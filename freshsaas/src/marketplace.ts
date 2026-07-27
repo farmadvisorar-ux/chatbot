@@ -55,7 +55,9 @@ export function mountMarketplace(): void {
     const style = document.createElement('style');
     style.dataset.freshsaasMarketplace = 'true';
     style.textContent = styleText;
-    document.head.appendChild(style);
+    // Prepended so the theme layer in the bundled CSS can override these.
+    // See the same note in directory.ts.
+    document.head.prepend(style);
 
     const section = document.createElement('section');
     section.id = 'marketplace';

@@ -51,7 +51,10 @@ export function initDirectory(): void {
   const style = document.createElement('style');
   style.dataset.freshsaasDirectory = 'true';
   style.textContent = styleText;
-  document.head.appendChild(style);
+  // Prepended, not appended: these are this component's base styles, so they
+  // have to sit *before* the bundled sheets or they'd beat the theme layer on
+  // cascade order and the directory would stay light on a dark page.
+  document.head.prepend(style);
 
   const section = document.createElement('section');
   section.id = 'launch-directory';

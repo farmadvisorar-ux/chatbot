@@ -135,6 +135,26 @@ ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS featured_rank INTEGER NOT
 CREATE INDEX IF NOT EXISTS directory_entries_featured ON directory_entries (featured, featured_rank) WHERE featured;
 CREATE INDEX IF NOT EXISTS directory_entries_undigested ON directory_entries (digested_at, discovered_at) WHERE digested_at IS NULL;
 
+-- First-party visitor analytics. Deliberately cookie-free and free of personal
+-- data: no IP address is stored, and session_id is a random per-tab value that
+-- disappears when the tab closes. That keeps this outside cookie-consent
+-- requirements while still answering what people actually do on the site.
+CREATE TABLE IF NOT EXISTS analytics_events (
+    id BIGSERIAL PRIMARY KEY,
+    type TEXT NOT NULL,
+    path TEXT NOT NULL DEFAULT '/',
+    referrer_host TEXT,
+    country TEXT,
+    device TEXT,
+    session_id TEXT,
+    entry_id UUID,
+    label TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS analytics_events_time ON analytics_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_events_type ON analytics_events (type, created_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_events_label ON analytics_events (type, label);
+
 CREATE TABLE IF NOT EXISTS rate_limit_events (
     id BIGSERIAL PRIMARY KEY,
     bucket TEXT NOT NULL,

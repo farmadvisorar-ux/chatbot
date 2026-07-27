@@ -190,6 +190,52 @@ function renderPeople(users: Person[], waitlist: WaitlistRow[]): void {
     `).join('') : '<div class="empty">Nobody on the waitlist yet.</div>';
 }
 
+type Analytics = {
+    days: number;
+    totals: { events: number; visitors: number; pageviews: number; outbound: number };
+    daily: Array<{ day: string; visitors: number; pageviews: number }>;
+    referrers: Array<{ source: string; visitors: number }>;
+    countries: Array<{ country: string; visitors: number }>;
+    devices: Array<{ device: string; visitors: number }>;
+    topListings: Array<{ label: string; clicks: number }>;
+    searches: Array<{ term: string; searches: number }>;
+    pages: Array<{ path: string; views: number }>;
+};
+
+/** Horizontal bars scaled to the largest value in the set. */
+function bars(rows: Array<[string, number]>, emptyText: string): string {
+    if (!rows.length) return `<div class="empty small">${escapeHtml(emptyText)}</div>`;
+    const max = Math.max(...rows.map(([, value]) => value)) || 1;
+    return rows.map(([label, value]) => `
+      <div class="bar">
+        <span class="bar-label">${escapeHtml(label)}</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${Math.max(3, Math.round((value / max) * 100))}%"></span></span>
+        <span class="bar-value">${value}</span>
+      </div>`).join('');
+}
+
+function renderAnalytics(data: Analytics): void {
+    const t = data.totals;
+    $('#analytics-stats').innerHTML = [
+        ['Visitors', String(t.visitors)],
+        ['Pageviews', String(t.pageviews)],
+        ['Outbound clicks', String(t.outbound)],
+        ['Events', String(t.events)],
+    ].map(([label, value]) => `<div class="stat"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('');
+
+    const max = Math.max(1, ...data.daily.map(d => d.visitors));
+    $('#analytics-chart').innerHTML = data.daily.length
+        ? data.daily.map(d => `<span class="col" title="${escapeHtml(d.day)}: ${d.visitors} visitors"><span style="height:${Math.max(2, Math.round((d.visitors / max) * 100))}%"></span></span>`).join('')
+        : '<div class="empty small">No traffic recorded yet.</div>';
+
+    $('#an-referrers').innerHTML = bars(data.referrers.map(r => [r.source, r.visitors]), 'No referrers yet.');
+    $('#an-countries').innerHTML = bars(data.countries.map(r => [r.country, r.visitors]), 'No country data yet.');
+    $('#an-listings').innerHTML = bars(data.topListings.map(r => [r.label, r.clicks]), 'No launch clicks yet.');
+    $('#an-searches').innerHTML = bars(data.searches.map(r => [r.term, r.searches]), 'No searches yet.');
+    $('#an-devices').innerHTML = bars(data.devices.map(r => [r.device, r.visitors]), 'No device data yet.');
+    $('#an-pages').innerHTML = bars(data.pages.map(r => [r.path, r.views]), 'No pageviews yet.');
+}
+
 async function loadAll(): Promise<void> {
     const params = new URLSearchParams({
         view: 'listings',
@@ -197,13 +243,16 @@ async function loadAll(): Promise<void> {
         filter: filterView.value,
         source: filterSource.value,
     });
-    const [overview, live, rels, market, people] = await Promise.all([
+    const days = $<HTMLSelectElement>('#analytics-days').value || '30';
+    const [overview, live, rels, market, people, analytics] = await Promise.all([
         callAdmin<Overview>('/api/admin?view=overview'),
         callAdmin<{ listings: Listing[] }>(`/api/admin?${params}`),
         callAdmin<{ awaitingRelease: Release[] }>('/api/admin?view=releases'),
         callAdmin<{ marketplace: MarketListing[] }>('/api/admin?view=marketplace'),
         callAdmin<{ users: Person[]; waitlist: WaitlistRow[] }>('/api/admin?view=people'),
+        callAdmin<Analytics>(`/api/admin?view=analytics&days=${days}`),
     ]);
+    renderAnalytics(analytics);
     renderStats(overview);
     renderListings(live.listings ?? []);
     renderPayouts(rels.awaitingRelease ?? []);
@@ -381,6 +430,7 @@ listingSearch.addEventListener('input', () => {
 });
 filterView.addEventListener('change', () => { void loadAll(); });
 filterSource.addEventListener('change', () => { void loadAll(); });
+$('#analytics-days').addEventListener('change', () => { void loadAll(); });
 
 const stored = localStorage.getItem(STORAGE_KEY);
 if (stored) {
