@@ -23,7 +23,7 @@
         "@rollup/rollup-linux-x64-gnu": "^4.0.0"
     },
     "devDependencies": {
-        "@neondatabase/serverless": "^0.10.4",
+        "@neondatabase/serverless": "^1.1.0",
         "@types/pg": "^8.11.10",
         "@vercel/node": "^3.2.24",
         "autoprefixer": "^10.4.0",
