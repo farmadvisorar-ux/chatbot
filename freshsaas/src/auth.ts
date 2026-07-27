@@ -32,6 +32,15 @@ function loadClerk(): Promise<ClerkType | null> {
     return loadPromise;
 }
 
+/**
+ * Every element marked data-auth-controls. There are two: one in the desktop
+ * header and one in the mobile menu, because the header is display:none below
+ * 980px — rendering only into the header left phone users with no way to sign
+ * in at all.
+ */
+const mountPoints = (): HTMLElement[] =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-auth-controls]'));
+
 function renderSignedOutControls(mountPoint: HTMLElement, onSignIn: () => void, onSignUp: () => void): void {
     mountPoint.innerHTML = '';
 
@@ -51,18 +60,16 @@ function renderSignedOutControls(mountPoint: HTMLElement, onSignIn: () => void, 
 }
 
 function renderHeaderControls(): void {
-    const mountPoint = document.querySelector<HTMLElement>('#auth-controls');
-    if (!mountPoint) return;
-
-    if (clerk?.user) {
-        mountPoint.innerHTML = '';
-        const userButtonSlot = document.createElement('div');
-        mountPoint.appendChild(userButtonSlot);
-        clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
-        return;
+    for (const mountPoint of mountPoints()) {
+        if (clerk?.user) {
+            mountPoint.innerHTML = '';
+            const userButtonSlot = document.createElement('div');
+            mountPoint.appendChild(userButtonSlot);
+            clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
+            continue;
+        }
+        renderSignedOutControls(mountPoint, () => clerk?.openSignIn({}), () => clerk?.openSignUp({}));
     }
-
-    renderSignedOutControls(mountPoint, () => clerk?.openSignIn({}), () => clerk?.openSignUp({}));
 }
 
 /**
@@ -70,17 +77,18 @@ function renderHeaderControls(): void {
  * Clerk's SDK. Hides itself if auth isn't configured on this deployment.
  */
 export function initAuth(): void {
-    const mountPoint = document.querySelector<HTMLElement>('#auth-controls');
-    if (!mountPoint) return;
+    const targets = mountPoints();
+    if (!targets.length) return;
+
     if (!publishableKey()) {
-        mountPoint.innerHTML = '';
+        targets.forEach(target => { target.innerHTML = ''; });
         return;
     }
-    renderSignedOutControls(
-        mountPoint,
+    targets.forEach(target => renderSignedOutControls(
+        target,
         () => loadClerk().then(() => clerk?.openSignIn({})),
         () => loadClerk().then(() => clerk?.openSignUp({})),
-    );
+    ));
 }
 
 export function isSignedIn(): boolean {
