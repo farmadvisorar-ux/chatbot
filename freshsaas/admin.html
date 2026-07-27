@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>FreshSAAS Admin</title>
+    <link rel="stylesheet" href="./src/admin.css">
+</head>
+<body>
+    <main id="admin-root">
+        <section id="admin-login" class="card">
+            <h1>FreshSAAS Admin</h1>
+            <p class="muted">Enter your admin key to manage submissions, listings and payouts.</p>
+            <form id="login-form">
+                <label>Admin key
+                    <input id="admin-key" type="password" autocomplete="current-password" required placeholder="Paste your ADMIN_SECRET">
+                </label>
+                <label class="checkbox"><input id="remember" type="checkbox"> Stay signed in on this device</label>
+                <button type="submit">Sign in</button>
+                <p id="login-status" class="status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section id="admin-app" hidden>
+            <header class="topbar">
+                <h1>FreshSAAS Admin</h1>
+                <div>
+                    <button id="refresh" type="button" class="ghost">Refresh</button>
+                    <button id="signout" type="button" class="ghost">Sign out</button>
+                </div>
+            </header>
+
+            <nav class="tabs">
+                <button class="tab active" data-tab="submissions" type="button">Submissions <span id="count-submissions">0</span></button>
+                <button class="tab" data-tab="payouts" type="button">Payouts <span id="count-payouts">0</span></button>
+                <button class="tab" data-tab="tools" type="button">Tools</button>
+            </nav>
+
+            <div class="panel active" data-panel="submissions">
+                <p class="muted">Founder submissions awaiting review. Approving publishes to the live directory and emails the founder that their project is listed.</p>
+                <div id="submissions-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="payouts">
+                <p class="muted">Buyer payments being held. Release only once the domain, code and accounts have actually changed hands — after release the money is gone from your balance.</p>
+                <div id="payouts-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="tools">
+                <p class="muted">Manual runs of the scheduled jobs.</p>
+                <div class="tool-row">
+                    <div><strong>Ingest launches</strong><span>Pull new launches from Hacker News, Product Hunt and GitHub.</span></div>
+                    <button id="run-ingest" type="button">Run now</button>
+                </div>
+                <div class="tool-row">
+                    <div><strong>Send outreach digest</strong><span>Email yourself the next 10 launches with their source links.</span></div>
+                    <button id="run-digest" type="button">Send now</button>
+                </div>
+                <p id="tools-status" class="status" role="status" aria-live="polite"></p>
+            </div>
+        </section>
+    </main>
+    <script type="module" src="./src/admin.ts"></script>
+</body>
+</html>
