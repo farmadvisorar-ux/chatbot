@@ -11,12 +11,12 @@
     <main id="admin-root">
         <section id="admin-login" class="card">
             <h1>FreshSAAS Admin</h1>
-            <p class="muted">Enter your admin key to manage submissions, listings and payouts.</p>
+            <p class="muted">Enter your admin key to manage the directory, featured picks and payouts.</p>
             <form id="login-form">
                 <label>Admin key
                     <input id="admin-key" type="password" autocomplete="current-password" required placeholder="Paste your ADMIN_SECRET">
                 </label>
-                <label class="checkbox"><input id="remember" type="checkbox"> Stay signed in on this device</label>
+                <label class="checkbox"><input id="remember" type="checkbox" checked> Stay signed in on this device</label>
                 <button type="submit">Sign in</button>
                 <p id="login-status" class="status" role="status" aria-live="polite"></p>
             </form>
@@ -26,20 +26,33 @@
             <header class="topbar">
                 <h1>FreshSAAS Admin</h1>
                 <div>
+                    <a class="ghost linkbtn" href="/" target="_blank" rel="noopener">View site</a>
                     <button id="refresh" type="button" class="ghost">Refresh</button>
                     <button id="signout" type="button" class="ghost">Sign out</button>
                 </div>
             </header>
 
+            <div id="stats" class="stats"></div>
+
             <nav class="tabs">
-                <button class="tab active" data-tab="listings" type="button">Listings <span id="count-listings">0</span></button>
+                <button class="tab active" data-tab="listings" type="button">Directory <span id="count-listings">0</span></button>
                 <button class="tab" data-tab="payouts" type="button">Payouts <span id="count-payouts">0</span></button>
                 <button class="tab" data-tab="tools" type="button">Tools</button>
             </nav>
 
             <div class="panel active" data-panel="listings">
-                <p class="muted">Everything live in the directory, newest first. Submissions and ingested launches publish automatically, so anything unwanted is removed here rather than held back beforehand.</p>
-                <label class="search"><input id="listing-search" type="search" placeholder="Search live listings by name or tagline"></label>
+                <div class="filters">
+                    <label class="search"><input id="listing-search" type="search" placeholder="Search name or tagline"></label>
+                    <select id="filter-view" aria-label="Which listings">
+                        <option value="live">All live</option>
+                        <option value="featured">Featured only</option>
+                        <option value="removed">Removed</option>
+                    </select>
+                    <select id="filter-source" aria-label="Filter by source">
+                        <option value="">All sources</option>
+                    </select>
+                </div>
+                <p class="muted">Listings publish automatically, so anything unwanted is removed here rather than held back beforehand. Featured entries are pinned to the top of the public directory.</p>
                 <div id="listings-list" class="list"></div>
             </div>
 
@@ -51,7 +64,7 @@
             <div class="panel" data-panel="tools">
                 <p class="muted">Manual runs of the scheduled jobs.</p>
                 <div class="tool-row">
-                    <div><strong>Ingest launches</strong><span>Pull new launches from Hacker News, Product Hunt and GitHub.</span></div>
+                    <div><strong>Ingest launches</strong><span>Pull from Hacker News, Product Hunt, GitHub, DEV and Lobsters.</span></div>
                     <button id="run-ingest" type="button">Run now</button>
                 </div>
                 <div class="tool-row">
@@ -61,6 +74,22 @@
                 <p id="tools-status" class="status" role="status" aria-live="polite"></p>
             </div>
         </section>
+
+        <div id="edit-modal" class="modal" hidden>
+            <div class="modal-backdrop" data-close-edit></div>
+            <form id="edit-form" class="modal-card">
+                <h2>Edit listing</h2>
+                <input type="hidden" name="id">
+                <label>Name<input name="name" required maxlength="120"></label>
+                <label>Tagline<input name="tagline" required maxlength="200"></label>
+                <label>Category<input name="category" maxlength="60" placeholder="e.g. AI, Developer Tools"></label>
+                <div class="row">
+                    <button type="submit">Save changes</button>
+                    <button type="button" class="ghost" data-close-edit>Cancel</button>
+                </div>
+                <p id="edit-status" class="status" role="status" aria-live="polite"></p>
+            </form>
+        </div>
     </main>
     <script type="module" src="./src/admin.ts"></script>
 </body>

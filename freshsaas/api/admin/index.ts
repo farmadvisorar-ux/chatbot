@@ -54,19 +54,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'overview') {
+            const [totals, bySource, recent] = await Promise.all([
+                pool.query(`SELECT
+                    (SELECT count(*)::int FROM directory_entries WHERE status='live') AS live,
+                    (SELECT count(*)::int FROM directory_entries WHERE status='live' AND featured) AS featured,
+                    (SELECT count(*)::int FROM directory_entries WHERE status='rejected') AS removed,
+                    (SELECT count(*)::int FROM directory_entries WHERE status='live' AND discovered_at > now() - interval '24 hours') AS last24h,
+                    (SELECT count(*)::int FROM waitlist) AS waitlist,
+                    (SELECT count(*)::int FROM users) AS users,
+                    (SELECT count(*)::int FROM marketplace_listings WHERE status='live') AS marketListings,
+                    (SELECT count(*)::int FROM marketplace_orders WHERE payment_state='paid_held') AS heldOrders,
+                    (SELECT COALESCE(sum(platform_fee_cents),0)::int FROM marketplace_orders WHERE payment_state IN ('paid_held','released')) AS feesCents`),
+                pool.query(`SELECT source, count(*)::int AS count FROM directory_entries
+                            WHERE status='live' GROUP BY source ORDER BY count DESC`),
+                pool.query(`SELECT max(discovered_at) AS "lastIngest" FROM directory_entries`),
+            ]);
+            json(res, 200, {
+                totals: totals.rows[0],
+                bySource: bySource.rows,
+                lastIngest: recent.rows[0]?.lastIngest ?? null,
+            });
+            return;
+        }
+
         if (view === 'listings') {
             // Submissions publish without review, so moderation happens here
-            // after the fact. Newest first, since that's where problems appear.
+            // after the fact rather than in a queue beforehand.
             const search = clean(typeof req.query.q === 'string' ? req.query.q : '', 80);
+            const source = clean(typeof req.query.source === 'string' ? req.query.source : '', 60);
+            const filter = clean(typeof req.query.filter === 'string' ? req.query.filter : '', 20) || 'live';
+            const status = filter === 'removed' ? 'rejected' : 'live';
+
             const { rows } = await pool.query(
-                `SELECT d.id, d.name, d.tagline, d.url, d.source, d.source_url AS "sourceUrl",
+                `SELECT d.id, d.name, d.tagline, d.url, d.category, d.source, d.source_url AS "sourceUrl",
+                        d.featured, d.featured_rank AS "featuredRank", d.status,
                         d.discovered_at AS "discoveredAt", s.email AS "submitterEmail"
                  FROM directory_entries d
                  LEFT JOIN project_submissions s ON s.published_entry_id = d.id
-                 WHERE d.status = 'live'
+                 WHERE d.status = $3
                    AND ($1 = '' OR d.name ILIKE '%' || $1 || '%' OR d.tagline ILIKE '%' || $1 || '%')
-                 ORDER BY d.discovered_at DESC LIMIT 100`,
-                [search],
+                   AND ($2 = '' OR d.source = $2)
+                   AND ($4 = false OR d.featured)
+                 ORDER BY d.featured DESC, d.featured_rank ASC, d.discovered_at DESC
+                 LIMIT 100`,
+                [search, source, status, filter === 'featured'],
             );
             json(res, 200, { listings: rows });
             return;
@@ -81,7 +113,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
-    const body = (req.body || {}) as { id?: string; orderId?: string; action?: string };
+    const body = (req.body || {}) as {
+        id?: string; orderId?: string; action?: string;
+        name?: string; tagline?: string; category?: string; rank?: number | string;
+    };
     const action = clean(body.action, 20);
 
     if (action === 'run-ingest' || action === 'run-digest') {
@@ -99,6 +134,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         });
         const payload = await response.json().catch(() => ({}));
         json(res, response.ok ? 200 : 502, payload);
+        return;
+    }
+
+    if (action === 'feature' || action === 'unfeature') {
+        const entryId = clean(body.id, 64);
+        if (!entryId) {
+            error(res, 400, 'Provide the listing id');
+            return;
+        }
+        const rank = Math.max(0, Math.min(999, Math.round(Number(body.rank) || 0)));
+        const updated = await pool.query(
+            `UPDATE directory_entries SET featured = $2, featured_rank = $3
+             WHERE id = $1 AND status = 'live' RETURNING name, featured`,
+            [entryId, action === 'feature', action === 'feature' ? rank : 0],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Listing not found or not live');
+            return;
+        }
+        json(res, 200, { ok: true, name: updated.rows[0].name, featured: updated.rows[0].featured });
+        return;
+    }
+
+    if (action === 'edit') {
+        const entryId = clean(body.id, 64);
+        const name = clean(body.name, 120);
+        const tagline = clean(body.tagline, 200);
+        const category = clean(body.category, 60);
+        if (!entryId || !name || !tagline) {
+            error(res, 400, 'Provide the listing id, a name and a tagline');
+            return;
+        }
+        const updated = await pool.query(
+            `UPDATE directory_entries
+             SET name = $2, tagline = $3, category = COALESCE(NULLIF($4, ''), category)
+             WHERE id = $1 RETURNING name`,
+            [entryId, name, tagline, category],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Listing not found');
+            return;
+        }
+        json(res, 200, { ok: true, name: updated.rows[0].name });
+        return;
+    }
+
+    if (action === 'restore') {
+        const entryId = clean(body.id, 64);
+        if (!entryId) {
+            error(res, 400, 'Provide the listing id');
+            return;
+        }
+        const restored = await pool.query(
+            `UPDATE directory_entries SET status = 'live' WHERE id = $1 AND status = 'rejected' RETURNING name`,
+            [entryId],
+        );
+        if (!restored.rows[0]) {
+            error(res, 404, 'Listing not found or already live');
+            return;
+        }
+        json(res, 200, { ok: true, restored: restored.rows[0].name });
         return;
     }
 
