@@ -54,6 +54,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'listings') {
+            // Submissions publish without review, so moderation happens here
+            // after the fact. Newest first, since that's where problems appear.
+            const search = clean(typeof req.query.q === 'string' ? req.query.q : '', 80);
+            const { rows } = await pool.query(
+                `SELECT d.id, d.name, d.tagline, d.url, d.source, d.source_url AS "sourceUrl",
+                        d.discovered_at AS "discoveredAt", s.email AS "submitterEmail"
+                 FROM directory_entries d
+                 LEFT JOIN project_submissions s ON s.published_entry_id = d.id
+                 WHERE d.status = 'live'
+                   AND ($1 = '' OR d.name ILIKE '%' || $1 || '%' OR d.tagline ILIKE '%' || $1 || '%')
+                 ORDER BY d.discovered_at DESC LIMIT 100`,
+                [search],
+            );
+            json(res, 200, { listings: rows });
+            return;
+        }
+
         const { rows } = await pool.query(
             `SELECT id, product, url, promise, email, status, submitted_at AS "submittedAt"
              FROM project_submissions WHERE status = 'new'
@@ -81,6 +99,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         });
         const payload = await response.json().catch(() => ({}));
         json(res, response.ok ? 200 : 502, payload);
+        return;
+    }
+
+    if (action === 'unpublish') {
+        const entryId = clean(body.id, 64);
+        if (!entryId) {
+            error(res, 400, 'Provide the listing id to remove');
+            return;
+        }
+        // Marked rejected rather than deleted, so the dedup key survives and
+        // the same entry can't be re-added by the next ingest run.
+        const removed = await pool.query(
+            `UPDATE directory_entries SET status = 'rejected' WHERE id = $1 AND status = 'live' RETURNING name`,
+            [entryId],
+        );
+        if (!removed.rows[0]) {
+            error(res, 404, 'Listing not found or already removed');
+            return;
+        }
+        json(res, 200, { ok: true, removed: removed.rows[0].name });
         return;
     }
 
