@@ -1,0 +1,37 @@
+name: FreshSAAS hourly launch ingest
+
+# Vercel's Hobby plan caps cron jobs at once per day, so the hourly schedule
+# lives here instead and just calls the ingest endpoint.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ingest
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          INGEST_URL: ${{ vars.INGEST_URL || 'https://freshsaas.vercel.app/api/cron/ingest' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET repository secret is not set; cannot authenticate to the ingest endpoint." >&2
+            exit 1
+          fi
+
+          response=$(curl -sS -X POST "$INGEST_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -w '\n%{http_code}' \
+            --max-time 120)
+
+          status=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+
+          echo "$body"
+
+          if [ "$status" != "200" ]; then
+            echo "Ingest failed with HTTP $status" >&2
+            exit 1
+          fi

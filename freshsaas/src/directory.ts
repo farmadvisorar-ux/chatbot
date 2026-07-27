@@ -1,6 +1,11 @@
 import { createIcons, ArrowRight, Search, X, Bookmark, BadgeCheck, Sparkles } from 'lucide';
-import { products, type Product } from './catalog';
+import { products as seedProducts, type Product } from './catalog';
 import { escapeHtml } from './escape-html';
+import { api } from './api-client';
+
+// Starts as the bundled seed catalog and is replaced once the live directory
+// (auto-ingested launches plus approved submissions) loads from the API.
+let products: Product[] = seedProducts;
 
 /* legacy seed data
 type Product = {
@@ -71,8 +76,12 @@ export function initDirectory(): void {
   let category = 'All';
   let savedOnly = false;
 
-  const categories = ['All', ...Array.from(new Set(products.map(product => product.category)))];
-  if (filterWrap) filterWrap.innerHTML = categories.map(item => `<button class="filter-button${item === 'All' ? ' active' : ''}" type="button" data-category="${item}">${item}</button>`).join('');
+  const renderCategoryFilters = (): void => {
+    if (!filterWrap) return;
+    const categories = ['All', ...Array.from(new Set(products.map(product => product.category)))];
+    filterWrap.innerHTML = categories.map(item => `<button class="filter-button${item === category ? ' active' : ''}" type="button" data-category="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join('');
+  };
+  renderCategoryFilters();
 
   const closeModal = (): void => {
     modal.classList.remove('open');
@@ -146,6 +155,37 @@ export function initDirectory(): void {
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
 
+  /**
+   * Pulls the live directory (hourly-ingested launches plus approved founder
+   * submissions) and merges it ahead of the bundled seed catalog. Seeded
+   * entries stay as a fallback so the grid is never empty if the API is
+   * unreachable; duplicates by name resolve in favour of the live row.
+   */
+  const loadLiveLaunches = async (): Promise<void> => {
+    try {
+      const response = await api.get<{ launches: Product[] }>('/api/directory');
+      const live = response.data?.launches ?? [];
+      if (!live.length) return;
+
+      const seen = new Set<string>();
+      products = [...live, ...seedProducts].filter(product => {
+        const key = product.name.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const badge = section.querySelector<HTMLElement>('.directory-badge');
+      if (badge) badge.innerHTML = `<i data-lucide="sparkles"></i>Multi-source discovery • ${products.length} launches`;
+      renderCategoryFilters();
+      render();
+      createIcons({ icons: { Search, Bookmark, Sparkles, X } });
+    } catch {
+      /* Keep showing the seeded catalog if the live directory is unavailable. */
+    }
+  };
+
   createIcons({ icons: { Search, Bookmark, Sparkles, X } });
   render();
+  loadLiveLaunches();
 }

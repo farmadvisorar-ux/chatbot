@@ -27,6 +27,10 @@ CREATE TABLE IF NOT EXISTS project_submissions (
     status TEXT NOT NULL DEFAULT 'new',
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Approving a submission publishes it to directory_entries; this records which
+-- entry it became so the same submission can't be published twice.
+ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS published_entry_id UUID;
+ALTER TABLE project_submissions ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS construction_projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -72,6 +76,29 @@ CREATE TABLE IF NOT EXISTS marketplace_orders (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS buyer_user_id TEXT REFERENCES users(id);
+
+-- Launches shown in the public directory. Rows arrive either from the hourly
+-- ingest job (api/cron/ingest.ts, pulling official launch-source APIs) or from
+-- an approved founder submission. dedup_key is a normalized name+host so the
+-- same product discovered on two sources, or re-seen on later runs, inserts
+-- once rather than duplicating.
+CREATE TABLE IF NOT EXISTS directory_entries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    dedup_key TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    tagline TEXT NOT NULL,
+    description TEXT NOT NULL,
+    url TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'New launch',
+    tags TEXT[] NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL,
+    source_url TEXT,
+    score INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'pending_review', 'rejected')),
+    discovered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS directory_entries_live ON directory_entries (status, discovered_at DESC);
 
 CREATE TABLE IF NOT EXISTS rate_limit_events (
     id BIGSERIAL PRIMARY KEY,
