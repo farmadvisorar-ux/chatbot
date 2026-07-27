@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const SENDER = 'FreshSAAS <onboarding@resend.dev>';
+const SENDER = 'FreshSAAS <hello@freshsaas.online>';
 const REPLY_TO = 'farmadvisorar@gmail.com';
 
 /**
@@ -13,10 +13,8 @@ const REPLY_TO = 'farmadvisorar@gmail.com';
  *
  * No-ops if RESEND_API_KEY isn't configured.
  *
- * Note: without a verified sending domain, the `onboarding@resend.dev` sender
- * only delivers to the Resend account's own address and rejects addresses at
- * placeholder domains outright — real signups won't receive this until a
- * domain is added and verified in Resend. See freshsaas/README.md.
+ * Sends from the verified freshsaas.online domain, so delivery reaches real
+ * signups. Replies go to the address above rather than the send-only sender.
  */
 export async function sendWelcomeEmail(toEmail: string, name: string | null): Promise<void> {
     const apiKey = process.env.RESEND_API_KEY;
