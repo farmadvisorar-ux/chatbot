@@ -32,29 +32,42 @@ function loadClerk(): Promise<ClerkType | null> {
     return loadPromise;
 }
 
+function renderSignedOutControls(mountPoint: HTMLElement, onSignIn: () => void, onSignUp: () => void): void {
+    mountPoint.innerHTML = '';
+
+    const signInButton = document.createElement('button');
+    signInButton.type = 'button';
+    signInButton.className = 'text-button';
+    signInButton.textContent = 'Sign in';
+    signInButton.addEventListener('click', onSignIn);
+    mountPoint.appendChild(signInButton);
+
+    const signUpButton = document.createElement('button');
+    signUpButton.type = 'button';
+    signUpButton.className = 'mini-cta';
+    signUpButton.textContent = 'Sign up';
+    signUpButton.addEventListener('click', onSignUp);
+    mountPoint.appendChild(signUpButton);
+}
+
 function renderHeaderControls(): void {
     const mountPoint = document.querySelector<HTMLElement>('#auth-controls');
     if (!mountPoint) return;
-    mountPoint.innerHTML = '';
 
     if (clerk?.user) {
+        mountPoint.innerHTML = '';
         const userButtonSlot = document.createElement('div');
         mountPoint.appendChild(userButtonSlot);
         clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
         return;
     }
 
-    const signInButton = document.createElement('button');
-    signInButton.type = 'button';
-    signInButton.className = 'text-button';
-    signInButton.textContent = 'Sign in';
-    signInButton.addEventListener('click', () => clerk?.openSignIn({}));
-    mountPoint.appendChild(signInButton);
+    renderSignedOutControls(mountPoint, () => clerk?.openSignIn({}), () => clerk?.openSignUp({}));
 }
 
 /**
- * Renders the header sign-in control immediately without loading Clerk's
- * SDK. Hides itself if auth isn't configured on this deployment.
+ * Renders the header sign-in/sign-up controls immediately without loading
+ * Clerk's SDK. Hides itself if auth isn't configured on this deployment.
  */
 export function initAuth(): void {
     const mountPoint = document.querySelector<HTMLElement>('#auth-controls');
@@ -63,12 +76,11 @@ export function initAuth(): void {
         mountPoint.innerHTML = '';
         return;
     }
-    const signInButton = document.createElement('button');
-    signInButton.type = 'button';
-    signInButton.className = 'text-button';
-    signInButton.textContent = 'Sign in';
-    signInButton.addEventListener('click', () => loadClerk().then(() => clerk?.openSignIn({})));
-    mountPoint.appendChild(signInButton);
+    renderSignedOutControls(
+        mountPoint,
+        () => loadClerk().then(() => clerk?.openSignIn({})),
+        () => loadClerk().then(() => clerk?.openSignUp({})),
+    );
 }
 
 export function isSignedIn(): boolean {
