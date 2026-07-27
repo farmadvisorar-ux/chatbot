@@ -17,6 +17,7 @@
         "lucide": "^0.469.0",
         "pg": "^8.13.1",
         "resend": "^4.0.1",
+        "stripe": "^22.3.2",
         "svix": "^1.45.1"
     },
     "optionalDependencies": {

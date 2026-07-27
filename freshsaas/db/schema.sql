@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Stripe Connect account id for sellers receiving payouts. Only the opaque
+-- "acct_..." id is stored: bank details live with Stripe, never here, which
+-- keeps this database out of PCI scope.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_id TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS payouts_enabled BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS waitlist (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,6 +81,18 @@ CREATE TABLE IF NOT EXISTS marketplace_orders (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS buyer_user_id TEXT REFERENCES users(id);
+
+-- Payment lifecycle. Money is taken with a Stripe Checkout Session that lands
+-- in the platform balance and is NOT auto-forwarded; the seller is paid by an
+-- explicit transfer once the asset handover is confirmed, so a seller cannot
+-- take payment and disappear. Only Stripe object ids are stored here.
+ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS stripe_session_id TEXT UNIQUE;
+ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT;
+ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS stripe_transfer_id TEXT;
+ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS released_at TIMESTAMPTZ;
+-- awaiting_payment -> paid_held -> released (or refunded)
+ALTER TABLE marketplace_orders ADD COLUMN IF NOT EXISTS payment_state TEXT NOT NULL DEFAULT 'awaiting_payment';
 
 -- Launches shown in the public directory. Rows arrive either from the hourly
 -- ingest job (api/cron/ingest.ts, pulling official launch-source APIs) or from
