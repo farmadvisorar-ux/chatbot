@@ -179,10 +179,69 @@ async function fromGitHub(): Promise<DirectoryCandidate[]> {
         }));
 }
 
+/** Dev.to's #showdev tag is where makers post what they've built. Official API. */
+async function fromDevTo(): Promise<DirectoryCandidate[]> {
+    const body = await fetchText('https://dev.to/api/articles?tag=showdev&per_page=60');
+    const data = JSON.parse(body) as Array<{ title: string; description?: string; url: string; tag_list?: string[]; positive_reactions_count?: number }>;
+
+    return data
+        .filter(post => post.title && (post.description ?? '').length >= 8)
+        .map(post => {
+            const title = post.title.replace(/^(show\s*dev|showdev)\s*:?\s*/i, '').trim();
+            const [namePart, ...rest] = title.split(/\s+[–—-]\s+/);
+            const tagline = (rest.join(' - ') || post.description || title).slice(0, 200);
+            return {
+                name: (namePart || title).slice(0, 80),
+                tagline,
+                description: `${tagline}. Shared by its maker on DEV's #showdev.`,
+                url: post.url,
+                category: categorise(`${title} ${(post.tag_list ?? []).join(' ')}`),
+                tags: [categorise(title), 'showdev', 'New launch'],
+                source: 'DEV',
+                sourceUrl: post.url,
+                score: post.positive_reactions_count ?? 0,
+            };
+        });
+}
+
+/** Lobsters' "show" tag — a curated developer community, low volume but high signal. */
+async function fromLobsters(): Promise<DirectoryCandidate[]> {
+    const xml = await fetchText('https://lobste.rs/t/show.rss');
+    const candidates: DirectoryCandidate[] = [];
+
+    for (const chunk of xml.split('<item>').slice(1)) {
+        const item = chunk.split('</item>')[0];
+        const rawTitle = item.match(/<title>([\s\S]*?)<\/title>/)?.[1];
+        const link = item.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim();
+        const comments = item.match(/<comments>([\s\S]*?)<\/comments>/)?.[1]?.trim();
+        if (!rawTitle || !link) continue;
+
+        const title = stripTags(rawTitle).replace(/^show\s+lobsters:?\s*/i, '').trim();
+        const [namePart, ...rest] = title.split(/\s+[–—-]\s+/);
+        const tagline = (rest.join(' - ') || title).slice(0, 200);
+        if (tagline.length < 8) continue;
+
+        candidates.push({
+            name: (namePart || title).slice(0, 80),
+            tagline,
+            description: `${tagline}. Shared by its maker on Lobsters.`,
+            url: link,
+            category: categorise(title),
+            tags: [categorise(title), 'Show Lobsters', 'New launch'],
+            source: 'Lobsters',
+            sourceUrl: comments || link,
+            score: 0,
+        });
+    }
+    return candidates;
+}
+
 const SOURCES: Array<[string, () => Promise<DirectoryCandidate[]>]> = [
     ['Hacker News', fromHackerNews],
     ['Product Hunt', fromProductHunt],
     ['GitHub', fromGitHub],
+    ['DEV', fromDevTo],
+    ['Lobsters', fromLobsters],
 ];
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

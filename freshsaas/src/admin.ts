@@ -1,7 +1,10 @@
 import './admin.css';
 import { escapeHtml } from './escape-html';
 
-type Submission = { id: string; product: string; url: string; promise: string; email: string; submittedAt: string };
+type Listing = {
+    id: string; name: string; tagline: string; url: string;
+    source: string; sourceUrl: string | null; discoveredAt: string; submitterEmail: string | null;
+};
 type Release = {
     id: string; listingName: string; buyerEmail: string; sellerEmail: string;
     priceCents: number; platformFeeCents: number; sellerPayoutCents: number; paidAt: string;
@@ -16,7 +19,8 @@ const keyInput = document.querySelector<HTMLInputElement>('#admin-key')!;
 const rememberInput = document.querySelector<HTMLInputElement>('#remember')!;
 const loginStatus = document.querySelector<HTMLElement>('#login-status')!;
 const toolsStatus = document.querySelector<HTMLElement>('#tools-status')!;
-const submissionsList = document.querySelector<HTMLElement>('#submissions-list')!;
+const listingsList = document.querySelector<HTMLElement>('#listings-list')!;
+const listingSearch = document.querySelector<HTMLInputElement>('#listing-search')!;
 const payoutsList = document.querySelector<HTMLElement>('#payouts-list')!;
 
 let adminKey = '';
@@ -39,22 +43,23 @@ async function callAdmin<T>(path: string, init?: RequestInit): Promise<T> {
     return payload as T;
 }
 
-function renderSubmissions(items: Submission[]): void {
-    document.querySelector('#count-submissions')!.textContent = String(items.length);
-    submissionsList.innerHTML = items.length ? items.map(item => `
+function renderListings(items: Listing[]): void {
+    document.querySelector('#count-listings')!.textContent = String(items.length);
+    listingsList.innerHTML = items.length ? items.map(item => `
       <article class="item" data-id="${escapeHtml(item.id)}">
-        <h3>${escapeHtml(item.product)}</h3>
-        <p class="meta">${escapeHtml(item.promise)}</p>
+        <h3>${escapeHtml(item.name)}</h3>
+        <p class="meta">${escapeHtml(item.tagline)}</p>
         <p class="meta">
           <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a>
-          &nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a>
-          &nbsp;·&nbsp; submitted ${escapeHtml(day(item.submittedAt))}
+          &nbsp;·&nbsp; via ${escapeHtml(item.source)}
+          ${item.sourceUrl ? `&nbsp;·&nbsp; <a href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">source</a>` : ''}
+          ${item.submitterEmail ? `&nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.submitterEmail)}">${escapeHtml(item.submitterEmail)}</a>` : ''}
+          &nbsp;·&nbsp; ${escapeHtml(day(item.discoveredAt))}
         </p>
         <div class="row">
-          <button type="button" data-action="approve">Approve &amp; publish</button>
-          <button type="button" class="ghost" data-action="reject">Reject</button>
+          <button type="button" class="ghost" data-action="unpublish">Remove from directory</button>
         </div>
-      </article>`).join('') : '<div class="empty">No submissions waiting.</div>';
+      </article>`).join('') : '<div class="empty">No live listings match.</div>';
 }
 
 function renderPayouts(items: Release[]): void {
@@ -74,11 +79,12 @@ function renderPayouts(items: Release[]): void {
 }
 
 async function loadAll(): Promise<void> {
-    const [subs, rels] = await Promise.all([
-        callAdmin<{ submissions: Submission[] }>('/api/admin?view=submissions'),
+    const query = encodeURIComponent(listingSearch?.value.trim() ?? '');
+    const [live, rels] = await Promise.all([
+        callAdmin<{ listings: Listing[] }>(`/api/admin?view=listings&q=${query}`),
         callAdmin<{ awaitingRelease: Release[] }>('/api/admin?view=releases'),
     ]);
-    renderSubmissions(subs.submissions ?? []);
+    renderListings(live.listings ?? []);
     renderPayouts(rels.awaitingRelease ?? []);
 }
 
@@ -131,21 +137,27 @@ document.querySelectorAll<HTMLButtonElement>('.tab').forEach(tab => tab.addEvent
     });
 }));
 
-submissionsList.addEventListener('click', async event => {
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
+listingsList.addEventListener('click', async event => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action="unpublish"]');
     const id = button?.closest<HTMLElement>('.item')?.dataset.id;
     if (!button || !id) return;
-    const action = button.dataset.action;
-    if (action === 'reject' && !confirm('Reject this submission? It will not be published.')) return;
+    if (!confirm('Remove this listing from the directory? It will stop appearing on the site and will not be re-added by a later ingest.')) return;
 
     button.disabled = true;
     try {
-        await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ id, action }) });
+        await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ id, action: 'unpublish' }) });
         await loadAll();
     } catch (err) {
-        alert(err instanceof Error ? err.message : 'Action failed');
+        alert(err instanceof Error ? err.message : 'Removal failed');
         button.disabled = false;
     }
+});
+
+// Debounced so typing doesn't fire a request per keystroke.
+let searchTimer = 0;
+listingSearch?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => { void loadAll(); }, 300);
 });
 
 payoutsList.addEventListener('click', async event => {

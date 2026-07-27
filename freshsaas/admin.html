@@ -32,14 +32,15 @@
             </header>
 
             <nav class="tabs">
-                <button class="tab active" data-tab="submissions" type="button">Submissions <span id="count-submissions">0</span></button>
+                <button class="tab active" data-tab="listings" type="button">Listings <span id="count-listings">0</span></button>
                 <button class="tab" data-tab="payouts" type="button">Payouts <span id="count-payouts">0</span></button>
                 <button class="tab" data-tab="tools" type="button">Tools</button>
             </nav>
 
-            <div class="panel active" data-panel="submissions">
-                <p class="muted">Founder submissions awaiting review. Approving publishes to the live directory and emails the founder that their project is listed.</p>
-                <div id="submissions-list" class="list"></div>
+            <div class="panel active" data-panel="listings">
+                <p class="muted">Everything live in the directory, newest first. Submissions and ingested launches publish automatically, so anything unwanted is removed here rather than held back beforehand.</p>
+                <label class="search"><input id="listing-search" type="search" placeholder="Search live listings by name or tagline"></label>
+                <div id="listings-list" class="list"></div>
             </div>
 
             <div class="panel" data-panel="payouts">
