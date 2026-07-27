@@ -122,6 +122,14 @@ ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS digested_at TIMESTAMPTZ;
 -- Featured entries are pinned to the top of the directory and rendered with
 -- the highlight treatment. featured_rank orders them against each other;
 -- lower sorts first, ties fall back to recency.
+-- Contact address published on the product's own site, for manual outreach.
+-- contact_checked_at is set even when nothing is found, so each site is only
+-- fetched once rather than re-crawled on every run.
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS contact_email TEXT;
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS contact_kind TEXT;
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS contact_checked_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS directory_entries_contact_todo ON directory_entries (contact_checked_at) WHERE contact_checked_at IS NULL;
+
 ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS featured_rank INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS directory_entries_featured ON directory_entries (featured, featured_rank) WHERE featured;

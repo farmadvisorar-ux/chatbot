@@ -5,6 +5,78 @@ import { insertCandidates, type DirectoryCandidate } from '../_lib/directory.js'
 import { sendAdminDigest, sendOutreachDigest, type DigestEntry } from '../_lib/email.js';
 
 const DIGEST_BATCH_SIZE = 10;
+const CONTACT_BATCH_SIZE = 15;
+
+// Shared inboxes belong to a business rather than identifying a person, so
+// they're the ones worth surfacing for outreach. Anything else is recorded as
+// 'personal' and flagged in the UI.
+const ROLE_MAILBOXES = /^(hello|hi|contact|support|info|team|sales|press|admin|help|founders?|care|enquiries|inquiries)@/i;
+const SKIP_ADDRESS = /(example|sentry|wixpress|godaddy|squarespace|\.png|\.jpg|\.svg|@2x|u003e)/i;
+
+/**
+ * Reads the contact address a product publishes on its own site.
+ *
+ * Only the page the listing already points at is fetched — no crawling, no
+ * third-party lookup services, and nothing pulled from commit histories or
+ * profiles. Sites that disallow us in robots.txt are skipped. This is the
+ * address the company put up to be contacted on; it's for writing to people
+ * individually, not for loading into a bulk sender.
+ */
+async function findContactEmail(pageUrl: string): Promise<{ email: string; kind: string } | null> {
+    let origin: string;
+    try {
+        origin = new URL(pageUrl).origin;
+    } catch {
+        return null;
+    }
+
+    try {
+        const robots = await fetchText(`${origin}/robots.txt`).catch(() => '');
+        // Only honour a blanket disallow-all; per-path rules aren't worth
+        // parsing for a single homepage fetch.
+        if (/user-agent:\s*\*[\s\S]*?disallow:\s*\/\s*(\n|$)/i.test(robots)) return null;
+    } catch {
+        /* No robots.txt is not a prohibition. */
+    }
+
+    const html = await fetchText(pageUrl).catch(() => '');
+    if (!html) return null;
+
+    const found = new Set<string>();
+    for (const match of html.matchAll(/mailto:([^"'?\s>]+)/gi)) {
+        const address = decodeEntities(match[1]).trim().toLowerCase();
+        if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(address) && !SKIP_ADDRESS.test(address)) found.add(address);
+    }
+
+    if (!found.size) return null;
+    const addresses = [...found];
+    const role = addresses.find(address => ROLE_MAILBOXES.test(address));
+    return role
+        ? { email: role, kind: 'role' }
+        : { email: addresses[0], kind: 'personal' };
+}
+
+/** Looks up contact addresses for entries that haven't been checked yet. */
+async function runContactLookup(pool: ReturnType<typeof getPool>): Promise<{ checked: number; found: number }> {
+    const { rows } = await pool.query<{ id: string; url: string }>(
+        `SELECT id, url FROM directory_entries
+         WHERE status = 'live' AND contact_checked_at IS NULL
+         ORDER BY featured DESC, discovered_at DESC
+         LIMIT $1`,
+        [CONTACT_BATCH_SIZE],
+    );
+
+    let found = 0;
+    for (const row of rows) {
+        const contact = await findContactEmail(row.url).catch(() => null);
+        await pool.query(
+            'UPDATE directory_entries SET contact_email = $2, contact_kind = $3, contact_checked_at = now() WHERE id = $1',
+            [row.id, contact?.email ?? null, contact?.kind ?? null],
+        );
+        if (contact) found += 1;
+    }
+    return { checked: rows.length, found };
+}
 
 /**
  * Emails the owner a batch of launches they haven't seen yet, with links for
@@ -23,7 +95,8 @@ async function runOutreachDigest(pool: ReturnType<typeof getPool>): Promise<{ se
            LIMIT $1
            FOR UPDATE SKIP LOCKED
          )
-         RETURNING id, name, tagline, url, source, source_url AS "sourceUrl"`,
+         RETURNING id, name, tagline, url, source, source_url AS "sourceUrl",
+                   contact_email AS "contactEmail", contact_kind AS "contactKind"`,
         [DIGEST_BATCH_SIZE],
     );
     if (!rows.length) return { sent: 0 };
@@ -266,6 +339,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (task === 'digest') {
         const { sent } = await runOutreachDigest(pool);
         json(res, 200, { ok: true, task: 'digest', sent });
+        return;
+    }
+    if (task === 'contacts') {
+        const result = await runContactLookup(pool);
+        json(res, 200, { ok: true, task: 'contacts', ...result });
         return;
     }
 
