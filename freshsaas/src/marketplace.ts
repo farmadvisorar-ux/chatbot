@@ -1,6 +1,7 @@
 import { createIcons, Store, Plus, X, ArrowRight, ShieldCheck } from 'lucide';
 import { api, ApiError } from './api-client';
 import { escapeHtml } from './escape-html';
+import { requireSignIn, currentUserEmail } from './auth';
 
 type Listing = { id: string; name: string; tagline: string; description: string; priceCents: number; url: string; createdAt: string };
 
@@ -68,14 +69,14 @@ export function mountMarketplace(): void {
     sellModal.className = 'mp-modal';
     sellModal.id = 'mp-sell-modal';
     sellModal.setAttribute('aria-hidden', 'true');
-    sellModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="sell"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-sell-title"><button class="mp-modal-close" type="button" data-mp-close="sell" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-sell-title">List your SaaS</h2><form id="mp-sell-form"><label>Product name<input name="name" required maxlength="120"></label><label>One-line tagline<input name="tagline" required maxlength="200"></label><label>Description for buyers<textarea name="description" rows="3" required maxlength="2000"></textarea></label><label>Asking price (USD)<input name="priceUsd" type="number" min="1" step="1" required></label><label>Product URL<input name="url" type="url" required placeholder="https://"></label><label>Your email<input name="sellerEmail" type="email" required></label><p style="font-size:12px;color:#6d7469;margin:-4px 0 14px">Listings are reviewed before going live. FreshSAAS takes a 10% fee when your SaaS sells.</p><button type="submit">Submit listing for review <i data-lucide="arrow-right"></i></button><p id="mp-sell-status" class="mp-status" role="status" aria-live="polite"></p></form></div>`;
+    sellModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="sell"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-sell-title"><button class="mp-modal-close" type="button" data-mp-close="sell" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-sell-title">List your SaaS</h2><p id="mp-sell-identity" style="font-size:12px;color:#6d7469;margin:-8px 0 14px"></p><form id="mp-sell-form"><label>Product name<input name="name" required maxlength="120"></label><label>One-line tagline<input name="tagline" required maxlength="200"></label><label>Description for buyers<textarea name="description" rows="3" required maxlength="2000"></textarea></label><label>Asking price (USD)<input name="priceUsd" type="number" min="1" step="1" required></label><label>Product URL<input name="url" type="url" required placeholder="https://"></label><p style="font-size:12px;color:#6d7469;margin:-4px 0 14px">Listings are reviewed before going live. FreshSAAS takes a 10% fee when your SaaS sells.</p><button type="submit">Submit listing for review <i data-lucide="arrow-right"></i></button><p id="mp-sell-status" class="mp-status" role="status" aria-live="polite"></p></form></div>`;
     document.body.appendChild(sellModal);
 
     const buyModal = document.createElement('div');
     buyModal.className = 'mp-modal';
     buyModal.id = 'mp-buy-modal';
     buyModal.setAttribute('aria-hidden', 'true');
-    buyModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="buy"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-buy-title"><button class="mp-modal-close" type="button" data-mp-close="buy" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-buy-title">Buy this SaaS</h2><div class="mp-demo-note"><i data-lucide="shield-check"></i><span>Demo checkout: no payment processor is connected yet, so this does not charge a real card. It previews the order and fee split.</span></div><div id="mp-fee-breakdown" class="mp-fee-breakdown"></div><form id="mp-buy-form"><input type="hidden" name="listingId"><label>Your email<input name="buyerEmail" type="email" required></label><button type="submit">Complete demo purchase <i data-lucide="arrow-right"></i></button><p id="mp-buy-status" class="mp-status" role="status" aria-live="polite"></p></form></div>`;
+    buyModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="buy"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-buy-title"><button class="mp-modal-close" type="button" data-mp-close="buy" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-buy-title">Buy this SaaS</h2><p id="mp-buy-identity" style="font-size:12px;color:#6d7469;margin:-8px 0 14px"></p><div class="mp-demo-note"><i data-lucide="shield-check"></i><span>Demo checkout: no payment processor is connected yet, so this does not charge a real card. It previews the order and fee split.</span></div><div id="mp-fee-breakdown" class="mp-fee-breakdown"></div><form id="mp-buy-form"><input type="hidden" name="listingId"><button type="submit">Complete demo purchase <i data-lucide="arrow-right"></i></button><p id="mp-buy-status" class="mp-status" role="status" aria-live="polite"></p></form></div>`;
     document.body.appendChild(buyModal);
 
     const grid = section.querySelector<HTMLElement>('#mp-grid');
@@ -118,18 +119,26 @@ export function mountMarketplace(): void {
         }
     };
 
-    sellButton?.addEventListener('click', () => openModal(sellModal));
+    sellButton?.addEventListener('click', async () => {
+        if (!(await requireSignIn())) return;
+        const identity = sellModal.querySelector<HTMLElement>('#mp-sell-identity');
+        if (identity) identity.textContent = `Listing as ${currentUserEmail() ?? 'your account'}.`;
+        openModal(sellModal);
+    });
     sellModal.addEventListener('click', event => { if ((event.target as HTMLElement).closest('[data-mp-close]')) closeModal(sellModal); });
     buyModal.addEventListener('click', event => { if ((event.target as HTMLElement).closest('[data-mp-close]')) closeModal(buyModal); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeModal(sellModal); closeModal(buyModal); } });
 
-    grid?.addEventListener('click', event => {
+    grid?.addEventListener('click', async event => {
         const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-mp-buy]');
         const listing = listings.find(item => item.id === button?.dataset.mpBuy);
         if (!listing || !buyForm || !feeBreakdown) return;
+        if (!(await requireSignIn())) return;
         const fee = Math.round(listing.priceCents * PLATFORM_FEE_RATE);
         (buyForm.elements.namedItem('listingId') as HTMLInputElement).value = listing.id;
         feeBreakdown.innerHTML = `<div class="mp-fee-row"><span>${escapeHtml(listing.name)}</span><span>${money(listing.priceCents)}</span></div><div class="mp-fee-row"><span>FreshSAAS platform fee (10%)</span><span>-${money(fee)}</span></div><div class="mp-fee-row total"><span>Seller receives</span><span>${money(listing.priceCents - fee)}</span></div>`;
+        const identity = buyModal.querySelector<HTMLElement>('#mp-buy-identity');
+        if (identity) identity.textContent = `Buying as ${currentUserEmail() ?? 'your account'}.`;
         if (buyStatus) { buyStatus.textContent = ''; buyStatus.className = 'mp-status'; }
         openModal(buyModal);
     });
@@ -141,7 +150,7 @@ export function mountMarketplace(): void {
         const payload = Object.fromEntries(new FormData(sellForm).entries());
         if (button) button.disabled = true;
         try {
-            await api.post('/api/marketplace-listings', payload);
+            await api.postAuthed('/api/marketplace-listings', payload);
             if (sellStatus) { sellStatus.textContent = 'Listing submitted. We will review it before it goes live.'; sellStatus.className = 'mp-status success'; }
             sellForm.reset();
         } catch (err) {
@@ -158,7 +167,7 @@ export function mountMarketplace(): void {
         const payload = Object.fromEntries(new FormData(buyForm).entries());
         if (button) button.disabled = true;
         try {
-            const response = await api.post<{ message: string }>('/api/marketplace-orders', payload);
+            const response = await api.postAuthed<{ message: string }>('/api/marketplace-orders', payload);
             if (buyStatus) { buyStatus.textContent = response.data.message; buyStatus.className = 'mp-status success'; }
         } catch (err) {
             if (buyStatus) { buyStatus.textContent = err instanceof ApiError ? err.message : 'Could not record this order. Please try again.'; buyStatus.className = 'mp-status error'; }

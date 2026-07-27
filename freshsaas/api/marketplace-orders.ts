@@ -1,12 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool } from './_lib/db.js';
-import { clean, validEmail } from './_lib/validate.js';
+import { clean } from './_lib/validate.js';
 import { json, error, requireMethod, clientKey } from './_lib/http.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
+import { requireAuth } from './_lib/auth.js';
 
 const PLATFORM_FEE_RATE = 0.1;
 
-type OrderBody = { listingId?: string; buyerEmail?: string };
+type OrderBody = { listingId?: string };
 
 /**
  * Demo checkout only. No payment processor is connected yet, so no money
@@ -17,6 +18,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!requireMethod(req, res, ['POST'])) return;
     const pool = getPool();
 
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
     if (!(await checkRateLimit(pool, 'marketplace-orders', clientKey(req), 10, 60))) {
         error(res, 429, 'Too many checkout attempts from this network. Try again later.');
         return;
@@ -24,10 +28,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const input = (req.body || {}) as OrderBody;
     const listingId = clean(input.listingId, 64);
-    const buyerEmail = clean(input.buyerEmail, 254).toLowerCase();
 
-    if (!listingId || !validEmail(buyerEmail)) {
-        error(res, 400, 'A listing and a valid buyer email are required');
+    if (!listingId) {
+        error(res, 400, 'A listing is required');
         return;
     }
 
@@ -46,9 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const sellerPayoutCents = priceCents - platformFeeCents;
 
     const inserted = await pool.query(
-        `INSERT INTO marketplace_orders (listing_id, buyer_email, price_cents, platform_fee_cents, seller_payout_cents, status)
-         VALUES ($1, $2, $3, $4, $5, 'stub_pending_payment_integration') RETURNING id`,
-        [listingId, buyerEmail, priceCents, platformFeeCents, sellerPayoutCents],
+        `INSERT INTO marketplace_orders (listing_id, buyer_user_id, buyer_email, price_cents, platform_fee_cents, seller_payout_cents, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'stub_pending_payment_integration') RETURNING id`,
+        [listingId, user.userId, user.email, priceCents, platformFeeCents, sellerPayoutCents],
     );
     if (!inserted.rows[0]) {
         error(res, 500, 'Could not record order');

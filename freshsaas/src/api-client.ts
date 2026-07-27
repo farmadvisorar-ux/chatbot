@@ -1,3 +1,5 @@
+import { getAuthToken } from './auth';
+
 export class ApiError extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -6,10 +8,17 @@ export class ApiError extends Error {
     }
 }
 
-async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<{ data: T }> {
+async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, authed = false): Promise<{ data: T }> {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (authed) {
+        const token = await getAuthToken();
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(path, {
         method,
-        headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+        headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     let payload: unknown = null;
@@ -28,4 +37,5 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
 export const api = {
     get: <T>(path: string) => request<T>('GET', path),
     post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+    postAuthed: <T>(path: string, body?: unknown) => request<T>('POST', path, body, true),
 };

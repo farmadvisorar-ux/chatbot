@@ -1,15 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool } from './_lib/db.js';
-import { clean, validEmail, validUrl, numberValue } from './_lib/validate.js';
+import { clean, validUrl, numberValue } from './_lib/validate.js';
 import { json, error, requireMethod, clientKey } from './_lib/http.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
+import { requireAuth } from './_lib/auth.js';
 
 type ListingBody = {
     name?: string;
     tagline?: string;
     description?: string;
     priceUsd?: string | number;
-    sellerEmail?: string;
     url?: string;
 };
 
@@ -27,6 +27,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
 
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
     if (!(await checkRateLimit(pool, 'marketplace-listings', clientKey(req), 5, 60))) {
         error(res, 429, 'Too many listing submissions from this network. Try again later.');
         return;
@@ -36,17 +39,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const name = clean(input.name, 120);
     const tagline = clean(input.tagline, 200);
     const description = clean(input.description, 2000);
-    const sellerEmail = clean(input.sellerEmail, 254).toLowerCase();
     const url = clean(input.url, 2048);
     const priceUsd = numberValue(input.priceUsd);
     const priceCents = Math.round(priceUsd * 100);
 
     if (!name || !tagline || !description || !url) {
         error(res, 400, 'Name, tagline, description, and URL are required');
-        return;
-    }
-    if (!validEmail(sellerEmail)) {
-        error(res, 400, 'Enter a valid seller email');
         return;
     }
     if (!validUrl(url)) {
@@ -60,9 +58,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     // New listings require manual review before they go live in the marketplace.
     const inserted = await pool.query(
-        `INSERT INTO marketplace_listings (name, tagline, description, price_cents, seller_email, url, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending_review') RETURNING id`,
-        [name, tagline, description, priceCents, sellerEmail, url],
+        `INSERT INTO marketplace_listings (name, tagline, description, price_cents, seller_user_id, seller_email, url, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_review') RETURNING id`,
+        [name, tagline, description, priceCents, user.userId, user.email, url],
     );
     if (!inserted.rows[0]) {
         error(res, 500, 'Could not save listing');

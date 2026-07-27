@@ -4,6 +4,7 @@ import { initDirectory } from './directory';
 import { mountAIWorkspace } from './ai-workspace';
 import { mountMarketplace } from './marketplace';
 import { escapeHtml } from './escape-html';
+import { initAuth } from './auth';
 import { createIcons, ArrowRight, Sparkles, Rocket, Search, CheckCircle2, Layers3, Zap, Globe2, Menu, X, BadgeCheck, Mail, Plus, Building2, CircleDollarSign, FileQuestion, ClipboardList } from 'lucide';
 
 createIcons({ icons: { ArrowRight, Sparkles, Rocket, Search, CheckCircle2, Layers3, Zap, Globe2, Menu, X, BadgeCheck, Mail, Plus, Building2, CircleDollarSign, FileQuestion, ClipboardList } });
@@ -156,6 +157,7 @@ const observer = new IntersectionObserver(entries => entries.forEach(entry => {
 }), { threshold: .12 });
 document.querySelectorAll<HTMLElement>('.reveal').forEach(element => observer.observe(element));
 
+initAuth();
 initDirectory();
 loadProjects();
 mountAIWorkspace();
