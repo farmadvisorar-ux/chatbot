@@ -36,9 +36,24 @@
 
             <nav class="tabs">
                 <button class="tab active" data-tab="listings" type="button">Directory <span id="count-listings">0</span></button>
+                <button class="tab" data-tab="marketplace" type="button">Marketplace <span id="count-marketplace">0</span></button>
                 <button class="tab" data-tab="payouts" type="button">Payouts <span id="count-payouts">0</span></button>
+                <button class="tab" data-tab="people" type="button">People <span id="count-people">0</span></button>
                 <button class="tab" data-tab="tools" type="button">Tools</button>
             </nav>
+
+            <div class="panel" data-panel="marketplace">
+                <p class="muted">SaaS businesses listed for sale. New listings arrive pending review and are only purchasable once approved and the seller has finished payout setup.</p>
+                <div id="marketplace-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="people">
+                <p class="muted">Signed-up accounts and waitlist emails.</p>
+                <h3 class="subhead">Accounts</h3>
+                <div id="users-list" class="list"></div>
+                <h3 class="subhead">Waitlist</h3>
+                <div id="waitlist-list" class="list"></div>
+            </div>
 
             <div class="panel active" data-panel="listings">
                 <div class="filters">
