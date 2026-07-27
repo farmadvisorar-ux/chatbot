@@ -17,6 +17,12 @@ const SKIP_ADDRESS = /(example|sentry|wixpress|godaddy|squarespace|\.png|\.jpg|\
 // digging it out of commit metadata or profiles is not what this does.
 const CODE_HOSTS = /^(www\.)?(github\.com|gitlab\.com|codeberg\.org|git\.sr\.ht|bitbucket\.org|sourceforge\.net)$/i;
 
+// Listings from these sources point at the aggregator's page, not the
+// product's own site. Reading contacts off them returns the aggregator's
+// address — an early run captured hello@producthunt.com for all 44 Product
+// Hunt entries, which would have meant mailing Product Hunt 44 times.
+const AGGREGATOR_HOSTS = /^(www\.)?(producthunt\.com|news\.ycombinator\.com|lobste\.rs|dev\.to|reddit\.com|indiehackers\.com|betalist\.com)$/i;
+
 /**
  * Reads the contact address a product publishes on its own site.
  *
@@ -36,7 +42,7 @@ async function findContactEmail(pageUrl: string): Promise<{ email: string; kind:
     } catch {
         return null;
     }
-    if (CODE_HOSTS.test(host)) return null;
+    if (CODE_HOSTS.test(host) || AGGREGATOR_HOSTS.test(host)) return null;
 
     try {
         const robots = await fetchText(`${origin}/robots.txt`).catch(() => '');
