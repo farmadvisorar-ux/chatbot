@@ -78,6 +78,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'marketplace') {
+            // Marketplace listings start pending_review and had no approval
+            // path before this — they could only be made live by editing the
+            // database directly.
+            const { rows } = await pool.query(
+                `SELECT l.id, l.name, l.tagline, l.description, l.url, l.price_cents AS "priceCents",
+                        l.seller_email AS "sellerEmail", l.status, l.created_at AS "createdAt",
+                        u.payouts_enabled AS "payoutsEnabled", u.stripe_account_id IS NOT NULL AS "hasStripe",
+                        (SELECT count(*)::int FROM marketplace_orders o WHERE o.listing_id = l.id) AS orders
+                 FROM marketplace_listings l
+                 LEFT JOIN users u ON u.id = l.seller_user_id
+                 WHERE l.status <> 'rejected'
+                 ORDER BY CASE l.status WHEN 'pending_review' THEN 0 ELSE 1 END, l.created_at DESC
+                 LIMIT 100`,
+            );
+            json(res, 200, { marketplace: rows });
+            return;
+        }
+
+        if (view === 'people') {
+            const [users, waitlist] = await Promise.all([
+                pool.query(
+                    `SELECT u.id, u.email, u.name, u.created_at AS "createdAt",
+                            u.payouts_enabled AS "payoutsEnabled",
+                            (SELECT count(*)::int FROM marketplace_listings l WHERE l.seller_user_id = u.id) AS listings,
+                            (SELECT count(*)::int FROM marketplace_orders o WHERE o.buyer_user_id = u.id) AS purchases
+                     FROM users u ORDER BY u.created_at DESC LIMIT 200`,
+                ),
+                pool.query('SELECT email, source, created_at AS "createdAt" FROM waitlist ORDER BY created_at DESC LIMIT 200'),
+            ]);
+            json(res, 200, { users: users.rows, waitlist: waitlist.rows });
+            return;
+        }
+
         if (view === 'listings') {
             // Submissions publish without review, so moderation happens here
             // after the fact rather than in a queue beforehand.
@@ -135,6 +169,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         });
         const payload = await response.json().catch(() => ({}));
         json(res, response.ok ? 200 : 502, payload);
+        return;
+    }
+
+    if (action === 'listing-approve' || action === 'listing-reject') {
+        const listingId = clean(body.id, 64);
+        if (!listingId) {
+            error(res, 400, 'Provide the marketplace listing id');
+            return;
+        }
+        const nextStatus = action === 'listing-approve' ? 'live' : 'rejected';
+        const updated = await pool.query(
+            `UPDATE marketplace_listings SET status = $2 WHERE id = $1 RETURNING name, status`,
+            [listingId, nextStatus],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Marketplace listing not found');
+            return;
+        }
+        json(res, 200, { ok: true, name: updated.rows[0].name, status: updated.rows[0].status });
         return;
     }
 

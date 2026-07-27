@@ -63,6 +63,13 @@ function renderHeaderControls(): void {
     for (const mountPoint of mountPoints()) {
         if (clerk?.user) {
             mountPoint.innerHTML = '';
+            // A link to the account page, since the Clerk avatar menu only
+            // covers profile and sign-out.
+            const accountLink = document.createElement('a');
+            accountLink.href = '/account.html';
+            accountLink.className = 'text-button';
+            accountLink.textContent = 'My account';
+            mountPoint.appendChild(accountLink);
             const userButtonSlot = document.createElement('div');
             mountPoint.appendChild(userButtonSlot);
             clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
@@ -93,6 +100,16 @@ export function initAuth(): void {
 
 export function isSignedIn(): boolean {
     return Boolean(clerk?.user);
+}
+
+/**
+ * Loads Clerk now and reports whether there's an existing session. The public
+ * site defers loading until someone clicks sign in, but a page that only makes
+ * sense when signed in has to resolve that before it can render anything.
+ */
+export async function resolveSession(): Promise<boolean> {
+    const activeClerk = await loadClerk();
+    return Boolean(activeClerk?.user);
 }
 
 export function currentUserEmail(): string | null {

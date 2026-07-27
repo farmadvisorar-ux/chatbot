@@ -78,3 +78,7 @@ button.danger{background:var(--danger)}
 .contact{margin:8px 0 0;font-size:13px}
 .contact a{color:#2c5f8a;font-weight:700}
 .contact em{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
+.subhead{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:22px 0 0}
+.item.is-pending{border-color:#f0d98c;background:#fffdf6}
+.badge.ok{background:#dff0c8;color:#3f5a1c}
+.badge.warn-badge{background:#ffe9b0;color:#6b5a12}

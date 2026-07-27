@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your account — FreshSAAS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/account.css">
+</head>
+<body>
+    <main id="account-root">
+        <header class="topbar">
+            <a class="brand" href="/"><span class="brand-mark">F</span> FreshSAAS</a>
+            <div id="account-controls"></div>
+        </header>
+
+        <section id="signed-out" hidden class="card center">
+            <h1>Your account</h1>
+            <p class="muted">Sign in to see your submissions, marketplace listings and purchases.</p>
+            <button id="signin" type="button">Sign in</button>
+        </section>
+
+        <section id="loading" class="card center">
+            <p class="muted">Loading your account…</p>
+        </section>
+
+        <section id="signed-in" hidden>
+            <h1 id="greeting">Your account</h1>
+
+            <div class="card payout-card" id="payout-card" hidden>
+                <div>
+                    <strong id="payout-title">Set up payouts</strong>
+                    <span id="payout-copy" class="muted">Add your bank details on Stripe so buyers can purchase your listings. FreshSAAS never sees or stores them.</span>
+                </div>
+                <button id="payout-button" type="button">Set up payouts</button>
+            </div>
+
+            <h2>Your listings for sale</h2>
+            <div id="listings" class="list"></div>
+
+            <h2>Your submitted products</h2>
+            <div id="submissions" class="list"></div>
+
+            <h2>Your purchases</h2>
+            <div id="purchases" class="list"></div>
+
+            <p id="status" class="status" role="status" aria-live="polite"></p>
+        </section>
+    </main>
+    <script type="module" src="./src/account.ts"></script>
+</body>
+</html>

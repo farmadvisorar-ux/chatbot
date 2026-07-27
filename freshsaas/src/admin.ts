@@ -135,6 +135,61 @@ function renderPayouts(items: Release[]): void {
       </article>`).join('') : '<div class="empty">No payments awaiting release.</div>';
 }
 
+type MarketListing = {
+    id: string; name: string; tagline: string; description: string; url: string; priceCents: number;
+    sellerEmail: string; status: string; createdAt: string; payoutsEnabled: boolean | null;
+    hasStripe: boolean | null; orders: number;
+};
+type Person = { id: string; email: string; name: string | null; createdAt: string; payoutsEnabled: boolean; listings: number; purchases: number };
+type WaitlistRow = { email: string; source: string; createdAt: string };
+
+function renderMarketplace(items: MarketListing[]): void {
+    const pending = items.filter(item => item.status === 'pending_review').length;
+    $('#count-marketplace').textContent = String(pending);
+    $('#marketplace-list').innerHTML = items.length ? items.map(item => `
+      <article class="item${item.status === 'pending_review' ? ' is-pending' : ''}" data-id="${escapeHtml(item.id)}">
+        <div class="item-head">
+          <h3>${escapeHtml(item.name)}</h3>
+          <span class="badge ${item.status === 'live' ? 'ok' : 'warn-badge'}">${escapeHtml(item.status === 'live' ? 'Live' : 'Pending review')}</span>
+        </div>
+        <p class="meta">${escapeHtml(item.tagline)}</p>
+        <p class="meta">
+          <strong>${escapeHtml(money(item.priceCents))}</strong>
+          &nbsp;·&nbsp; you keep ${escapeHtml(money(Math.round(item.priceCents * 0.1)))}
+          &nbsp;·&nbsp; <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a>
+          &nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.sellerEmail)}">${escapeHtml(item.sellerEmail)}</a>
+          &nbsp;·&nbsp; ${escapeHtml(day(item.createdAt))}
+        </p>
+        ${item.payoutsEnabled
+            ? ''
+            : `<div class="warn">Seller can't receive money yet${item.hasStripe ? ' — Stripe onboarding started but unfinished.' : ' — they haven\'t started payout setup.'} Buyers are blocked from purchasing until they do.</div>`}
+        <div class="row">
+          ${item.status === 'pending_review'
+            ? '<button type="button" data-action="listing-approve">Approve for sale</button><button type="button" class="ghost" data-action="listing-reject">Reject</button>'
+            : '<button type="button" class="ghost" data-action="listing-reject">Take down</button>'}
+        </div>
+      </article>`).join('') : '<div class="empty">No marketplace listings yet.</div>';
+}
+
+function renderPeople(users: Person[], waitlist: WaitlistRow[]): void {
+    $('#count-people').textContent = String(users.length);
+    $('#users-list').innerHTML = users.length ? users.map(person => `
+      <article class="item">
+        <h3>${escapeHtml(person.name || person.email)}</h3>
+        <p class="meta">
+          <a href="mailto:${escapeHtml(person.email)}">${escapeHtml(person.email)}</a>
+          &nbsp;·&nbsp; joined ${escapeHtml(day(person.createdAt))}
+          ${person.listings ? `&nbsp;·&nbsp; ${person.listings} listing${person.listings === 1 ? '' : 's'}` : ''}
+          ${person.purchases ? `&nbsp;·&nbsp; ${person.purchases} purchase${person.purchases === 1 ? '' : 's'}` : ''}
+          ${person.payoutsEnabled ? '&nbsp;·&nbsp; payouts active' : ''}
+        </p>
+      </article>`).join('') : '<div class="empty">No signed-up accounts yet.</div>';
+
+    $('#waitlist-list').innerHTML = waitlist.length ? waitlist.map(row => `
+      <article class="item"><p class="meta"><a href="mailto:${escapeHtml(row.email)}">${escapeHtml(row.email)}</a> &nbsp;·&nbsp; ${escapeHtml(day(row.createdAt))}</p></article>
+    `).join('') : '<div class="empty">Nobody on the waitlist yet.</div>';
+}
+
 async function loadAll(): Promise<void> {
     const params = new URLSearchParams({
         view: 'listings',
@@ -142,14 +197,18 @@ async function loadAll(): Promise<void> {
         filter: filterView.value,
         source: filterSource.value,
     });
-    const [overview, live, rels] = await Promise.all([
+    const [overview, live, rels, market, people] = await Promise.all([
         callAdmin<Overview>('/api/admin?view=overview'),
         callAdmin<{ listings: Listing[] }>(`/api/admin?${params}`),
         callAdmin<{ awaitingRelease: Release[] }>('/api/admin?view=releases'),
+        callAdmin<{ marketplace: MarketListing[] }>('/api/admin?view=marketplace'),
+        callAdmin<{ users: Person[]; waitlist: WaitlistRow[] }>('/api/admin?view=people'),
     ]);
     renderStats(overview);
     renderListings(live.listings ?? []);
     renderPayouts(rels.awaitingRelease ?? []);
+    renderMarketplace(market.marketplace ?? []);
+    renderPeople(people.users ?? [], people.waitlist ?? []);
 }
 
 async function signIn(key: string, remember: boolean): Promise<void> {
@@ -247,6 +306,23 @@ editForm.addEventListener('submit', async event => {
 });
 document.querySelectorAll('[data-close-edit]').forEach(el =>
     el.addEventListener('click', () => { editModal.hidden = true; }));
+
+$('#marketplace-list').addEventListener('click', async event => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
+    const id = button?.closest<HTMLElement>('.item')?.dataset.id;
+    if (!button || !id) return;
+    const action = button.dataset.action!;
+    if (action === 'listing-reject' && !confirm('Take this listing down? It will no longer be purchasable.')) return;
+
+    button.disabled = true;
+    try {
+        await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ id, action }) });
+        await loadAll();
+    } catch (err) {
+        alert(err instanceof Error ? err.message : 'Action failed');
+        button.disabled = false;
+    }
+});
 
 payoutsList.addEventListener('click', async event => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action="release"]');
