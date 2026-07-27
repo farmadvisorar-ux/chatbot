@@ -1,0 +1,34 @@
+# Tests
+## Test 1 - Construction project can be created and appears in portfolio [sanity]
+Viewport: desktop
+Description: Verifies the working Construction & Contractor OS saves a new project through the backend.
+Steps:
+1. Open FreshSAAS.online and scroll to Construction & Contractor OS
+2. Click Create project and enter a unique project name, customer, contract value, Active status, progress, RFIs, and change orders
+3. Click Save project and wait for the confirmation
+4. Confirm the project appears in Project portfolio and the metrics update
+Expected: The project is saved, visible in the portfolio, and included in the active-project and contract-value totals.
+## Test 2 - AI Workspace returns ranked catalog matches
+Viewport: desktop
+Description: Verifies the Phase 17.1 smart search understands a plain-language catalog request without using model tokens.
+Steps:
+1. Open FreshSAAS and click AI Workspace
+2. Enter "Show me AI tools for construction teams" in Smart search
+3. Click Search and review the ranked results
+Expected: Ranked launch matches appear and the status confirms that no AI model tokens were used.
+## Test 3 - Mobile provider setup protects customer credentials
+Viewport: mobile
+Description: Verifies the bring-your-own-AI setup requires a session credential while refusing to store or upload it.
+Steps:
+1. On mobile, tap AI Workspace and open Provider
+2. Select OpenAI, enter a model, leave the session credential blank, and tap Save connection profile
+3. Enter "test-session-key" as the session credential and save again
+Expected: The blank credential is blocked; after a credential is entered, the profile saves and confirms the credential was cleared, never uploaded, and never stored.
+## Test 4 - Human approval gate records a decision without execution
+Viewport: desktop
+Description: Verifies proposed AI actions require an explicit human decision and cannot execute automatically.
+Steps:
+1. Open AI Workspace and select Approvals
+2. Add a uniquely named proposal to the review queue
+3. Click Approve on the new proposal
+Expected: The proposal changes to Approved and the interface confirms that no automatic execution was started.
