@@ -38,3 +38,57 @@ export async function sendWelcomeEmail(toEmail: string, name: string | null): Pr
         console.error('Welcome email threw:', err);
     }
 }
+
+/**
+ * Tells a founder their submitted project is now live in the directory.
+ *
+ * Only ever sent to an address the founder typed into the submission form
+ * themselves, which is what makes it a transactional reply rather than
+ * unsolicited mail. Never call this with an address discovered by scraping.
+ */
+export async function sendListedEmail(toEmail: string, productName: string, productUrl: string): Promise<void> {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return;
+
+    try {
+        const resend = new Resend(apiKey);
+        const { error } = await resend.emails.send({
+            from: SENDER,
+            to: toEmail,
+            replyTo: REPLY_TO,
+            subject: `${productName} is now listed on FreshSAAS`,
+            text: `Good news — ${productName} is now live in the FreshSAAS launch directory.\n\nYou can see it at https://freshsaas.online\n\nYou're getting this because you submitted ${productUrl} to FreshSAAS. If that wasn't you, just reply and we'll remove the listing.\n\n— FreshSAAS`,
+        });
+        if (error) {
+            console.error('Listing email was not sent:', error.name, error.message);
+        }
+    } catch (err) {
+        console.error('Listing email threw:', err);
+    }
+}
+
+/**
+ * Digest to the site owner after an ingest run. Goes only to ADMIN_EMAIL,
+ * so it carries none of the consent concerns of mailing listed founders.
+ */
+export async function sendAdminDigest(summary: string): Promise<void> {
+    const apiKey = process.env.RESEND_API_KEY;
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!apiKey || !adminEmail) return;
+
+    try {
+        const resend = new Resend(apiKey);
+        const { error } = await resend.emails.send({
+            from: SENDER,
+            to: adminEmail,
+            replyTo: REPLY_TO,
+            subject: 'FreshSAAS: new launches added',
+            text: `${summary}\n\nBrowse them at https://freshsaas.online\n\n— FreshSAAS automation`,
+        });
+        if (error) {
+            console.error('Admin digest was not sent:', error.name, error.message);
+        }
+    } catch (err) {
+        console.error('Admin digest threw:', err);
+    }
+}

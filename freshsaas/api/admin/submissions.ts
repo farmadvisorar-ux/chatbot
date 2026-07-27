@@ -3,6 +3,7 @@ import { getPool } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { clean } from '../_lib/validate.js';
 import { insertCandidates, dedupKey } from '../_lib/directory.js';
+import { sendListedEmail } from '../_lib/email.js';
 
 /**
  * Review queue for founder submissions.
@@ -51,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const found = await pool.query(
-        `SELECT id, product, url, promise, status, published_entry_id
+        `SELECT id, product, url, promise, email, status, published_entry_id
          FROM project_submissions WHERE id = $1`,
         [id],
     );
@@ -94,6 +95,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         `UPDATE project_submissions SET status = 'approved', reviewed_at = now(), published_entry_id = $2 WHERE id = $1`,
         [id, entryId],
     );
+
+    // Only notify on the run that actually published, so re-approving an
+    // already-listed submission doesn't email the founder twice.
+    if (added > 0 && submission.email) {
+        await sendListedEmail(submission.email, submission.product, submission.url);
+    }
 
     json(res, 200, { ok: true, status: 'approved', published: added > 0, entryId });
 }
