@@ -38,7 +38,9 @@ The dev server only serves the static frontend — API routes need either `verce
 2. In the Application's sign-in options, enable: **Email address** (with both "Password" and "Email verification link" / magic link strategies), **Google**, and **Microsoft**. Clerk provides shared development OAuth credentials for Google out of the box; Microsoft and production Google both need your own OAuth app (Clerk's dashboard walks you through registering one in Google Cloud Console / Azure AD when you're ready to go to production — you can launch with Clerk's dev credentials first).
 3. In **API Keys**, copy the **Publishable key** and **Secret key**.
 4. Set both as Vercel env vars: `VITE_CLERK_PUBLISHABLE_KEY` (Publishable key) and `CLERK_SECRET_KEY` (Secret key), then redeploy (step 6 above — the publishable key must be present at build time).
-5. Once deployed, go to Clerk Dashboard → **Webhooks** → **Add Endpoint**, URL `https://<your-domain>/api/webhooks/clerk`, subscribed to the `user.created` and `user.updated` events. Copy the endpoint's **Signing Secret** and set it as `CLERK_WEBHOOK_SECRET` in Vercel, then redeploy once more.
+5. Once deployed, go to Clerk Dashboard → **Webhooks** → **Add Endpoint**, URL `https://<your-domain>/api/webhooks/clerk`, subscribed to the `user.created`, `user.updated`, and `user.deleted` events. Copy the endpoint's **Signing Secret** and set it as `CLERK_WEBHOOK_SECRET` in Vercel, then redeploy once more.
+
+   `user.deleted` matters for data hygiene: without it, deleting an account in Clerk leaves that person's email behind in the `users` table forever. With it subscribed, the handler removes the row — or, if they have marketplace listings or orders (records worth keeping), scrubs the identifying fields while preserving the row for referential integrity.
 
 Without these env vars set, the site still works — the "Sign in" control just hides itself, and any auth-gated API endpoint returns a clear 501 instead of crashing.
 

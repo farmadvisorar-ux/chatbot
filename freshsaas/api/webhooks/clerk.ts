@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type pg from 'pg';
 import { Webhook } from 'svix';
 import { getPool } from '../_lib/db.js';
 import { error, json, requireMethod } from '../_lib/http.js';
@@ -16,6 +17,25 @@ type ClerkUserEvent = {
         primary_email_address_id: string | null;
     };
 };
+
+/**
+ * Removes a deleted Clerk user's personal data. Marketplace listings and
+ * orders reference users by id, so a plain DELETE fails for anyone with
+ * trading history — those rows are financial records worth keeping. In that
+ * case the row is kept for referential integrity but its identifying fields
+ * are scrubbed. Users with no history are deleted outright.
+ */
+async function removeUser(pool: pg.Pool, userId: string): Promise<void> {
+    try {
+        await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    } catch (err) {
+        if ((err as { code?: string }).code !== '23503') throw err;
+        await pool.query(
+            `UPDATE users SET email = 'deleted-' || id || '@removed.invalid', name = NULL WHERE id = $1`,
+            [userId],
+        );
+    }
+}
 
 function readRawBody(req: VercelRequest): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -74,6 +94,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 await sendWelcomeEmail(primaryEmail.email_address, name);
             }
         }
+    } else if (event.type === 'user.deleted') {
+        await removeUser(getPool(), event.data.id);
     }
 
     json(res, 200, { received: true });
