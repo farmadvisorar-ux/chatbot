@@ -1,0 +1,37 @@
+name: FreshSAAS outreach digest
+
+# Emails the site owner 10 newly listed launches with their source links, so
+# founders can be contacted personally. Paced at two-hourly by request.
+on:
+  schedule:
+    - cron: '43 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send outreach digest
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          INGEST_URL: ${{ vars.INGEST_URL || 'https://freshsaas.online/api/cron/ingest' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET repository secret is not set; cannot authenticate." >&2
+            exit 1
+          fi
+
+          response=$(curl -sS -X POST "$INGEST_URL?task=digest" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -w '\n%{http_code}' \
+            --max-time 120)
+
+          status=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+
+          echo "$body"
+
+          if [ "$status" != "200" ]; then
+            echo "Digest failed with HTTP $status" >&2
+            exit 1
+          fi
