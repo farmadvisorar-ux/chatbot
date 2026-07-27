@@ -64,6 +64,9 @@ button.danger{background:var(--danger)}
 
 /* Edit modal */
 .modal{position:fixed;inset:0;display:grid;place-items:center;z-index:50}
+/* Author `display` beats the UA stylesheet's [hidden]{display:none}, so the
+   hidden state has to be restated here or the modal is permanently on screen. */
+.modal[hidden]{display:none}
 .modal-backdrop{position:absolute;inset:0;background:rgba(12,15,20,.6)}
 .modal-card{position:relative;z-index:1;width:min(460px,calc(100% - 28px));background:#fff;border-radius:18px;padding:26px;display:grid;gap:12px}
 .modal-card h2{margin:0;font-size:20px}

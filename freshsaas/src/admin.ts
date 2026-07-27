@@ -93,7 +93,8 @@ function renderListings(items: Listing[]): void {
     const removedView = filterView.value === 'removed';
 
     listingsList.innerHTML = items.length ? items.map(item => `
-      <article class="item${item.featured ? ' is-featured' : ''}" data-id="${escapeHtml(item.id)}">
+      <article class="item${item.featured ? ' is-featured' : ''}" data-id="${escapeHtml(item.id)}"
+               data-name="${escapeHtml(item.name)}" data-tagline="${escapeHtml(item.tagline)}" data-category="${escapeHtml(item.category)}">
         <div class="item-head">
           <h3>${escapeHtml(item.name)}</h3>
           ${item.featured ? '<span class="badge">Featured</span>' : ''}
@@ -201,10 +202,13 @@ listingsList.addEventListener('click', async event => {
     const action = button.dataset.action!;
 
     if (action === 'edit') {
+        // Read from data attributes rather than rendered text: the visible
+        // markup wraps values in links and separators, so scraping it back out
+        // returns the decorated version rather than the stored one.
         (editForm.elements.namedItem('id') as HTMLInputElement).value = id;
-        (editForm.elements.namedItem('name') as HTMLInputElement).value = card.querySelector('h3')?.textContent ?? '';
-        (editForm.elements.namedItem('tagline') as HTMLInputElement).value = card.querySelector('.meta')?.textContent?.trim() ?? '';
-        (editForm.elements.namedItem('category') as HTMLInputElement).value = '';
+        (editForm.elements.namedItem('name') as HTMLInputElement).value = card.dataset.name ?? '';
+        (editForm.elements.namedItem('tagline') as HTMLInputElement).value = card.dataset.tagline ?? '';
+        (editForm.elements.namedItem('category') as HTMLInputElement).value = card.dataset.category ?? '';
         editStatus.textContent = '';
         editModal.hidden = false;
         return;
