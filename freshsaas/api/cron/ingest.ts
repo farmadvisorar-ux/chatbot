@@ -13,55 +13,81 @@ const CONTACT_BATCH_SIZE = 15;
 const ROLE_MAILBOXES = /^(hello|hi|contact|support|info|team|sales|press|admin|help|founders?|care|enquiries|inquiries)@/i;
 const SKIP_ADDRESS = /(example|sentry|wixpress|godaddy|squarespace|\.png|\.jpg|\.svg|@2x|u003e)/i;
 
+// Code hosts never publish the maker's contact address on a repo page, and
+// digging it out of commit metadata or profiles is not what this does.
+const CODE_HOSTS = /^(www\.)?(github\.com|gitlab\.com|codeberg\.org|git\.sr\.ht|bitbucket\.org|sourceforge\.net)$/i;
+
 /**
  * Reads the contact address a product publishes on its own site.
  *
- * Only the page the listing already points at is fetched — no crawling, no
- * third-party lookup services, and nothing pulled from commit histories or
- * profiles. Sites that disallow us in robots.txt are skipped. This is the
- * address the company put up to be contacted on; it's for writing to people
- * individually, not for loading into a bulk sender.
+ * Fetches the listing's own page and, if nothing is there, the site's
+ * homepage and /contact — the places a company puts an address it wants to
+ * be reached on. No crawling beyond that, no third-party lookup services,
+ * and nothing taken from commit histories or profiles. Sites that disallow
+ * us in robots.txt are skipped.
  */
 async function findContactEmail(pageUrl: string): Promise<{ email: string; kind: string } | null> {
     let origin: string;
+    let host: string;
     try {
-        origin = new URL(pageUrl).origin;
+        const parsed = new URL(pageUrl);
+        origin = parsed.origin;
+        host = parsed.hostname;
     } catch {
         return null;
     }
+    if (CODE_HOSTS.test(host)) return null;
 
     try {
         const robots = await fetchText(`${origin}/robots.txt`).catch(() => '');
-        // Only honour a blanket disallow-all; per-path rules aren't worth
-        // parsing for a single homepage fetch.
+        // Only a blanket disallow-all is honoured; per-path rules aren't worth
+        // parsing for a couple of page fetches.
         if (/user-agent:\s*\*[\s\S]*?disallow:\s*\/\s*(\n|$)/i.test(robots)) return null;
     } catch {
         /* No robots.txt is not a prohibition. */
     }
 
-    const html = await fetchText(pageUrl).catch(() => '');
-    if (!html) return null;
+    const extract = (html: string): string[] => {
+        const found = new Set<string>();
+        for (const match of html.matchAll(/mailto:([^"'?\s>]+)/gi)) {
+            const address = decodeEntities(match[1]).trim().toLowerCase();
+            if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(address) && !SKIP_ADDRESS.test(address)) found.add(address);
+        }
+        return [...found];
+    };
 
-    const found = new Set<string>();
-    for (const match of html.matchAll(/mailto:([^"'?\s>]+)/gi)) {
-        const address = decodeEntities(match[1]).trim().toLowerCase();
-        if (/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(address) && !SKIP_ADDRESS.test(address)) found.add(address);
+    // Deep links (a blog post, a docs page) often carry no contact details
+    // even when the site does, so fall back to the obvious locations.
+    const targets = [pageUrl, origin, `${origin}/contact`];
+    for (const target of targets) {
+        const html = await fetchText(target).catch(() => '');
+        if (!html) continue;
+        const addresses = extract(html);
+        if (!addresses.length) continue;
+        const role = addresses.find(address => ROLE_MAILBOXES.test(address));
+        return role ? { email: role, kind: 'role' } : { email: addresses[0], kind: 'personal' };
     }
-
-    if (!found.size) return null;
-    const addresses = [...found];
-    const role = addresses.find(address => ROLE_MAILBOXES.test(address));
-    return role
-        ? { email: role, kind: 'role' }
-        : { email: addresses[0], kind: 'personal' };
+    return null;
 }
 
 /** Looks up contact addresses for entries that haven't been checked yet. */
 async function runContactLookup(pool: ReturnType<typeof getPool>): Promise<{ checked: number; found: number }> {
+    // Product Hunt entries and founder submissions point at real product sites;
+    // Lobsters and Show HN links are often blog posts or repos with nothing to
+    // find. Checking the likely ones first means the early batches are useful
+    // rather than mostly misses.
     const { rows } = await pool.query<{ id: string; url: string }>(
         `SELECT id, url FROM directory_entries
          WHERE status = 'live' AND contact_checked_at IS NULL
-         ORDER BY featured DESC, discovered_at DESC
+         ORDER BY featured DESC,
+                  CASE source
+                    WHEN 'FreshSAAS submission' THEN 0
+                    WHEN 'Product Hunt' THEN 1
+                    WHEN 'DEV' THEN 2
+                    WHEN 'Hacker News' THEN 3
+                    ELSE 4
+                  END,
+                  discovered_at DESC
          LIMIT $1`,
         [CONTACT_BATCH_SIZE],
     );
