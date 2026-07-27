@@ -2,6 +2,8 @@
 
 A launch directory and marketplace for newly launched SaaS products, built as a static Vite frontend with Vercel serverless functions and Postgres.
 
+**Live:** https://freshsaas.vercel.app (Vercel project `wordwide-top-10/freshsaas`, database via the Neon Vercel integration).
+
 ## Stack
 
 - Frontend: Vite + TypeScript, no framework, Tailwind for base styles
@@ -25,8 +27,8 @@ The dev server only serves the static frontend — API routes need either `verce
 2. In the Vercel dashboard, "Add New Project" and import the repo. Vercel auto-detects the Vite build (`npm run build`, output `dist`) and the `api/` functions.
 3. Provision a Postgres database (Vercel Postgres, or the Neon/Supabase integration from the Vercel marketplace) and copy its connection string.
 4. In Project Settings → Environment Variables, add `DATABASE_URL` with that connection string.
-5. Run the migration once against that database: `DATABASE_URL=... npm run migrate` (from your machine, or any environment with network access to the DB).
-6. Deploy. `vercel.json` sets baseline security headers (CSP, X-Frame-Options, etc.).
+5. Run the migration once against that database: `DATABASE_URL=... npm run migrate` (from your machine, or any environment with raw Postgres/TCP network access to the DB). If you're running from a sandboxed environment that only allows outbound HTTPS (no direct port-5432 access — common in CI runners and hosted agents), use `DATABASE_URL=... npm run migrate:http` instead, which applies the same `db/schema.sql` over Neon's HTTP driver. This only works against Neon databases; other Postgres providers need the plain `npm run migrate` from an environment with TCP access.
+6. Deploy. `vercel.json` sets baseline security headers (CSP, X-Frame-Options, etc.). **Redeploy after adding/changing `DATABASE_URL`** — Vercel bakes env vars into a deployment at build time, so a deployment built before the variable existed won't see it until you redeploy.
 
 ## What's implemented vs. stubbed
 
