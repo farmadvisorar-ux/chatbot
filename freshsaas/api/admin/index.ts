@@ -66,6 +66,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const body = (req.body || {}) as { id?: string; orderId?: string; action?: string };
     const action = clean(body.action, 20);
 
+    if (action === 'run-ingest' || action === 'run-digest') {
+        // Proxied server-side so the browser never holds CRON_SECRET.
+        const cronSecret = process.env.CRON_SECRET;
+        if (!cronSecret) {
+            error(res, 501, 'CRON_SECRET is not configured, so scheduled jobs cannot be run.');
+            return;
+        }
+        const base = process.env.PUBLIC_SITE_URL || 'https://freshsaas.online';
+        const task = action === 'run-digest' ? '?task=digest' : '';
+        const response = await fetch(`${base}/api/cron/ingest${task}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${cronSecret}` },
+        });
+        const payload = await response.json().catch(() => ({}));
+        json(res, response.ok ? 200 : 502, payload);
+        return;
+    }
+
     if (action === 'release') {
         await releaseOrder(pool, clean(body.orderId, 64), res);
         return;
