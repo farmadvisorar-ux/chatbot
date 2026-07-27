@@ -1,4 +1,5 @@
-:root{--ink:#10131b;--paper:#f5f6ef;--line:rgba(16,19,27,.14);--muted:#6e7468;--lime:#c9ff57;--danger:#c0392b}
+:root{--ink:#e8ecf4;--paper:#0b0e14;--surface:#141922;--surface-2:#1b2230;--line:rgba(255,255,255,.1);--muted:#93a0b5;--lime:#c9ff57;--danger:#ff8f7a}
+html{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;line-height:1.55}
 button,input{font:inherit}
@@ -9,20 +10,20 @@ button,input{font:inherit}
 h1{font-family:'Syne',sans-serif;font-size:30px;letter-spacing:-.04em;margin:28px 0 6px}
 h2{font-family:'Syne',sans-serif;font-size:19px;letter-spacing:-.03em;margin:34px 0 0}
 .muted{color:var(--muted);font-size:14px}
-button{background:var(--ink);color:#fff;border:0;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer}
+button{background:var(--lime);color:#0b0e14;border:0;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
-.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px}
 .card.center{text-align:center;margin-top:60px}
 .card.center button{margin-top:16px}
-.payout-card{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:20px;background:#f4faea;border-color:#cfe3b0}
+.payout-card{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:20px;background:rgba(201,255,87,.08);border-color:rgba(201,255,87,.28)}
 .payout-card strong{display:block;margin-bottom:2px}
 .list{display:grid;gap:10px;margin-top:12px}
-.item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
 .item h3{margin:0 0 4px;font-size:16px}
 .item p{margin:2px 0}
 .meta{font-size:13px;color:var(--muted);word-break:break-word}
-.meta a{color:#2c5f8a}
-.note{font-size:12px;color:#6b5a12;background:#fff7e0;border:1px solid #f0d98c;border-radius:10px;padding:9px;margin-top:10px!important}
+.meta a{color:#7ac7ff}
+.note{font-size:12px;color:#ffd08a;background:rgba(255,209,138,.1);border:1px solid rgba(255,209,138,.3);border-radius:10px;padding:9px;margin-top:10px!important}
 .badge{background:var(--lime);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:800;color:var(--ink)}
 .empty{padding:26px;text-align:center;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:14px}
 .status{font-size:13px;margin-top:18px;min-height:18px}

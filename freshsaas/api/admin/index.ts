@@ -78,6 +78,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'analytics') {
+            const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
+            const window = `${days} days`;
+            const [totals, daily, referrers, countries, devices, topListings, searches, pages] = await Promise.all([
+                pool.query(`SELECT count(*)::int AS events,
+                                   count(DISTINCT session_id)::int AS visitors,
+                                   count(*) FILTER (WHERE type='pageview')::int AS pageviews,
+                                   count(*) FILTER (WHERE type='outbound')::int AS outbound
+                            FROM analytics_events WHERE created_at > now() - $1::interval`, [window]),
+                pool.query(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+                                   count(DISTINCT session_id)::int AS visitors,
+                                   count(*) FILTER (WHERE type='pageview')::int AS pageviews
+                            FROM analytics_events WHERE created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY 1`, [window]),
+                pool.query(`SELECT COALESCE(referrer_host,'direct') AS source, count(DISTINCT session_id)::int AS visitors
+                            FROM analytics_events WHERE created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY visitors DESC LIMIT 12`, [window]),
+                pool.query(`SELECT COALESCE(country,'??') AS country, count(DISTINCT session_id)::int AS visitors
+                            FROM analytics_events WHERE created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY visitors DESC LIMIT 12`, [window]),
+                pool.query(`SELECT COALESCE(device,'unknown') AS device, count(DISTINCT session_id)::int AS visitors
+                            FROM analytics_events WHERE created_at > now() - $1::interval GROUP BY 1 ORDER BY visitors DESC`, [window]),
+                pool.query(`SELECT a.label, count(*)::int AS clicks
+                            FROM analytics_events a
+                            WHERE a.type IN ('listing_click','outbound') AND a.created_at > now() - $1::interval AND a.label IS NOT NULL
+                            GROUP BY 1 ORDER BY clicks DESC LIMIT 15`, [window]),
+                pool.query(`SELECT label AS term, count(*)::int AS searches
+                            FROM analytics_events WHERE type='search' AND created_at > now() - $1::interval AND label IS NOT NULL
+                            GROUP BY 1 ORDER BY searches DESC LIMIT 15`, [window]),
+                pool.query(`SELECT path, count(*)::int AS views
+                            FROM analytics_events WHERE type='pageview' AND created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY views DESC LIMIT 10`, [window]),
+            ]);
+            json(res, 200, {
+                days,
+                totals: totals.rows[0],
+                daily: daily.rows,
+                referrers: referrers.rows,
+                countries: countries.rows,
+                devices: devices.rows,
+                topListings: topListings.rows,
+                searches: searches.rows,
+                pages: pages.rows,
+            });
+            return;
+        }
+
         if (view === 'marketplace') {
             // Marketplace listings start pending_review and had no approval
             // path before this — they could only be made live by editing the
