@@ -5,6 +5,7 @@ type Listing = {
     id: string; name: string; tagline: string; url: string; category: string;
     source: string; sourceUrl: string | null; featured: boolean; featuredRank: number;
     status: string; discoveredAt: string; submitterEmail: string | null;
+    contactEmail: string | null; contactKind: string | null;
 };
 type Release = {
     id: string; listingName: string; buyerEmail: string; sellerEmail: string;
@@ -107,6 +108,7 @@ function renderListings(items: Listing[]): void {
           ${item.submitterEmail ? `&nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.submitterEmail)}">${escapeHtml(item.submitterEmail)}</a>` : ''}
           &nbsp;·&nbsp; ${escapeHtml(day(item.discoveredAt))}
         </p>
+        ${item.contactEmail ? `<p class="contact"><a href="mailto:${escapeHtml(item.contactEmail)}">${escapeHtml(item.contactEmail)}</a>${item.contactKind === 'personal' ? ' <em>personal address — write individually</em>' : ' <em>published on their site</em>'}</p>` : ''}
         <div class="row">
           ${removedView
             ? '<button type="button" data-action="restore">Restore to directory</button>'
@@ -267,19 +269,21 @@ payoutsList.addEventListener('click', async event => {
     }
 });
 
-async function runTask(task: 'ingest' | 'digest', button: HTMLButtonElement): Promise<void> {
+async function runTask(task: 'ingest' | 'digest' | 'contacts', button: HTMLButtonElement): Promise<void> {
     button.disabled = true;
-    toolsStatus.textContent = task === 'ingest' ? 'Pulling new launches…' : 'Sending digest…';
+    toolsStatus.textContent = { ingest: 'Pulling new launches…', digest: 'Sending digest…', contacts: 'Looking up contact addresses…' }[task];
     toolsStatus.className = 'status';
     try {
         // Proxied through the admin API so CRON_SECRET stays out of the browser.
-        const result = await callAdmin<{ totalAdded?: number; sent?: number }>('/api/admin', {
+        const result = await callAdmin<{ totalAdded?: number; sent?: number; checked?: number; found?: number }>('/api/admin', {
             method: 'POST',
-            body: JSON.stringify({ action: task === 'ingest' ? 'run-ingest' : 'run-digest' }),
+            body: JSON.stringify({ action: `run-${task}` }),
         });
         toolsStatus.textContent = task === 'ingest'
             ? `Added ${result.totalAdded ?? 0} new launches.`
-            : `Sent a digest of ${result.sent ?? 0} launches.`;
+            : task === 'contacts'
+                ? `Checked ${result.checked ?? 0} sites, found ${result.found ?? 0} contact addresses.`
+                : `Sent a digest of ${result.sent ?? 0} launches.`;
         toolsStatus.className = 'status success';
         await loadAll();
     } catch (err) {
@@ -292,6 +296,7 @@ async function runTask(task: 'ingest' | 'digest', button: HTMLButtonElement): Pr
 
 $<HTMLButtonElement>('#run-ingest').addEventListener('click', e => void runTask('ingest', e.currentTarget as HTMLButtonElement));
 $<HTMLButtonElement>('#run-digest').addEventListener('click', e => void runTask('digest', e.currentTarget as HTMLButtonElement));
+$<HTMLButtonElement>('#run-contacts').addEventListener('click', e => void runTask('contacts', e.currentTarget as HTMLButtonElement));
 
 let searchTimer = 0;
 listingSearch.addEventListener('input', () => {

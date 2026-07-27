@@ -67,7 +67,10 @@ export async function sendListedEmail(toEmail: string, productName: string, prod
     }
 }
 
-export type DigestEntry = { name: string; tagline: string; url: string; source: string; sourceUrl: string | null };
+export type DigestEntry = {
+    name: string; tagline: string; url: string; source: string; sourceUrl: string | null;
+    contactEmail?: string | null; contactKind?: string | null;
+};
 
 /**
  * Outreach batch for the site owner: newly listed launches with links, so they
@@ -87,6 +90,9 @@ export async function sendOutreachDigest(entries: DigestEntry[]): Promise<boolea
         `   ${entry.tagline}`,
         `   Product: ${entry.url}`,
         entry.sourceUrl ? `   Found on ${entry.source}: ${entry.sourceUrl}` : `   Source: ${entry.source}`,
+        entry.contactEmail
+            ? `   Contact: ${entry.contactEmail}${entry.contactKind === 'personal' ? '  (personal address — write individually)' : ''}`
+            : '   Contact: not published on their site',
     ].join('\n')).join('\n\n');
 
     try {

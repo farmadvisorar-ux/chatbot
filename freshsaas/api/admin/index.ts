@@ -89,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const { rows } = await pool.query(
                 `SELECT d.id, d.name, d.tagline, d.url, d.category, d.source, d.source_url AS "sourceUrl",
                         d.featured, d.featured_rank AS "featuredRank", d.status,
+                        d.contact_email AS "contactEmail", d.contact_kind AS "contactKind",
                         d.discovered_at AS "discoveredAt", s.email AS "submitterEmail"
                  FROM directory_entries d
                  LEFT JOIN project_submissions s ON s.published_entry_id = d.id
@@ -119,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     };
     const action = clean(body.action, 20);
 
-    if (action === 'run-ingest' || action === 'run-digest') {
+    if (action === 'run-ingest' || action === 'run-digest' || action === 'run-contacts') {
         // Proxied server-side so the browser never holds CRON_SECRET.
         const cronSecret = process.env.CRON_SECRET;
         if (!cronSecret) {
@@ -127,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
         const base = process.env.PUBLIC_SITE_URL || 'https://freshsaas.online';
-        const task = action === 'run-digest' ? '?task=digest' : '';
+        const task = action === 'run-digest' ? '?task=digest' : action === 'run-contacts' ? '?task=contacts' : '';
         const response = await fetch(`${base}/api/cron/ingest${task}`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${cronSecret}` },
