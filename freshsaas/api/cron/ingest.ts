@@ -2,7 +2,44 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { insertCandidates, type DirectoryCandidate } from '../_lib/directory.js';
-import { sendAdminDigest } from '../_lib/email.js';
+import { sendAdminDigest, sendOutreachDigest, type DigestEntry } from '../_lib/email.js';
+
+const DIGEST_BATCH_SIZE = 10;
+
+/**
+ * Emails the owner a batch of launches they haven't seen yet, with links for
+ * personal outreach, then marks them so the next batch moves on.
+ *
+ * Rows are claimed and marked in one statement so two overlapping runs cannot
+ * send the same batch twice.
+ */
+async function runOutreachDigest(pool: ReturnType<typeof getPool>): Promise<{ sent: number }> {
+    const { rows } = await pool.query<DigestEntry & { id: string }>(
+        `UPDATE directory_entries SET digested_at = now()
+         WHERE id IN (
+           SELECT id FROM directory_entries
+           WHERE status = 'live' AND digested_at IS NULL
+           ORDER BY discovered_at DESC
+           LIMIT $1
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING id, name, tagline, url, source, source_url AS "sourceUrl"`,
+        [DIGEST_BATCH_SIZE],
+    );
+    if (!rows.length) return { sent: 0 };
+
+    const delivered = await sendOutreachDigest(rows);
+    if (!delivered) {
+        // Put them back in the queue so a mail failure doesn't silently skip
+        // a batch the owner never actually received.
+        await pool.query(
+            `UPDATE directory_entries SET digested_at = NULL WHERE id = ANY($1::uuid[])`,
+            [rows.map(row => row.id)],
+        );
+        return { sent: 0 };
+    }
+    return { sent: rows.length };
+}
 
 const USER_AGENT = 'FreshSAAS-Bot/1.0 (+https://freshsaas.online)';
 const FETCH_TIMEOUT_MS = 12000;
@@ -163,6 +200,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const pool = getPool();
+
+    // Two schedules share this function because Vercel's Hobby plan caps the
+    // project at 12 serverless functions: hourly ingest, two-hourly digest.
+    const task = typeof req.query.task === 'string' ? req.query.task : 'ingest';
+    if (task === 'digest') {
+        const { sent } = await runOutreachDigest(pool);
+        json(res, 200, { ok: true, task: 'digest', sent });
+        return;
+    }
+
     const report: Record<string, { found: number; added: number } | { failed: string }> = {};
     let totalAdded = 0;
 
@@ -179,13 +226,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
     }
 
-    // Only mail the owner when there is something new; an hourly "added 0"
-    // digest would be noise that trains them to ignore the alert.
-    if (totalAdded > 0) {
-        const lines = Object.entries(report)
-            .map(([name, result]) => 'added' in result ? `${name}: ${result.added} new (${result.found} seen)` : `${name}: failed — ${result.failed}`)
-            .join('\n');
-        await sendAdminDigest(`${totalAdded} new launches were added to the directory.\n\n${lines}`);
+    // Only surface ingest failures here. What was *added* arrives in the
+    // two-hourly outreach digest instead, so a busy hour doesn't produce two
+    // emails about the same launches.
+    const failures = Object.entries(report)
+        .filter(([, result]) => 'failed' in result)
+        .map(([name, result]) => `${name}: ${(result as { failed: string }).failed}`);
+    if (failures.length) {
+        await sendAdminDigest(`Some launch sources failed during ingest:\n\n${failures.join('\n')}`);
     }
 
     json(res, 200, { ok: true, totalAdded, sources: report });

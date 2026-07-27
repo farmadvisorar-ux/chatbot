@@ -67,6 +67,48 @@ export async function sendListedEmail(toEmail: string, productName: string, prod
     }
 }
 
+export type DigestEntry = { name: string; tagline: string; url: string; source: string; sourceUrl: string | null };
+
+/**
+ * Outreach batch for the site owner: newly listed launches with links, so they
+ * can look through and contact founders personally where it's worth it.
+ *
+ * Goes only to ADMIN_EMAIL. It deliberately carries links rather than mailing
+ * the founders directly — those addresses were never given to us, so bulk
+ * mailing them would be unsolicited regardless of how slowly it were paced.
+ */
+export async function sendOutreachDigest(entries: DigestEntry[]): Promise<boolean> {
+    const apiKey = process.env.RESEND_API_KEY;
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!apiKey || !adminEmail || !entries.length) return false;
+
+    const body = entries.map((entry, index) => [
+        `${index + 1}. ${entry.name}`,
+        `   ${entry.tagline}`,
+        `   Product: ${entry.url}`,
+        entry.sourceUrl ? `   Found on ${entry.source}: ${entry.sourceUrl}` : `   Source: ${entry.source}`,
+    ].join('\n')).join('\n\n');
+
+    try {
+        const resend = new Resend(apiKey);
+        const { error } = await resend.emails.send({
+            from: SENDER,
+            to: adminEmail,
+            replyTo: REPLY_TO,
+            subject: `${entries.length} new launches to review`,
+            text: `Here are ${entries.length} launches recently added to your directory, with links so you can reach out to the founders yourself where it looks worthwhile.\n\n${body}\n\nAll of them are already live at https://freshsaas.online\n\n— FreshSAAS automation`,
+        });
+        if (error) {
+            console.error('Outreach digest was not sent:', error.name, error.message);
+            return false;
+        }
+        return true;
+    } catch (err) {
+        console.error('Outreach digest threw:', err);
+        return false;
+    }
+}
+
 /**
  * Digest to the site owner after an ingest run. Goes only to ADMIN_EMAIL,
  * so it carries none of the consent concerns of mailing listed founders.

@@ -116,6 +116,10 @@ CREATE TABLE IF NOT EXISTS directory_entries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS directory_entries_live ON directory_entries (status, discovered_at DESC);
+-- Set once an entry has appeared in an outreach digest to the site owner, so
+-- each batch shows launches not seen before rather than repeating the newest.
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS digested_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS directory_entries_undigested ON directory_entries (digested_at, discovered_at) WHERE digested_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS rate_limit_events (
     id BIGSERIAL PRIMARY KEY,
