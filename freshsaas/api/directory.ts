@@ -22,9 +22,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!requireMethod(req, res, ['GET'])) return;
 
     const { rows } = await getPool().query(
-        `SELECT id, name, tagline, description, url, category, tags, source, source_url, discovered_at
+        `SELECT id, name, tagline, description, url, category, tags, source, source_url,
+                discovered_at, featured, featured_rank
          FROM directory_entries WHERE status = 'live'
-         ORDER BY discovered_at DESC LIMIT 500`,
+         ORDER BY featured DESC, featured_rank ASC, discovered_at DESC LIMIT 500`,
     );
 
     // Shaped to match the frontend Product type so it merges with the static
@@ -41,7 +42,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             audience: `${row.category} teams, founders and early adopters`,
             pricing: 'See launch page',
             launched: launchedLabel(row.discovered_at),
-            freshness: Math.max(1, Math.round(100 - Math.min(99, ageHours / 2))),
+            featured: Boolean(row.featured),
+            // Featured entries sit above the freshness sort so a hand-picked
+            // launch stays at the top rather than sinking as it ages.
+            freshness: row.featured ? 200 - row.featured_rank : Math.max(1, Math.round(100 - Math.min(99, ageHours / 2))),
             accent: ACCENTS[index % ACCENTS.length],
             tags: Array.isArray(row.tags) && row.tags.length ? row.tags : [row.category],
             url: row.url,

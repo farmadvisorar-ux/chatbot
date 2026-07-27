@@ -119,6 +119,12 @@ CREATE INDEX IF NOT EXISTS directory_entries_live ON directory_entries (status, 
 -- Set once an entry has appeared in an outreach digest to the site owner, so
 -- each batch shows launches not seen before rather than repeating the newest.
 ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS digested_at TIMESTAMPTZ;
+-- Featured entries are pinned to the top of the directory and rendered with
+-- the highlight treatment. featured_rank orders them against each other;
+-- lower sorts first, ties fall back to recency.
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS featured_rank INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS directory_entries_featured ON directory_entries (featured, featured_rank) WHERE featured;
 CREATE INDEX IF NOT EXISTS directory_entries_undigested ON directory_entries (digested_at, discovered_at) WHERE digested_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS rate_limit_events (

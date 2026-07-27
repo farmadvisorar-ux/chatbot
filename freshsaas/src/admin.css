@@ -43,3 +43,32 @@ button.danger{background:var(--danger)}
 @media(max-width:680px){.topbar{flex-direction:column;align-items:flex-start}.tool-row{flex-direction:column;align-items:flex-start}.tool-row button{width:100%}}
 .search{display:block;margin-top:14px}
 .search input{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fff}
+
+/* Overview tiles */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0 4px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.stat b{display:block;font-size:22px;margin-top:4px;font-family:'Syne',system-ui,sans-serif}
+.stat small{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Filters */
+.filters{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:16px}
+.filters .search{margin:0}
+.filters select{border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;color:var(--ink)}
+
+/* Listing cards */
+.item-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.item.is-featured{border-color:#b6cf74;box-shadow:0 0 0 3px rgba(201,255,87,.25)}
+.badge{background:var(--lime);color:var(--ink);border-radius:999px;padding:3px 9px;font-size:11px;font-weight:800}
+.linkbtn{display:inline-flex;align-items:center;text-decoration:none;padding:12px 16px;border-radius:10px}
+
+/* Edit modal */
+.modal{position:fixed;inset:0;display:grid;place-items:center;z-index:50}
+.modal-backdrop{position:absolute;inset:0;background:rgba(12,15,20,.6)}
+.modal-card{position:relative;z-index:1;width:min(460px,calc(100% - 28px));background:#fff;border-radius:18px;padding:26px;display:grid;gap:12px}
+.modal-card h2{margin:0;font-size:20px}
+.modal-card label{display:grid;gap:6px;font-size:13px;font-weight:700}
+.modal-card input{border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+.modal-card .row{display:flex;gap:8px;margin-top:4px}
+
+@media(max-width:820px){.stats{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:1fr}}
