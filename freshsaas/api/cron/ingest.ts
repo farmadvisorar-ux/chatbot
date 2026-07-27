@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { insertCandidates, type DirectoryCandidate } from '../_lib/directory.js';
+import { sendAdminDigest } from '../_lib/email.js';
 
 const USER_AGENT = 'FreshSAAS-Bot/1.0 (+https://freshsaas.online)';
 const FETCH_TIMEOUT_MS = 12000;
@@ -176,6 +177,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         } catch (err) {
             report[name] = { failed: err instanceof Error ? err.message : String(err) };
         }
+    }
+
+    // Only mail the owner when there is something new; an hourly "added 0"
+    // digest would be noise that trains them to ignore the alert.
+    if (totalAdded > 0) {
+        const lines = Object.entries(report)
+            .map(([name, result]) => 'added' in result ? `${name}: ${result.added} new (${result.found} seen)` : `${name}: failed — ${result.failed}`)
+            .join('\n');
+        await sendAdminDigest(`${totalAdded} new launches were added to the directory.\n\n${lines}`);
     }
 
     json(res, 200, { ok: true, totalAdded, sources: report });
