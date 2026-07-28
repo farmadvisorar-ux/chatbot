@@ -24,13 +24,16 @@ function sessionId(): string {
     }
 }
 
-export function track(type: EventType, detail: { label?: string; entryId?: string } = {}): void {
+export function track(type: EventType, detail: { label?: string; entryId?: string; path?: string } = {}): void {
+    const { path, ...rest } = detail;
     const payload = JSON.stringify({
         type,
-        path: location.pathname,
+        // Insights articles are hash-routed, so the caller can name the path
+        // it wants recorded rather than every article reporting /insights.html.
+        path: path || location.pathname,
         referrer: document.referrer || null,
         sessionId: sessionId(),
-        ...detail,
+        ...rest,
     });
 
     try {

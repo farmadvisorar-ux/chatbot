@@ -36,6 +36,21 @@ async function loadListings() {
     }
 }
 
+async function loadInsights() {
+    if (!process.env.DATABASE_URL) return [];
+    try {
+        const { neon } = await import('@neondatabase/serverless');
+        const sql = neon(process.env.DATABASE_URL);
+        return await sql`
+            SELECT slug, title, keyword, meta_description, category, excerpt, body_html,
+                   read_minutes, links, updated_at
+            FROM insight_articles WHERE published ORDER BY rank ASC, created_at ASC`;
+    } catch (err) {
+        console.warn('[seo] could not read insights, continuing without prerender:', err.message);
+        return [];
+    }
+}
+
 const listings = await loadListings();
 console.log(`[seo] prerendering ${listings.length} listings`);
 
@@ -102,8 +117,68 @@ html = html.replace('</head>', `${structuredData}\n</head>`);
 html = html.replace('</body>', `<div id="seo-launches" hidden aria-hidden="true">${prerendered}</div>\n</body>`);
 writeFileSync(indexPath, html);
 
+// --- Insights ---------------------------------------------------------
+// The guides are the whole point of the page for a crawler, so the full
+// article text is written into the HTML rather than only the card list.
+// The client replaces it once the API responds.
+const insights = await loadInsights();
+console.log(`[seo] prerendering ${insights.length} insight articles`);
+
+const insightsPath = join(dist, 'insights.html');
+let insightsHtml = readFileSync(insightsPath, 'utf8');
+
+const insightCards = insights.map(a => `
+<article class="ins-card">
+  <span class="ins-card-cat">${escapeHtml(a.category)} · ${a.read_minutes} min read</span>
+  <h2><a href="#${escapeHtml(a.slug)}" data-open="${escapeHtml(a.slug)}">${escapeHtml(a.title)}</a></h2>
+  <p>${escapeHtml(a.excerpt)}</p>
+  <div class="ins-card-foot"><span class="ins-keyword">${escapeHtml(a.keyword)}</span></div>
+</article>`).join('');
+
+// Full text, hidden from readers but present for crawlers.
+const insightBodies = insights.map(a => `
+<article class="seo-article" id="seo-${escapeHtml(a.slug)}">
+  <h2>${escapeHtml(a.title)}</h2>
+  <p>${escapeHtml(a.meta_description)}</p>
+  ${a.body_html}
+  <ul>${(a.links || []).map(l => `<li><a href="${escapeHtml(l.affiliateUrl || l.url)}" rel="${l.affiliateUrl ? 'sponsored nofollow noopener' : 'noopener'}">${escapeHtml(l.name)}</a></li>`).join('')}</ul>
+</article>`).join('');
+
+const insightLd = insights.map(a => ({
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: a.title,
+    description: a.meta_description,
+    keywords: a.keyword,
+    articleSection: a.category,
+    dateModified: new Date(a.updated_at).toISOString(),
+    mainEntityOfPage: `${SITE}/insights.html#${a.slug}`,
+    publisher: { '@type': 'Organization', name: 'FreshSAAS', url: SITE },
+}));
+const insightListLd = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'FreshSAAS SaaS buyer\u2019s guides',
+    numberOfItems: insights.length,
+    itemListElement: insights.map((a, i) => ({
+        '@type': 'ListItem', position: i + 1, name: a.title,
+        url: `${SITE}/insights.html#${a.slug}`,
+    })),
+};
+
+insightsHtml = insightsHtml.replace('</head>',
+    [insightListLd, ...insightLd].map(d => `<script type="application/ld+json">${JSON.stringify(d)}</script>`).join('\n') + '\n</head>');
+insightsHtml = insightsHtml.replace(
+    '<section id="ins-list" class="ins-list" aria-live="polite"></section>',
+    `<section id="ins-list" class="ins-list" aria-live="polite">${insightCards}</section>`);
+insightsHtml = insightsHtml.replace('</body>',
+    `<div id="seo-insights" hidden aria-hidden="true">${insightBodies}</div>\n</body>`);
+writeFileSync(insightsPath, insightsHtml);
+
 const urls = [
     { loc: `${SITE}/`, priority: '1.0', freq: 'hourly' },
+    { loc: `${SITE}/insights.html`, priority: '0.9', freq: 'weekly' },
+    ...insights.map(a => ({ loc: `${SITE}/insights.html#${a.slug}`, priority: '0.7', freq: 'monthly' })),
     { loc: `${SITE}/#discover`, priority: '0.8', freq: 'hourly' },
     { loc: `${SITE}/#marketplace`, priority: '0.8', freq: 'daily' },
     { loc: `${SITE}/#founders`, priority: '0.6', freq: 'weekly' },

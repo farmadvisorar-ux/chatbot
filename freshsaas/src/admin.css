@@ -96,3 +96,13 @@ button.danger{background:var(--danger);color:#2b0f08}
 .bar-value{color:var(--muted);font-variant-numeric:tabular-nums}
 .empty.small{padding:18px;font-size:13px}
 @media(max-width:820px){.grid-2{grid-template-columns:1fr}}
+/* Insights affiliate editor */
+.aff-rows{display:grid;gap:10px;margin-top:14px}
+.aff-row{display:grid;grid-template-columns:minmax(150px,26%) 1fr auto;gap:10px;align-items:center}
+.aff-name strong{display:block;font-size:13px}
+.aff-name a{display:block;font-size:11px;color:#7ac7ff;word-break:break-all;text-decoration:none}
+.aff-row input{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--ink);font:inherit;font-size:13px}
+.aff-row input:focus{outline:0;border-color:var(--lime);box-shadow:0 0 0 3px rgba(201,255,87,.16)}
+.aff-row button{padding:10px 14px;font-size:13px}
+.item code{background:var(--surface-3);border-radius:5px;padding:1px 5px;font-size:12px}
+@media(max-width:680px){.aff-row{grid-template-columns:1fr}.aff-row button{width:100%}}

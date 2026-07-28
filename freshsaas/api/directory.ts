@@ -67,12 +67,57 @@ async function recordEvent(req: VercelRequest, res: VercelResponse): Promise<voi
     json(res, 202, { ok: true });
 }
 
+/**
+ * Published Insights articles.
+ *
+ * Also served from this endpoint for the 12-function reason above. Each link
+ * resolves to its affiliate URL when the operator has set one; `sponsored`
+ * tells the client to mark the link up correctly and show the disclosure.
+ */
+async function sendInsights(req: VercelRequest, res: VercelResponse): Promise<void> {
+    const slug = typeof req.query.slug === 'string' ? req.query.slug : null;
+    const { rows } = slug
+        ? await getPool().query(
+            `SELECT slug, title, keyword, meta_description, category, excerpt, body_html, links,
+                    read_minutes, updated_at
+             FROM insight_articles WHERE published AND slug = $1`, [slug])
+        : await getPool().query(
+            `SELECT slug, title, keyword, meta_description, category, excerpt, body_html, links,
+                    read_minutes, updated_at
+             FROM insight_articles WHERE published ORDER BY rank ASC, created_at ASC`);
+
+    json(res, 200, {
+        articles: rows.map(row => ({
+            slug: row.slug,
+            title: row.title,
+            keyword: row.keyword,
+            metaDescription: row.meta_description,
+            category: row.category,
+            excerpt: row.excerpt,
+            bodyHtml: row.body_html,
+            readMinutes: row.read_minutes,
+            updatedAt: row.updated_at,
+            links: (row.links || []).map((link: { name: string; url: string; note?: string; affiliateUrl?: string | null }) => ({
+                name: link.name,
+                note: link.note ?? '',
+                url: link.affiliateUrl || link.url,
+                sponsored: Boolean(link.affiliateUrl),
+            })),
+        })),
+    });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (req.method === 'POST') {
         await recordEvent(req, res);
         return;
     }
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
+
+    if (req.query.view === 'insights') {
+        await sendInsights(req, res);
+        return;
+    }
 
     const { rows } = await getPool().query(
         `SELECT id, name, tagline, description, url, category, tags, source, source_url,

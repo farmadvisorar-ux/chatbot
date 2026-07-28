@@ -118,7 +118,17 @@ export function initDirectory(): void {
     const filtered = products.filter(product => {
       const haystack = [product.name, product.category, product.tagline, product.description, product.audience, ...product.tags].join(' ').toLowerCase();
       return (category === 'All' || product.category === category) && (!query || haystack.includes(query)) && (!savedOnly || saved.includes(product.id));
-    }).sort((a, b) => sort?.value === 'name' ? a.name.localeCompare(b.name) : b.freshness - a.freshness);
+    }).sort((a, b) => {
+      // Pinning is applied before the chosen sort, so featured entries stay at
+      // the top under A–Z as well as under Freshest. The previous approach gave
+      // the pinned entry a freshness of 101, which silently stopped working the
+      // moment anyone switched the sort to name.
+      const rank = (product: Product): number =>
+        product.id === 'pilot-policy' ? 0 : product.featured ? 1 : 2;
+      const difference = rank(a) - rank(b);
+      if (difference !== 0) return difference;
+      return sort?.value === 'name' ? a.name.localeCompare(b.name) : b.freshness - a.freshness;
+    });
 
     count.textContent = `${filtered.length} launch${filtered.length === 1 ? '' : 'es'} showing`;
     grid.innerHTML = filtered.length ? filtered.map(product => `<article class="directory-card${product.featured ? ' featured' : ''}${product.id === 'pilot-policy' ? ' pilot-featured' : ''}" data-product-id="${escapeHtml(product.id)}"><div class="directory-card-top"><span class="directory-logo" style="background:${escapeHtml(product.accent)}">${escapeHtml(product.initials)}</span><button class="save-button${saved.includes(product.id) ? ' saved' : ''}" type="button" aria-label="${escapeHtml(saved.includes(product.id) ? 'Remove' : 'Save')} ${escapeHtml(product.name)}" data-save="${escapeHtml(product.id)}"><i data-lucide="bookmark"></i></button></div><span class="directory-category">${escapeHtml(product.category)} • ${escapeHtml(product.launched)}</span><h3>${escapeHtml(product.name)}</h3><p class="directory-tagline">${escapeHtml(product.tagline)}</p><p class="directory-description">${escapeHtml(product.description)}</p>${product.id === 'pilot-policy' ? `<a class="project-url" href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer" aria-label="Visit PilotPolicy.com">PilotPolicy.com</a>` : ''}<div class="directory-card-footer"><span class="freshness"><i data-lucide="badge-check"></i>${product.freshness}% fresh</span><button class="details-button" type="button" data-details="${escapeHtml(product.id)}">${product.id === 'pilot-policy' ? 'View project' : 'View launch'} <i data-lucide="arrow-right"></i></button></div></article>`).join('') : '<div class="directory-empty">No launches match those filters yet. Try a broader search or switch back to All.</div>';

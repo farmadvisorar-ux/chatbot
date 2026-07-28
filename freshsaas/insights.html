@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaaS Insights — Buyer's Guides and Tool Comparisons | FreshSAAS</title>
+    <meta name="description" content="Independent buyer's guides for SaaS founders: what is better, what is best, and how to choose. Honest comparisons of the tools startups actually run on.">
+    <meta name="keywords" content="best saas tools, saas comparison, saas buyers guide, best tools for startups, saas software reviews">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+    <meta name="theme-color" content="#0b0e14">
+    <link rel="canonical" href="https://freshsaas.online/insights.html">
+
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="FreshSAAS">
+    <meta property="og:title" content="SaaS Insights — Buyer's Guides and Tool Comparisons">
+    <meta property="og:description" content="Independent buyer's guides for SaaS founders: what is better, what is best, and how to choose.">
+    <meta property="og:url" content="https://freshsaas.online/insights.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SaaS Insights — Buyer's Guides and Tool Comparisons">
+    <meta name="twitter:description" content="Independent buyer's guides for SaaS founders: what is better, what is best, and how to choose.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="ins-shell">
+        <header class="ins-header">
+            <a class="ins-brand" href="/" aria-label="FreshSAAS home">
+                <span class="ins-brand-mark">F</span>
+                <span>FreshSAAS<span class="ins-brand-dot">.online</span></span>
+            </a>
+            <nav class="ins-nav" aria-label="Primary">
+                <a href="/#discover">Discover</a>
+                <a href="/#marketplace">Marketplace</a>
+                <a class="ins-nav-current" href="/insights.html" aria-current="page">Insights</a>
+                <a class="ins-cta" href="/#waitlist">Get early access</a>
+            </nav>
+        </header>
+
+        <main>
+            <section class="ins-hero">
+                <p class="ins-kicker">FreshSAAS Insights</p>
+                <h1>What is better? What is best? Straight answers.</h1>
+                <p class="ins-lede">Buyer's guides for the software startups actually run on — written around how to decide, not around feature tables that go stale in a month. Every guide links out to the tools it discusses.</p>
+                <div class="ins-meta-row">
+                    <span id="ins-count">20 guides</span>
+                    <span>Updated regularly</span>
+                    <span>No pay-to-rank</span>
+                </div>
+            </section>
+
+            <section class="ins-controls" aria-label="Filter guides">
+                <label class="ins-search">
+                    <span class="sr-only">Search guides</span>
+                    <input id="ins-search" type="search" placeholder="Search guides, tools or categories">
+                </label>
+                <div id="ins-categories" class="ins-categories"></div>
+            </section>
+
+            <!-- Prerendered at build time for crawlers; replaced on load. -->
+            <section id="ins-list" class="ins-list" aria-live="polite"></section>
+
+            <article id="ins-article" class="ins-article" hidden></article>
+        </main>
+
+        <footer class="ins-footer">
+            <a href="/">← Back to FreshSAAS</a>
+            <span>© <span id="ins-year"></span> FreshSAAS.online</span>
+        </footer>
+    </div>
+    <script type="module" src="./src/insights.ts"></script>
+</body>
+</html>

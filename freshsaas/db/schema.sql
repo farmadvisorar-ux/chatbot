@@ -162,3 +162,27 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS rate_limit_events_lookup ON rate_limit_events (bucket, client_key, created_at);
+
+-- Insights: buyer's-guide articles ("best X", "A vs B") that bring search
+-- traffic in and hand it to listings. Article copy is authored in the repo
+-- and seeded from scripts/insights-content.mjs; the affiliate links are the
+-- one field edited from the admin panel, so the seeder never overwrites them.
+CREATE TABLE IF NOT EXISTS insight_articles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    keyword TEXT NOT NULL,
+    meta_description TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Guides',
+    excerpt TEXT NOT NULL,
+    body_html TEXT NOT NULL,
+    -- [{ name, url, note, affiliateUrl }] — affiliateUrl is admin-owned and
+    -- is what turns a plain outbound link into a monetised one.
+    links JSONB NOT NULL DEFAULT '[]'::jsonb,
+    read_minutes INT NOT NULL DEFAULT 4,
+    rank INT NOT NULL DEFAULT 100,
+    published BOOLEAN NOT NULL DEFAULT true,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS insight_articles_live ON insight_articles (published, rank, created_at DESC);

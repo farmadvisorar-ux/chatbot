@@ -159,6 +159,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'insights') {
+            const { rows } = await pool.query(
+                `SELECT slug, title, keyword, category, links, published, updated_at AS "updatedAt"
+                 FROM insight_articles ORDER BY rank ASC, created_at ASC`,
+            );
+            json(res, 200, { insights: rows });
+            return;
+        }
+
         if (view === 'listings') {
             // Submissions publish without review, so moderation happens here
             // after the fact rather than in a queue beforehand.
@@ -198,6 +207,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const body = (req.body || {}) as {
         id?: string; orderId?: string; action?: string;
         name?: string; tagline?: string; category?: string; rank?: number | string;
+        slug?: string; linkName?: string; affiliateUrl?: string;
     };
     const action = clean(body.action, 20);
 
@@ -235,6 +245,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
         json(res, 200, { ok: true, name: updated.rows[0].name, status: updated.rows[0].status });
+        return;
+    }
+
+    if (action === 'insight-affiliate') {
+        const slug = clean(body.slug, 120);
+        const linkName = clean(body.linkName, 120);
+        // An empty string clears the affiliate link and reverts to the plain
+        // outbound URL, so the operator can undo a partnership.
+        const affiliateUrl = clean(body.affiliateUrl, 500);
+
+        if (!slug || !linkName) {
+            error(res, 400, 'Provide the article slug and link name');
+            return;
+        }
+        if (affiliateUrl && !/^https:\/\/\S+$/i.test(affiliateUrl)) {
+            error(res, 400, 'Affiliate URL must start with https://');
+            return;
+        }
+
+        const current = await pool.query<{ links: Array<{ name: string; url: string; note?: string; affiliateUrl?: string | null }> }>(
+            'SELECT links FROM insight_articles WHERE slug = $1', [slug],
+        );
+        if (!current.rows[0]) {
+            error(res, 404, 'Article not found');
+            return;
+        }
+        const links = current.rows[0].links || [];
+        if (!links.some(link => link.name === linkName)) {
+            error(res, 404, 'That link is not in this article');
+            return;
+        }
+        const next = links.map(link =>
+            link.name === linkName ? { ...link, affiliateUrl: affiliateUrl || null } : link);
+
+        await pool.query(
+            'UPDATE insight_articles SET links = $2::jsonb, updated_at = now() WHERE slug = $1',
+            [slug, JSON.stringify(next)],
+        );
+        json(res, 200, { ok: true, slug, linkName, affiliateUrl: affiliateUrl || null });
+        return;
+    }
+
+    if (action === 'insight-publish' || action === 'insight-unpublish') {
+        const slug = clean(body.slug, 120);
+        if (!slug) {
+            error(res, 400, 'Provide the article slug');
+            return;
+        }
+        const updated = await pool.query(
+            'UPDATE insight_articles SET published = $2, updated_at = now() WHERE slug = $1 RETURNING title, published',
+            [slug, action === 'insight-publish'],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Article not found');
+            return;
+        }
+        json(res, 200, { ok: true, title: updated.rows[0].title, published: updated.rows[0].published });
         return;
     }
 

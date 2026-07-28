@@ -266,3 +266,65 @@ body {
 .aiw-decision-row .approve { background: var(--lime); color: #0b0e14; border-color: var(--lime); }
 .aiw-decision-row .reject { background: transparent; color: #ff9d8a; border-color: rgba(255, 157, 138, .4); }
 .aiw-decision-note { border-color: var(--line); color: #8593aa; }
+
+/* Insights entry point ------------------------------------------------- */
+.preview-heading-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.insights-button {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--lime); color: #0b0e14;
+    border: 1px solid var(--lime); border-radius: 12px;
+    padding: 12px 18px; font-weight: 800; text-decoration: none;
+    box-shadow: 0 10px 30px rgba(201, 255, 87, .16);
+}
+.insights-button:hover { box-shadow: 0 14px 38px rgba(201, 255, 87, .26); }
+.insights-button svg { width: 17px; }
+@media (max-width: 680px) { .insights-button { width: 100%; justify-content: center; } }
+
+/* Featured foil border -------------------------------------------------
+   The animated foil edge previously applied only to the single pinned
+   project. Every featured listing now gets it, which is what makes the
+   featured slot visibly worth having. Keyframes come from the component
+   stylesheet injected by directory.ts. */
+.directory-card.featured {
+    position: relative;
+    isolation: isolate;
+    border-color: transparent;
+    box-shadow: 0 22px 70px rgba(73, 145, 196, .22), 0 0 28px rgba(201, 255, 87, .12);
+}
+.directory-card.featured::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 22px;
+    padding: 2px;
+    background: linear-gradient(110deg,
+        #7ac7ff 0%, #ffffff 18%, #c9ff57 36%, #7ac7ff 54%,
+        #ffffff 72%, #c9ff57 88%, #7ac7ff 100%);
+    background-size: 300% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: pilot-border-shimmer 3s linear infinite;
+    pointer-events: none;
+    z-index: 3;
+}
+.directory-card.featured::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 28px;
+    background: linear-gradient(110deg, rgba(122, 199, 255, .24), rgba(201, 255, 87, .17), rgba(255, 255, 255, .12));
+    filter: blur(14px);
+    opacity: .5;
+    z-index: -1;
+    pointer-events: none;
+}
+/* The pinned project keeps a slightly stronger glow so it still reads as
+   first among featured. */
+.directory-card.pilot-featured::after { opacity: .62; }
+
+/* Respect users who have asked for less motion: keep the foil, stop it moving. */
+@media (prefers-reduced-motion: reduce) {
+    .directory-card.featured::before { animation: none; background-position: 50% 0; }
+}
