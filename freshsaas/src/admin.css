@@ -12,7 +12,7 @@ h1{font-size:24px;letter-spacing:-.03em;margin:0}
 #login-form label{display:grid;gap:6px;font-size:13px;font-weight:700}
 #login-form input[type=password]{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface-2);color:var(--ink)}
 .checkbox{display:flex!important;align-items:center;gap:8px;font-weight:400!important;color:var(--muted)}
-.checkbox input{width:auto}
+.checkbox input{width:auto;accent-color:var(--lime)}
 button{background:var(--lime);color:#0b0e14;border:0;border-radius:10px;padding:12px 16px;font-weight:800;cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
 button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
