@@ -328,3 +328,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
     .directory-card.featured::before { animation: none; background-position: 50% 0; }
 }
+
+/* Startup Fame badge ---------------------------------------------------
+   Sits in the footer next to the copyright. Given a max-width so a wide
+   badge cannot push the footer into horizontal scroll on small screens. */
+.badge-link { display: inline-flex; line-height: 0; }
+.badge-link img { max-width: 100%; height: auto; border-radius: 6px; }
