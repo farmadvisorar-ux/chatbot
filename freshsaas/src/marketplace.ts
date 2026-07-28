@@ -75,14 +75,14 @@ export function mountMarketplace(): void {
     sellModal.className = 'mp-modal';
     sellModal.id = 'mp-sell-modal';
     sellModal.setAttribute('aria-hidden', 'true');
-    sellModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="sell"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-sell-title"><button class="mp-modal-close" type="button" data-mp-close="sell" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-sell-title">List your SaaS</h2><p id="mp-sell-identity" style="font-size:12px;color:#6d7469;margin:-8px 0 14px"></p><form id="mp-sell-form"><label>Product name<input name="name" required maxlength="120"></label><label>One-line tagline<input name="tagline" required maxlength="200"></label><label>Description for buyers<textarea name="description" rows="3" required maxlength="2000"></textarea></label><label>Asking price (USD)<input name="priceUsd" type="number" min="1" step="1" required></label><label>Product URL<input name="url" type="url" required placeholder="https://"></label><p style="font-size:12px;color:#6d7469;margin:-4px 0 14px">Listings are reviewed before going live. FreshSAAS takes a 10% fee when your SaaS sells.</p><button type="submit">Submit listing for review <i data-lucide="arrow-right"></i></button><p id="mp-sell-status" class="mp-status" role="status" aria-live="polite"></p></form><div id="mp-payout-setup" class="mp-payout-setup" hidden><strong>Get paid for this sale</strong><span>Add your bank details on Stripe so buyers can purchase. FreshSAAS never sees or stores them.</span><button type="button">Set up payouts</button></div></div>`;
+    sellModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="sell"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-sell-title"><button class="mp-modal-close" type="button" data-mp-close="sell" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-sell-title">List your SaaS</h2><p id="mp-sell-identity" style="font-size:12px;color:#93a0b5;margin:-8px 0 14px"></p><form id="mp-sell-form"><label>Product name<input name="name" required maxlength="120"></label><label>One-line tagline<input name="tagline" required maxlength="200"></label><label>Description for buyers<textarea name="description" rows="3" required maxlength="2000"></textarea></label><label>Asking price (USD)<input name="priceUsd" type="number" min="1" step="1" required></label><label>Product URL<input name="url" type="url" required placeholder="https://"></label><p style="font-size:12px;color:#93a0b5;margin:-4px 0 14px">Listings are reviewed before going live. FreshSAAS takes a 10% fee when your SaaS sells.</p><button type="submit">Submit listing for review <i data-lucide="arrow-right"></i></button><p id="mp-sell-status" class="mp-status" role="status" aria-live="polite"></p></form><div id="mp-payout-setup" class="mp-payout-setup" hidden><strong>Get paid for this sale</strong><span>Add your bank details on Stripe so buyers can purchase. FreshSAAS never sees or stores them.</span><button type="button">Set up payouts</button></div></div>`;
     document.body.appendChild(sellModal);
 
     const buyModal = document.createElement('div');
     buyModal.className = 'mp-modal';
     buyModal.id = 'mp-buy-modal';
     buyModal.setAttribute('aria-hidden', 'true');
-    buyModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="buy"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-buy-title"><button class="mp-modal-close" type="button" data-mp-close="buy" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-buy-title">Buy this SaaS</h2><p id="mp-buy-identity" style="font-size:12px;color:#6d7469;margin:-8px 0 14px"></p><div class="mp-demo-note"><i data-lucide="shield-check"></i><span>You'll pay securely on Stripe. Your payment is held by FreshSAAS and only released to the seller once the handover is confirmed.</span></div><div id="mp-fee-breakdown" class="mp-fee-breakdown"></div><form id="mp-buy-form"><input type="hidden" name="listingId"><button type="submit">Complete demo purchase <i data-lucide="arrow-right"></i></button><p id="mp-buy-status" class="mp-status" role="status" aria-live="polite"></p></form></div>`;
+    buyModal.innerHTML = `<div class="mp-modal-backdrop" data-mp-close="buy"></div><div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="mp-buy-title"><button class="mp-modal-close" type="button" data-mp-close="buy" aria-label="Close"><i data-lucide="x"></i></button><h2 id="mp-buy-title">Buy this SaaS</h2><p id="mp-buy-identity" style="font-size:12px;color:#93a0b5;margin:-8px 0 14px"></p><div class="mp-demo-note"><i data-lucide="shield-check"></i><span>You'll pay securely on Stripe. Your payment is held by FreshSAAS and only released to the seller once the handover is confirmed.</span></div><div id="mp-fee-breakdown" class="mp-fee-breakdown"></div><form id="mp-buy-form"><input type="hidden" name="listingId"><button type="submit">Complete demo purchase <i data-lucide="arrow-right"></i></button><p id="mp-buy-status" class="mp-status" role="status" aria-live="polite"></p></form></div>`;
     document.body.appendChild(buyModal);
 
     const grid = section.querySelector<HTMLElement>('#mp-grid');
@@ -101,10 +101,17 @@ export function mountMarketplace(): void {
      * Deliberately a redirect to Stripe rather than a form here — collecting
      * bank or card details on this site would pull it into PCI scope.
      */
-    const showPayoutSetup = async (): Promise<void> => {
+    const showPayoutSetup = async (paymentsEnabled = true): Promise<void> => {
         const setupBar = sellModal.querySelector<HTMLElement>('#mp-payout-setup');
         if (!setupBar) return;
         setupBar.hidden = false;
+
+        // Published before payouts are switched on: say so plainly rather than
+        // showing a button whose only outcome is an error.
+        if (!paymentsEnabled) {
+            setupBar.innerHTML = `<strong>Payouts open soon</strong><span>Your listing is saved. Buyer payments are not switched on yet — we will email you as soon as they are, so you can add your bank details then.</span>`;
+            return;
+        }
         const button = setupBar.querySelector<HTMLButtonElement>('button');
         if (!button || button.dataset.wired) return;
         button.dataset.wired = 'true';
@@ -189,14 +196,17 @@ export function mountMarketplace(): void {
             sellForm.reset();
             // A listing nobody can pay out on is worse than no listing, so the
             // payout prompt appears immediately rather than at first sale.
-            const payouts = await api.get<{ payoutsEnabled: boolean }>('/api/seller/payouts').catch(() => null);
+            const payouts = await api.get<{ payoutsEnabled: boolean; paymentsEnabled?: boolean }>('/api/seller/payouts').catch(() => null);
+            const paymentsEnabled = payouts?.data?.paymentsEnabled !== false;
             if (sellStatus) {
-                sellStatus.innerHTML = payouts?.data?.payoutsEnabled
+                sellStatus.innerHTML = !paymentsEnabled
                     ? 'Listing submitted. We will review it before it goes live.'
-                    : 'Listing submitted. <strong>Next step:</strong> set up payouts so buyers can purchase it.';
+                    : payouts?.data?.payoutsEnabled
+                        ? 'Listing submitted. We will review it before it goes live.'
+                        : 'Listing submitted. <strong>Next step:</strong> set up payouts so buyers can purchase it.';
                 sellStatus.className = 'mp-status success';
             }
-            if (!payouts?.data?.payoutsEnabled) showPayoutSetup();
+            if (!payouts?.data?.payoutsEnabled) showPayoutSetup(paymentsEnabled);
         } catch (err) {
             if (sellStatus) { sellStatus.textContent = err instanceof ApiError ? err.message : 'Could not submit listing. Please try again.'; sellStatus.className = 'mp-status error'; }
         } finally {

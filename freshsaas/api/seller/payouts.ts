@@ -71,7 +71,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const stripe = getStripe();
     if (!stripe) {
-        error(res, 501, 'Payments are not configured on this deployment yet.');
+        // A read is answered rather than refused, so the UI can say purchases
+        // aren't open yet instead of offering a button that can only fail.
+        // Starting onboarding still errors, because it genuinely cannot work.
+        if (req.method === 'GET') {
+            json(res, 200, { connected: false, payoutsEnabled: false, paymentsEnabled: false });
+            return;
+        }
+        error(res, 501, 'Payouts are not open yet. Your listing is saved and we will email you as soon as you can add bank details.');
         return;
     }
 

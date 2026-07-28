@@ -209,6 +209,8 @@ body {
 .mp-demo-note { background: rgba(122, 199, 255, .1); border-color: rgba(122, 199, 255, .28); color: #b8dcff; }
 .mp-payout-setup { background: rgba(201, 255, 87, .08); border-color: rgba(201, 255, 87, .28); }
 .mp-payout-setup span { color: #a3b0c6; }
+.mp-modal-card label { color: #c3cddd; }
+.mp-payout-setup strong { color: var(--ink); }
 .mp-payout-setup button, .mp-modal-card button[type="submit"] { background: var(--lime); color: #0b0e14; }
 .mp-status.success { color: var(--lime); }
 .mp-status.error { color: #ff9d8a; }

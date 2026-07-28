@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const stripe = getStripe();
     if (!stripe) {
-        error(res, 501, 'Payments are not configured on this deployment yet.');
+        error(res, 501, 'Purchases are not open yet. Join the launch list and we will let you know the moment they are.');
         return;
     }
 
