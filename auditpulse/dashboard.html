@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — AuditPulse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="topbar wrap">
+        <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
+        <div id="header-controls" data-auth-controls></div>
+    </header>
+
+    <main class="wrap" style="padding-bottom:80px">
+        <section id="signed-out" hidden class="card center" style="margin-top:60px">
+            <h1>Your dashboard</h1>
+            <p class="muted">Sign in to add websites and run audits.</p>
+            <button id="signin" type="button">Sign in</button>
+        </section>
+
+        <section id="loading" class="card center" style="margin-top:60px">
+            <p class="muted">Loading your dashboard…</p>
+        </section>
+
+        <section id="signed-in" hidden>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;flex-wrap:wrap;gap:12px">
+                <h1>Your sites</h1>
+                <button id="add-target-btn" type="button">+ Add a site</button>
+            </div>
+            <div id="plan-banner" class="card" style="margin-top:16px;display:none"></div>
+
+            <div class="dash-layout">
+                <div>
+                    <div id="target-list" class="target-list"></div>
+                </div>
+                <div id="detail-panel">
+                    <div class="empty">Select a site on the left, or add a new one to get started.</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="add-target-modal" class="modal-overlay" hidden>
+        <div class="modal">
+            <h2>Add a site</h2>
+            <p class="muted" style="font-size:13px">A full audit requires proving you control this domain, so AuditPulse can't be used to test sites you don't own.</p>
+            <div class="field">
+                <label for="target-url-input">Website URL</label>
+                <input id="target-url-input" type="text" placeholder="https://yourwebsite.com" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="target-label-input">Label (optional)</label>
+                <input id="target-label-input" type="text" placeholder="Marketing site, client name, etc.">
+            </div>
+            <label class="checkbox-field">
+                <input id="target-attest-input" type="checkbox">
+                <span>I own this website, or I have explicit written authorization from its owner to run security audits against it. I understand unauthorized scanning of systems you do not control may be illegal.</span>
+            </label>
+            <div id="add-target-status" class="status"></div>
+            <div class="modal-actions">
+                <button type="button" class="ghost-button" id="add-target-cancel">Cancel</button>
+                <button type="button" id="add-target-submit">Add site</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="email-report-modal" class="modal-overlay" hidden>
+        <div class="modal">
+            <h2>Email this report</h2>
+            <div class="field">
+                <label for="email-recipient-input">Recipient email</label>
+                <input id="email-recipient-input" type="email" placeholder="client@company.com" autocomplete="off">
+            </div>
+            <div class="field">
+                <label for="email-note-input">Note (optional)</label>
+                <textarea id="email-note-input" rows="3" placeholder="Hi — here's the latest security audit for your review."></textarea>
+            </div>
+            <div id="email-report-status" class="status"></div>
+            <div class="modal-actions">
+                <button type="button" class="ghost-button" id="email-report-cancel">Cancel</button>
+                <button type="button" id="email-report-submit">Send report</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <script type="module" src="./src/dashboard.ts"></script>
+</body>
+</html>

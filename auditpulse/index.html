@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuditPulse — Find every vulnerability on your website</title>
+    <meta name="description" content="Scan any website for security vulnerabilities and misconfigurations. Get a comprehensive, interactive report with severity-ranked findings and step-by-step fixes.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="topbar wrap">
+        <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
+        <div id="header-controls" data-auth-controls></div>
+    </header>
+
+    <main>
+        <section class="hero wrap-narrow">
+            <span class="eyebrow">Security audits in minutes</span>
+            <h1>Find every vulnerability on your website — before someone else does.</h1>
+            <p class="lead">Enter a URL for a free instant check. Sign up for a full, comprehensive audit with a severity-ranked report, one-click fixes, and automatic re-audits every 30 days.</p>
+
+            <form id="quick-check-form" class="quick-check-form">
+                <input id="quick-check-url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="off">
+                <button type="submit" id="quick-check-submit">Scan for free</button>
+            </form>
+            <p class="legal-note">Free check performs a single passive request (the same one your browser makes) — response headers, TLS/certificate info, and cookie flags. No sign-up required. Only scan sites you own or are authorized to test.</p>
+
+            <div id="quick-check-status" class="status" role="status" aria-live="polite"></div>
+            <div id="quick-check-result" style="text-align:left;margin-top:24px" hidden></div>
+        </section>
+
+        <section class="wrap">
+            <div class="feature-grid">
+                <div class="card">
+                    <h3>🛡️ Comprehensive checks</h3>
+                    <p>Security headers, TLS/certificate health, cookie flags, CORS misconfigurations, exposed secrets and backups, outdated JS libraries, DNS email security, clickjacking, mixed content, and more.</p>
+                </div>
+                <div class="card">
+                    <h3>📊 Interactive dashboard</h3>
+                    <p>Every finding is severity-ranked with a plain-English description, evidence, and a step-by-step fix — filterable and searchable in one place.</p>
+                </div>
+                <div class="card">
+                    <h3>✉️ Client-ready reports</h3>
+                    <p>Email a polished report straight to a client or teammate. They can open the full interactive findings with just the link — no account needed.</p>
+                </div>
+                <div class="card">
+                    <h3>🔁 Automatic 30-day re-audits</h3>
+                    <p>Verified sites on the Unlimited plan are re-scanned automatically every 30 days, with the report emailed to you the moment it's done.</p>
+                </div>
+                <div class="card">
+                    <h3>🔒 Authorized-use only</h3>
+                    <p>Full audits require proof you control the domain (a DNS record or file upload) — so AuditPulse can never be pointed at a site you don't own.</p>
+                </div>
+                <div class="card">
+                    <h3>⚡ No installs</h3>
+                    <p>Nothing to install or configure. Add a URL, verify ownership, and get your first audit in minutes.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="wrap" id="pricing">
+            <div class="card pricing-card">
+                <h2>Unlimited</h2>
+                <div class="price">$100<span>/month</span></div>
+                <p class="muted">Cancel anytime.</p>
+                <ul class="pricing-list">
+                    <li>Unlimited websites and unlimited on-demand audits</li>
+                    <li>Automatic full re-audit every 30 days per site</li>
+                    <li>Unlimited report emails to clients and teammates</li>
+                    <li>Shareable interactive report links — no account needed for recipients</li>
+                    <li>Priority support</li>
+                </ul>
+                <button id="pricing-cta" type="button" style="width:100%">Start with a free audit</button>
+                <p class="muted" style="font-size:12px;margin-top:10px">New accounts get 1 free site and 1 free full audit before upgrading.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="wrap">
+        AuditPulse only performs non-destructive, passive security checks. Running a full audit requires verifying you own or are authorized to test the target domain. © AuditPulse.
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
