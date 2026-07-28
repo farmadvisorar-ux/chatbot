@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { insertCandidates, type DirectoryCandidate } from '../_lib/directory.js';
+import { authorizeCronRequest } from '../_lib/github-oidc.js';
 import { sendAdminDigest, sendOutreachDigest, type DigestEntry } from '../_lib/email.js';
 
 const DIGEST_BATCH_SIZE = 10;
@@ -352,13 +353,11 @@ const SOURCES: Array<[string, () => Promise<DirectoryCandidate[]>]> = [
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST', 'GET'])) return;
 
-    const secret = process.env.CRON_SECRET;
-    if (!secret) {
-        error(res, 501, 'Ingest is not configured');
-        return;
-    }
-    const provided = req.headers.authorization?.replace(/^Bearer\s+/i, '');
-    if (provided !== secret) {
+    // Accepts CRON_SECRET or a GitHub Actions OIDC token, so the scheduled
+    // jobs work without a secret having to be copied into GitHub by hand.
+    const auth = await authorizeCronRequest(req.headers.authorization);
+    if (!auth.ok) {
+        console.warn('[cron] rejected request:', auth.reason);
         error(res, 401, 'Unauthorized');
         return;
     }

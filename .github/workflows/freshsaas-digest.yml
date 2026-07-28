@@ -7,6 +7,12 @@ on:
     - cron: '43 */2 * * *'
   workflow_dispatch:
 
+# See freshsaas-ingest.yml: lets the job authenticate with a GitHub-signed
+# identity token instead of a stored secret.
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   digest:
     runs-on: ubuntu-latest
@@ -16,13 +22,26 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           INGEST_URL: ${{ vars.INGEST_URL || 'https://freshsaas.online/api/cron/ingest' }}
         run: |
-          if [ -z "$CRON_SECRET" ]; then
-            echo "CRON_SECRET repository secret is not set; cannot authenticate." >&2
-            exit 1
+          set -euo pipefail
+
+          if [ -n "${CRON_SECRET:-}" ]; then
+            echo "Authenticating with CRON_SECRET."
+            credential="$CRON_SECRET"
+          else
+            echo "No CRON_SECRET set; authenticating with a GitHub OIDC token."
+            credential=$(curl -sS \
+              -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=freshsaas-cron" \
+              | jq -r '.value')
+
+            if [ -z "$credential" ] || [ "$credential" = "null" ]; then
+              echo "Could not obtain an OIDC token from GitHub." >&2
+              exit 1
+            fi
           fi
 
           response=$(curl -sS -X POST "$INGEST_URL?task=digest" \
-            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Authorization: Bearer $credential" \
             -w '\n%{http_code}' \
             --max-time 120)
 
