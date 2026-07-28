@@ -1,6 +1,6 @@
 import './styles.css';
 import { api } from './api-client';
-import { initDirectory } from './directory';
+import { initDirectory, previewProduct } from './directory';
 import { mountAIWorkspace } from './ai-workspace';
 import { mountMarketplace } from './marketplace';
 import { escapeHtml } from './escape-html';
@@ -144,6 +144,8 @@ projectForm?.addEventListener('submit', async event => {
 
 let toastTimer = 0;
 document.querySelectorAll<HTMLButtonElement>('.preview-action').forEach(button => button.addEventListener('click', () => {
+    const productId = button.closest<HTMLElement>('[data-product-id]')?.dataset.productId;
+    if (productId && previewProduct(productId)) return;
     document.querySelector('#launch-directory')?.scrollIntoView({ behavior: 'smooth' });
     if (!toast) return;
     toast.textContent = 'Opening the live launch directory.';

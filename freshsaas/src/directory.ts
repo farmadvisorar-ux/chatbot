@@ -44,6 +44,30 @@ const savedIds = (): string[] => {
   try { return JSON.parse(localStorage.getItem('freshsaas_saved') || '[]') as string[]; } catch { return []; }
 };
 
+// The three "Preview launch" cards in the hero/preview sections above the
+// live directory are marketing teasers, not real catalog entries. Their copy
+// mirrors what's hardcoded in index.html so the modal a click opens matches
+// what the card already promised, rather than a scroll to a directory that
+// will never actually contain them.
+const teaserProducts: Product[] = [
+  { id: 'inbox-copilot', name: 'Inbox Copilot', initials: 'IC', category: 'AI + Support', tagline: 'Turn messy support threads into clear next actions.', description: 'Turn messy support threads into clear next actions, draft replies, and searchable customer insights.', audience: 'Support teams and founders', pricing: 'Free trial', launched: '2 hours ago', freshness: 98, accent: '#ff7d66', tags: ['Support', 'Automation', 'AI'], url: '#launch-directory' },
+  { id: 'process-builder', name: 'Process Builder', initials: 'PB', category: 'Operations', tagline: 'Launch lightweight automations without a six-week rollout.', description: 'Map repeatable workflows, assign ownership, and launch lightweight automations without a six-week rollout.', audience: 'Operators and agencies', pricing: 'From $19/mo', launched: 'Fresh pick', freshness: 95, accent: '#c9ff57', tags: ['Workflow', 'Teams', 'No-code'], url: '#launch-directory' },
+  { id: 'signal-monitor', name: 'Signal Monitor', initials: 'SM', category: 'Analytics', tagline: 'Know what changed before your next meeting.', description: 'Know what changed across your key metrics and get a plain-English explanation before your next meeting.', audience: 'Growth and product teams', pricing: 'Free beta', launched: 'Today', freshness: 92, accent: '#7ac7ff', tags: ['Metrics', 'Alerts', 'Reporting'], url: '#launch-directory' },
+];
+const teaserIds = new Set(teaserProducts.map(product => product.id));
+
+/**
+ * Lets other modules (the hero/preview "Preview launch" buttons) open the
+ * same product detail modal the live directory uses, keyed by product id.
+ * Set once initDirectory() has built the modal; returns false if the id
+ * isn't known yet (e.g. before the live directory has loaded) so the caller
+ * can fall back to something else.
+ */
+let openProductById: ((id: string) => boolean) | null = null;
+export function previewProduct(id: string): boolean {
+  return openProductById ? openProductById(id) : false;
+}
+
 export function initDirectory(): void {
   const preview = document.querySelector<HTMLElement>('.launch-preview');
   if (!preview || document.querySelector('#launch-directory')) return;
@@ -92,11 +116,22 @@ export function initDirectory(): void {
   const openModal = (product: Product): void => {
     if (!modalContent) return;
     const isSaved = savedIds().includes(product.id);
-    modalContent.innerHTML = `<div class="modal-product-logo" style="background:${escapeHtml(product.accent)}">${escapeHtml(product.initials)}</div><h2 id="product-modal-title">${escapeHtml(product.name)}</h2><p><strong>${escapeHtml(product.tagline)}</strong></p><p>${escapeHtml(product.description)}</p>${product.id === 'pilot-policy' ? `<a class="modal-project-url" href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer">PilotPolicy.com</a>` : ''}<div class="product-facts"><div class="product-fact"><small>Best for</small><strong>${escapeHtml(product.audience)}</strong></div><div class="product-fact"><small>Pricing</small><strong>${escapeHtml(product.pricing)}</strong></div><div class="product-fact"><small>Discovered</small><strong>${escapeHtml(product.launched)}</strong></div><div class="product-fact"><small>Source</small><strong>${escapeHtml(product.source || (product.url.includes('producthunt.com') ? 'Product Hunt' : 'Direct listing'))}</strong></div></div><div class="product-tags">${product.tags.map(tag => `<span class="product-tag">${escapeHtml(tag)}</span>`).join('')}</div><div class="product-modal-actions"><a href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(product.id === 'pilot-policy' ? 'Visit PilotPolicy.com' : product.website ? 'Visit website' : product.source ? `View on ${product.source}` : product.url.includes('producthunt.com') ? 'View on Product Hunt' : 'Visit website')} <i data-lucide="arrow-right"></i></a><button type="button" data-modal-save="${escapeHtml(product.id)}">${isSaved ? 'Saved to collection' : 'Save this launch'}</button></div>`;
+    const isTeaser = teaserIds.has(product.id);
+    const actions = isTeaser
+      ? `<a href="#launch-directory" data-teaser-jump>Browse live launches <i data-lucide="arrow-right"></i></a>`
+      : `<a href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(product.id === 'pilot-policy' ? 'Visit PilotPolicy.com' : product.website ? 'Visit website' : product.source ? `View on ${product.source}` : product.url.includes('producthunt.com') ? 'View on Product Hunt' : 'Visit website')} <i data-lucide="arrow-right"></i></a><button type="button" data-modal-save="${escapeHtml(product.id)}">${isSaved ? 'Saved to collection' : 'Save this launch'}</button>`;
+    modalContent.innerHTML = `<div class="modal-product-logo" style="background:${escapeHtml(product.accent)}">${escapeHtml(product.initials)}</div><h2 id="product-modal-title">${escapeHtml(product.name)}</h2><p><strong>${escapeHtml(product.tagline)}</strong></p><p>${escapeHtml(product.description)}</p>${product.id === 'pilot-policy' ? `<a class="modal-project-url" href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer">PilotPolicy.com</a>` : ''}${isTeaser ? `<p style="font-size:12px;color:#8a9182;margin:-4px 0 4px"><em>Preview example — browse real launches below.</em></p>` : ''}<div class="product-facts"><div class="product-fact"><small>Best for</small><strong>${escapeHtml(product.audience)}</strong></div><div class="product-fact"><small>Pricing</small><strong>${escapeHtml(product.pricing)}</strong></div><div class="product-fact"><small>Discovered</small><strong>${escapeHtml(product.launched)}</strong></div><div class="product-fact"><small>Source</small><strong>${escapeHtml(product.source || (isTeaser ? 'Preview' : product.url.includes('producthunt.com') ? 'Product Hunt' : 'Direct listing'))}</strong></div></div><div class="product-tags">${product.tags.map(tag => `<span class="product-tag">${escapeHtml(tag)}</span>`).join('')}</div><div class="product-modal-actions">${actions}</div>`;
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     createIcons({ icons: { ArrowRight } });
+  };
+
+  openProductById = (id: string): boolean => {
+    const product = products.find(item => item.id === id) ?? teaserProducts.find(item => item.id === id);
+    if (!product) return false;
+    openModal(product);
+    return true;
   };
 
   const toggleSave = (id: string): void => {
@@ -142,6 +177,7 @@ export function initDirectory(): void {
   modal.addEventListener('click', event => {
     const target = event.target as HTMLElement;
     if (target.closest('[data-product-close]')) { closeModal(); return; }
+    if (target.closest('[data-teaser-jump]')) { closeModal(); return; }
     const saveButton = target.closest<HTMLButtonElement>('[data-modal-save]');
     if (saveButton?.dataset.modalSave) toggleSave(saveButton.dataset.modalSave);
   });
