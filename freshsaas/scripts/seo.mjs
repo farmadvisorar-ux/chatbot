@@ -43,7 +43,7 @@ async function loadInsights() {
         const sql = neon(process.env.DATABASE_URL);
         return await sql`
             SELECT slug, title, keyword, meta_description, category, excerpt, body_html,
-                   read_minutes, links, updated_at
+                   read_minutes, links, updated_at, disclosure
             FROM insight_articles WHERE published ORDER BY rank ASC, created_at ASC`;
     } catch (err) {
         console.warn('[seo] could not read insights, continuing without prerender:', err.message);
@@ -140,6 +140,7 @@ const insightBodies = insights.map(a => `
 <article class="seo-article" id="seo-${escapeHtml(a.slug)}">
   <h2>${escapeHtml(a.title)}</h2>
   <p>${escapeHtml(a.meta_description)}</p>
+  ${a.disclosure ? `<p><strong>Disclosure:</strong> ${escapeHtml(a.disclosure)}</p>` : ''}
   ${a.body_html}
   <ul>${(a.links || []).map(l => `<li><a href="${escapeHtml(l.affiliateUrl || l.url)}" rel="${l.affiliateUrl ? 'sponsored nofollow noopener' : 'noopener'}">${escapeHtml(l.name)}</a></li>`).join('')}</ul>
 </article>`).join('');

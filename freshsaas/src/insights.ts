@@ -7,7 +7,7 @@ type Link = { name: string; url: string; note: string; sponsored: boolean };
 type Article = {
     slug: string; title: string; keyword: string; metaDescription: string;
     category: string; excerpt: string; bodyHtml: string; readMinutes: number;
-    updatedAt: string; links: Link[];
+    updatedAt: string; links: Link[]; disclosure: string | null;
 };
 
 const list = document.querySelector<HTMLElement>('#ins-list');
@@ -103,6 +103,7 @@ function showArticle(slug: string): void {
         <h1>${escapeHtml(article.title)}</h1>
         <p class="ins-standfirst">${escapeHtml(article.excerpt)}</p>
         <p class="ins-byline">Updated ${escapeHtml(dateLabel(article.updatedAt))}</p>
+        ${article.disclosure ? `<p class="ins-ownership"><strong>Disclosure:</strong> ${escapeHtml(article.disclosure)}</p>` : ''}
         <div class="ins-body">${article.bodyHtml}</div>
         ${linkList(article)}
         <a class="ins-back" href="#" data-back>← All guides</a>`;

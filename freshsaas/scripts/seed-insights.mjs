@@ -39,11 +39,11 @@ for (const article of articles) {
 
     const result = await sql`
         INSERT INTO insight_articles
-            (slug, title, keyword, meta_description, category, excerpt, body_html, links, read_minutes, rank, published)
+            (slug, title, keyword, meta_description, category, excerpt, body_html, links, read_minutes, rank, published, disclosure)
         VALUES (
             ${article.slug}, ${article.title}, ${article.keyword}, ${article.metaDescription},
             ${article.category}, ${article.excerpt}, ${article.body}, ${JSON.stringify(links)}::jsonb,
-            ${article.readMinutes}, ${article.rank ?? 100}, true
+            ${article.readMinutes}, ${article.rank ?? 100}, true, ${article.disclosure ?? null}
         )
         ON CONFLICT (slug) DO UPDATE SET
             title = EXCLUDED.title,
@@ -54,6 +54,7 @@ for (const article of articles) {
             body_html = EXCLUDED.body_html,
             links = EXCLUDED.links,
             read_minutes = EXCLUDED.read_minutes,
+            disclosure = EXCLUDED.disclosure,
             updated_at = now()
         RETURNING (xmax = 0) AS is_insert`;
 

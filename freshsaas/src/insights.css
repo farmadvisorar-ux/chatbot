@@ -101,3 +101,10 @@ a{color:inherit}
     .ins-header{gap:12px}
     .ins-nav{gap:14px;font-size:13px}
 }
+.ins-ownership{margin:-14px 0 30px;padding:13px 15px;font-size:13px;line-height:1.55;color:#ffd9a8;background:rgba(255,209,138,.09);border:1px solid rgba(255,209,138,.28);border-radius:12px}
+.ins-ownership strong{color:#ffc078}
+
+/* Author `display` beats the UA stylesheet's [hidden]{display:none}, so the
+   hidden state has to be restated or hiding these elements does nothing and
+   the list stays on screen underneath the opened article. */
+.ins-list[hidden], .ins-controls[hidden], .ins-article[hidden] { display: none; }

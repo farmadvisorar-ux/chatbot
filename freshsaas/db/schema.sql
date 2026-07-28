@@ -186,3 +186,9 @@ CREATE TABLE IF NOT EXISTS insight_articles (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS insight_articles_live ON insight_articles (published, rank, created_at DESC);
+
+-- Ownership disclosure shown at the top of an article. Guides that rank a
+-- FreshSAAS-owned property have to say so: an undisclosed self-ranking in a
+-- "best of" list is a deceptive endorsement under the FTC guides, and the
+-- disclosure is what keeps the promotional guides defensible.
+ALTER TABLE insight_articles ADD COLUMN IF NOT EXISTS disclosure TEXT;

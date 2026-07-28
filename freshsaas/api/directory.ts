@@ -79,11 +79,11 @@ async function sendInsights(req: VercelRequest, res: VercelResponse): Promise<vo
     const { rows } = slug
         ? await getPool().query(
             `SELECT slug, title, keyword, meta_description, category, excerpt, body_html, links,
-                    read_minutes, updated_at
+                    read_minutes, updated_at, disclosure
              FROM insight_articles WHERE published AND slug = $1`, [slug])
         : await getPool().query(
             `SELECT slug, title, keyword, meta_description, category, excerpt, body_html, links,
-                    read_minutes, updated_at
+                    read_minutes, updated_at, disclosure
              FROM insight_articles WHERE published ORDER BY rank ASC, created_at ASC`);
 
     json(res, 200, {
@@ -97,6 +97,7 @@ async function sendInsights(req: VercelRequest, res: VercelResponse): Promise<vo
             bodyHtml: row.body_html,
             readMinutes: row.read_minutes,
             updatedAt: row.updated_at,
+            disclosure: row.disclosure ?? null,
             links: (row.links || []).map((link: { name: string; url: string; note?: string; affiliateUrl?: string | null }) => ({
                 name: link.name,
                 note: link.note ?? '',
