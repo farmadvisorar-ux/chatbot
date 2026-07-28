@@ -1,11 +1,16 @@
 import './styles.css';
 import { api } from './api-client';
+import { track, trackSearch } from './analytics';
 import { initDirectory, previewProduct } from './directory';
 import { mountAIWorkspace } from './ai-workspace';
 import { mountMarketplace } from './marketplace';
 import { escapeHtml } from './escape-html';
 import { initAuth } from './auth';
 import { createIcons, ArrowRight, Sparkles, Rocket, Search, CheckCircle2, Layers3, Zap, Globe2, Menu, X, BadgeCheck, Mail, Plus, Building2, CircleDollarSign, FileQuestion, ClipboardList } from 'lucide';
+// Imported last on purpose. Vite emits bundled CSS in module-graph order, and
+// the modules above ship their own sheets (ai-workspace.css and friends), so
+// the theme layer only overrides them if it comes after.
+import './theme-dark.css';
 
 createIcons({ icons: { ArrowRight, Sparkles, Rocket, Search, CheckCircle2, Layers3, Zap, Globe2, Menu, X, BadgeCheck, Mail, Plus, Building2, CircleDollarSign, FileQuestion, ClipboardList } });
 
@@ -164,3 +169,26 @@ initDirectory();
 loadProjects();
 mountAIWorkspace();
 mountMarketplace();
+
+track('pageview');
+document.querySelectorAll<HTMLElement>('[data-submit]').forEach(button =>
+    button.addEventListener('click', () => track('submit_open')));
+document.querySelector('#signup-form')?.addEventListener('submit', () => track('signup_open'));
+
+// Directory and marketplace are rendered after mount, so listen on the
+// document rather than binding to elements that don't exist yet.
+document.addEventListener('click', event => {
+    const target = event.target as HTMLElement;
+    const details = target.closest<HTMLElement>('[data-details]');
+    if (details) {
+        const card = details.closest<HTMLElement>('.directory-card');
+        track('listing_click', { label: card?.querySelector('h3')?.textContent?.slice(0, 120) ?? undefined });
+        return;
+    }
+    const link = target.closest<HTMLAnchorElement>('a[target="_blank"]');
+    if (link?.href && !link.href.includes(location.host)) {
+        track('outbound', { label: link.closest('.directory-card, .product-modal-card')?.querySelector('h3, h2')?.textContent?.slice(0, 120) ?? new URL(link.href).hostname });
+    }
+});
+const directorySearch = document.querySelector<HTMLInputElement>('#directory-search');
+if (directorySearch) directorySearch.addEventListener('input', trackSearch(() => directorySearch.value));

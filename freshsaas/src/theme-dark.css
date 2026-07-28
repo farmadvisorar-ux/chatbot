@@ -1,0 +1,330 @@
+/**
+ * Dark-first theme layer.
+ *
+ * Loaded after styles.css and overrides it rather than replacing it: the base
+ * sheet is 20KB of dense rules driving the whole page, and rewriting it would
+ * risk breaking layout for a change that is purely about surface and colour.
+ * Tokens carry most of the work; the rest targets places that hardcoded a
+ * light background.
+ */
+
+:root {
+    --ink: #e8ecf4;             /* now the text colour, not the dark surface */
+    --paper: #0b0e14;           /* page background */
+    --surface: #141922;
+    --surface-2: #1b2230;
+    --surface-3: #232c3d;
+    --white: #141922;
+    --muted: #93a0b5;
+    --line: rgba(255, 255, 255, .1);
+    --line-strong: rgba(255, 255, 255, .18);
+    --lime: #c9ff57;
+    --coral: #ff7d66;
+    --blue: #7ac7ff;
+    --violet: #a78bfa;
+    --shadow: 0 24px 70px rgba(0, 0, 0, .55);
+    --glow: 0 0 0 1px rgba(201, 255, 87, .18), 0 18px 50px rgba(201, 255, 87, .08);
+}
+
+html { color-scheme: dark; }
+
+body {
+    background:
+        radial-gradient(900px 500px at 12% -8%, rgba(122, 199, 255, .10), transparent 60%),
+        radial-gradient(800px 460px at 88% 4%, rgba(201, 255, 87, .09), transparent 62%),
+        var(--paper);
+    color: var(--ink);
+}
+
+/* Ambient blobs read as smudges on dark, so soften them. */
+.ambient { opacity: .16; filter: blur(90px); }
+.ambient-one { background: #7ac7ff; }
+.ambient-two { background: #a78bfa; }
+
+/* Header ------------------------------------------------------------- */
+.site-header {
+    background: rgba(15, 19, 27, .72);
+    border-color: var(--line);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .45);
+    -webkit-backdrop-filter: blur(22px);
+    backdrop-filter: blur(22px);
+}
+.brand, .site-footer p { color: var(--ink); }
+.brand-mark { background: var(--lime); color: #0b0e14; }
+.brand-dot { color: var(--muted); }
+.desktop-nav a, .text-button { color: #b9c4d6; }
+.desktop-nav a:hover, .text-button:hover { color: #fff; }
+.mini-cta { background: var(--lime); color: #0b0e14; border-color: var(--lime); }
+.mini-cta:hover { box-shadow: 0 10px 30px rgba(201, 255, 87, .28); }
+.menu-button { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.mobile-nav { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow); }
+.mobile-nav a, .mobile-nav button { color: var(--ink); }
+
+/* Hero ---------------------------------------------------------------- */
+.hero-note, .section-heading > p, .preview-heading p, .how-intro > p,
+.waitlist-panel > div > p, .modal-card > p, .ops-heading p { color: #8fa0bb; }
+.hero h1 em { color: var(--lime); }
+.hero h1 em:after { background: rgba(201, 255, 87, .22); }
+.hero-lede, .section-heading > span, .step p, .feature-row p { color: #a3b0c6; }
+.primary-cta { background: var(--lime); color: #0b0e14; border-color: var(--lime); box-shadow: 0 10px 0 rgba(201, 255, 87, .16); }
+.secondary-cta { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.secondary-cta:hover { border-color: var(--lime); color: var(--lime); }
+.micro-proof { color: #8fa0bb; }
+.micro-proof svg { color: var(--lime); }
+
+/* Radar card is already dark; just deepen it. */
+.radar-card { background: linear-gradient(160deg, #141b26, #0d1219); border-color: var(--line); }
+
+/* --ink flipped from "dark surface" to "light text", so anything that used it
+   as foreground on a light or lime background now needs the dark ink back. */
+.launch-chip { background: rgba(255, 255, 255, .95); color: #10131b; }
+.launch-chip small { color: #5f6660; }
+.radar-core { color: #10131b; }
+.featured-card { color: #10131b; }
+.featured-card p, .featured-card span { color: rgba(16, 19, 27, .72); }
+.product-logo { color: #10131b; }
+/* Same flip in reverse: .dark-cta painted white text onto var(--ink), which is
+   now a pale colour. Restore it as a solid light-on-dark button. */
+.dark-cta { background: #10131b; color: #fff; border-color: var(--line-strong); }
+.dark-cta:hover { border-color: var(--lime); color: var(--lime); }
+
+/* Ticker -------------------------------------------------------------- */
+.ticker { background: var(--lime); border-color: transparent; color: #0b0e14; }
+
+/* Feature rail -------------------------------------------------------- */
+.feature-rail, .feature-row { border-color: var(--line); }
+.feature-row:hover { background: rgba(255, 255, 255, .03); }
+.feature-icon { border-color: var(--line-strong); background: var(--surface); }
+.feature-number, .feature-meta { color: #7d8ba3; }
+
+/* Steps --------------------------------------------------------------- */
+.steps { background: var(--line); border-color: var(--line); }
+.step { background: var(--surface); }
+.step > span { color: #7d8ba3; }
+
+/* Directory ----------------------------------------------------------- */
+.launch-directory { background: transparent; }
+.directory-head p, .directory-summary { color: #93a0b5; }
+.directory-search { background: var(--surface); border-color: var(--line); }
+.directory-search input { color: var(--ink); }
+.directory-search input::placeholder { color: #6d7a90; }
+.filter-button, .saved-toggle, .sort-select {
+    background: var(--surface); color: #c3cddd; border-color: var(--line);
+}
+.filter-button:hover, .saved-toggle:hover { border-color: var(--line-strong); color: #fff; }
+.filter-button.active, .saved-toggle.active { background: var(--lime); color: #0b0e14; border-color: var(--lime); }
+.directory-card {
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border-color: var(--line);
+    color: var(--ink);
+}
+.directory-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(201, 255, 87, .38);
+    box-shadow: 0 26px 60px rgba(0, 0, 0, .5), 0 0 0 1px rgba(201, 255, 87, .12);
+}
+.directory-card h3 { color: #fff; }
+.directory-tagline { color: #dbe3ef; }
+.directory-description, .directory-category { color: #93a0b5; }
+.directory-card-footer { border-color: var(--line); }
+.freshness { color: #9fb06a; }
+.freshness svg { color: var(--lime); }
+.details-button { color: var(--lime); }
+.save-button { background: var(--surface-3); border-color: var(--line); color: #c3cddd; }
+.save-button.saved { background: var(--lime); color: #0b0e14; }
+.directory-empty { border-color: var(--line); background: rgba(255, 255, 255, .02); color: #93a0b5; }
+.directory-card.featured {
+    background: linear-gradient(165deg, rgba(201, 255, 87, .14), var(--surface-2) 55%);
+    border-color: rgba(201, 255, 87, .4);
+}
+.directory-badge { color: var(--lime); }
+
+/* Product modal ------------------------------------------------------- */
+.product-modal-card { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.product-modal-card > p { color: #a3b0c6; }
+.product-modal-close { background: var(--surface-3); border-color: var(--line); color: var(--ink); }
+.product-fact { background: var(--surface-2); border-color: var(--line); }
+.product-fact small { color: #8593aa; }
+.product-tag { background: var(--surface-3); color: #c3cddd; }
+.product-modal-actions a { background: var(--lime); color: #0b0e14; border-color: var(--lime); }
+.product-modal-actions button { background: var(--surface-3); color: var(--ink); border-color: var(--line-strong); }
+
+/* Contractor OS ------------------------------------------------------- */
+.ops-metrics, .project-board, .ops-panel { background: var(--surface); border-color: var(--line); }
+.ops-metrics article { border-color: var(--line); }
+.ops-metrics span, .board-toolbar p, .project-main span, .project-main small, .ops-panel > p { color: #93a0b5; }
+.board-toolbar, .control-row, .project-row { border-color: var(--line); }
+.board-toolbar select, .modal-card select { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.project-symbol { background: var(--surface-3); }
+.project-progress { background: var(--surface-3); }
+.control-row strong { color: var(--lime); }
+.ops-empty { color: #93a0b5; }
+.status-active { background: rgba(201, 255, 87, .18); color: var(--lime); }
+.status-bidding { background: rgba(122, 199, 255, .18); color: var(--blue); }
+.status-closeout { background: rgba(255, 125, 102, .18); color: var(--coral); }
+
+/* Waitlist ------------------------------------------------------------ */
+.waitlist-panel { background: linear-gradient(180deg, var(--surface-2), var(--surface)); border-color: var(--line); box-shadow: var(--shadow); }
+.waitlist-panel > div > span { color: #a3b0c6; }
+.email-field { background: var(--surface-3); border-color: var(--line); }
+.email-field input { color: var(--ink); }
+.email-field input::placeholder { color: #6d7a90; }
+.email-field > svg { color: #8593aa; }
+.email-field button { background: var(--lime); color: #0b0e14; }
+.form-status { color: #8fa0bb; }
+.form-status.success { color: var(--lime); }
+.form-status.error { color: #ff9d8a; }
+
+/* Modals -------------------------------------------------------------- */
+.modal-card { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.modal-close { background: var(--surface-3); border-color: var(--line); color: var(--ink); }
+.modal-card input, .modal-card textarea { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.modal-card input::placeholder, .modal-card textarea::placeholder { color: #6d7a90; }
+.modal-card input:focus, .modal-card textarea:focus {
+    border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201, 255, 87, .16);
+}
+
+/* Founder band ---------------------------------------------------------
+   Kept as the bright coral break in an otherwise dark page, so its text has
+   to be dark ink. The original browns only cleared ~3.5:1 against coral;
+   these are darkened to pass AA. */
+.founder-section { border-color: rgba(0, 0, 0, .4); }
+.founder-copy > p { color: #521d12; }
+.founder-copy h2 { color: #2b0f08; }
+.founder-copy > span { color: #40190f; }
+.founder-actions > span { color: #40190f; }
+
+/* Footer -------------------------------------------------------------- */
+.site-footer { border-color: var(--line); color: #8593aa; }
+
+/* Marketplace (already dark) — align with the new palette. */
+.marketplace { background: transparent; }
+.marketplace-card { background: linear-gradient(180deg, var(--surface-2), var(--surface)); border-color: var(--line); }
+.marketplace-card:hover { border-color: rgba(201, 255, 87, .3); }
+.mp-modal-card { background: var(--surface); color: var(--ink); }
+.mp-modal-card input, .mp-modal-card textarea { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.mp-modal-close { background: var(--surface-3); border-color: var(--line); color: var(--ink); }
+.mp-fee-breakdown { background: var(--surface-2); color: var(--ink); }
+.mp-fee-row.total { border-color: var(--line); }
+.mp-demo-note { background: rgba(122, 199, 255, .1); border-color: rgba(122, 199, 255, .28); color: #b8dcff; }
+.mp-payout-setup { background: rgba(201, 255, 87, .08); border-color: rgba(201, 255, 87, .28); }
+.mp-payout-setup span { color: #a3b0c6; }
+.mp-modal-card label { color: #c3cddd; }
+.mp-payout-setup strong { color: var(--ink); }
+.mp-payout-setup button, .mp-modal-card button[type="submit"] { background: var(--lime); color: #0b0e14; }
+.mp-status.success { color: var(--lime); }
+.mp-status.error { color: #ff9d8a; }
+
+/* Toast --------------------------------------------------------------- */
+.toast { background: var(--surface-3); color: var(--ink); border: 1px solid var(--line-strong); }
+
+/* Prerendered SEO block is for crawlers only. */
+#seo-launches { display: none !important; }
+
+/* AI workspace -------------------------------------------------------- */
+.aiw-launcher { background: var(--lime); color: #0b0e14; border-color: rgba(0, 0, 0, .2); }
+.aiw-launcher svg { color: #0b0e14; }
+.aiw-launcher small { color: rgba(11, 14, 20, .7); }
+.aiw-panel { background: var(--paper); color: var(--ink); box-shadow: -30px 0 90px rgba(0, 0, 0, .6); }
+.aiw-header { background: var(--surface-2); }
+.aiw-header p { color: #a3b0c6; }
+.aiw-icon-button { background: rgba(255, 255, 255, .07); border-color: var(--line-strong); color: var(--ink); }
+/* Lime band: text must be dark ink, not the inherited light body colour. */
+.aiw-guardrail { border-color: rgba(0, 0, 0, .35); color: #0b0e14; }
+.aiw-guardrail div { border-color: rgba(11, 14, 20, .22); }
+.aiw-guardrail span { color: rgba(11, 14, 20, .74); }
+.aiw-tabs button { background: var(--surface-2); border-color: var(--line); color: #a3b0c6; }
+.aiw-tabs button.active { background: var(--lime); color: #0b0e14; border-color: var(--lime); }
+.aiw-tabs button span { background: var(--surface-3); color: var(--ink); }
+.aiw-tabs button.active span { background: rgba(11, 14, 20, .18); color: #0b0e14; }
+.aiw-section-head p, .aiw-result p, .aiw-proposal p, .aiw-result span { color: #93a0b5; }
+.aiw-section-head > svg { color: var(--lime); }
+.aiw-local-badge { background: rgba(201, 255, 87, .14); color: var(--lime); }
+.aiw-search-form input, .aiw-proposal-form input,
+.aiw-provider-form input, .aiw-provider-form select {
+    background: var(--surface-2); border-color: var(--line); color: var(--ink);
+}
+.aiw-search-form input:focus, .aiw-proposal-form input:focus,
+.aiw-provider-form input:focus, .aiw-provider-form select:focus {
+    border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201, 255, 87, .18);
+}
+.aiw-search-form button, .aiw-proposal-form button {
+    background: var(--lime); color: #0b0e14; border-color: var(--lime);
+}
+.aiw-primary { background: var(--lime); color: #0b0e14; border-color: var(--lime); box-shadow: 0 7px 0 rgba(201, 255, 87, .14); }
+.aiw-status { color: #93a0b5; }
+.aiw-status.success { color: var(--lime); }
+.aiw-status.error { color: #ff9d8a; }
+.aiw-status.warning { color: #ffd08a; }
+.aiw-result, .aiw-proposal { background: var(--surface); border-color: var(--line); }
+.aiw-result-actions a { color: var(--lime); }
+.aiw-result-actions button { color: var(--blue); }
+.aiw-provider-form label span { color: #8593aa; }
+.aiw-approval-lock { background: rgba(201, 255, 87, .08); border-color: rgba(201, 255, 87, .26); }
+.aiw-approval-lock svg { color: var(--lime); }
+.aiw-approval-lock span { color: #93a0b5; }
+.aiw-decision-row .approve { background: var(--lime); color: #0b0e14; border-color: var(--lime); }
+.aiw-decision-row .reject { background: transparent; color: #ff9d8a; border-color: rgba(255, 157, 138, .4); }
+.aiw-decision-note { border-color: var(--line); color: #8593aa; }
+
+/* Insights entry point ------------------------------------------------- */
+.preview-heading-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.insights-button {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--lime); color: #0b0e14;
+    border: 1px solid var(--lime); border-radius: 12px;
+    padding: 12px 18px; font-weight: 800; text-decoration: none;
+    box-shadow: 0 10px 30px rgba(201, 255, 87, .16);
+}
+.insights-button:hover { box-shadow: 0 14px 38px rgba(201, 255, 87, .26); }
+.insights-button svg { width: 17px; }
+@media (max-width: 680px) { .insights-button { width: 100%; justify-content: center; } }
+
+/* Featured foil border -------------------------------------------------
+   The animated foil edge previously applied only to the single pinned
+   project. Every featured listing now gets it, which is what makes the
+   featured slot visibly worth having. Keyframes come from the component
+   stylesheet injected by directory.ts. */
+.directory-card.featured {
+    position: relative;
+    isolation: isolate;
+    border-color: transparent;
+    box-shadow: 0 22px 70px rgba(73, 145, 196, .22), 0 0 28px rgba(201, 255, 87, .12);
+}
+.directory-card.featured::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 22px;
+    padding: 2px;
+    background: linear-gradient(110deg,
+        #7ac7ff 0%, #ffffff 18%, #c9ff57 36%, #7ac7ff 54%,
+        #ffffff 72%, #c9ff57 88%, #7ac7ff 100%);
+    background-size: 300% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: pilot-border-shimmer 3s linear infinite;
+    pointer-events: none;
+    z-index: 3;
+}
+.directory-card.featured::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 28px;
+    background: linear-gradient(110deg, rgba(122, 199, 255, .24), rgba(201, 255, 87, .17), rgba(255, 255, 255, .12));
+    filter: blur(14px);
+    opacity: .5;
+    z-index: -1;
+    pointer-events: none;
+}
+/* The pinned project keeps a slightly stronger glow so it still reads as
+   first among featured. */
+.directory-card.pilot-featured::after { opacity: .62; }
+
+/* Respect users who have asked for less motion: keep the foil, stop it moving. */
+@media (prefers-reduced-motion: reduce) {
+    .directory-card.featured::before { animation: none; background-position: 50% 0; }
+}

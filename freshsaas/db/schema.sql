@@ -135,6 +135,26 @@ ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS featured_rank INTEGER NOT
 CREATE INDEX IF NOT EXISTS directory_entries_featured ON directory_entries (featured, featured_rank) WHERE featured;
 CREATE INDEX IF NOT EXISTS directory_entries_undigested ON directory_entries (digested_at, discovered_at) WHERE digested_at IS NULL;
 
+-- First-party visitor analytics. Deliberately cookie-free and free of personal
+-- data: no IP address is stored, and session_id is a random per-tab value that
+-- disappears when the tab closes. That keeps this outside cookie-consent
+-- requirements while still answering what people actually do on the site.
+CREATE TABLE IF NOT EXISTS analytics_events (
+    id BIGSERIAL PRIMARY KEY,
+    type TEXT NOT NULL,
+    path TEXT NOT NULL DEFAULT '/',
+    referrer_host TEXT,
+    country TEXT,
+    device TEXT,
+    session_id TEXT,
+    entry_id UUID,
+    label TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS analytics_events_time ON analytics_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_events_type ON analytics_events (type, created_at DESC);
+CREATE INDEX IF NOT EXISTS analytics_events_label ON analytics_events (type, label);
+
 CREATE TABLE IF NOT EXISTS rate_limit_events (
     id BIGSERIAL PRIMARY KEY,
     bucket TEXT NOT NULL,
@@ -142,3 +162,33 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS rate_limit_events_lookup ON rate_limit_events (bucket, client_key, created_at);
+
+-- Insights: buyer's-guide articles ("best X", "A vs B") that bring search
+-- traffic in and hand it to listings. Article copy is authored in the repo
+-- and seeded from scripts/insights-content.mjs; the affiliate links are the
+-- one field edited from the admin panel, so the seeder never overwrites them.
+CREATE TABLE IF NOT EXISTS insight_articles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    keyword TEXT NOT NULL,
+    meta_description TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'Guides',
+    excerpt TEXT NOT NULL,
+    body_html TEXT NOT NULL,
+    -- [{ name, url, note, affiliateUrl }] — affiliateUrl is admin-owned and
+    -- is what turns a plain outbound link into a monetised one.
+    links JSONB NOT NULL DEFAULT '[]'::jsonb,
+    read_minutes INT NOT NULL DEFAULT 4,
+    rank INT NOT NULL DEFAULT 100,
+    published BOOLEAN NOT NULL DEFAULT true,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS insight_articles_live ON insight_articles (published, rank, created_at DESC);
+
+-- Ownership disclosure shown at the top of an article. Guides that rank a
+-- FreshSAAS-owned property have to say so: an undisclosed self-ranking in a
+-- "best of" list is a deceptive endorsement under the FTC guides, and the
+-- disclosure is what keeps the promotional guides defensible.
+ALTER TABLE insight_articles ADD COLUMN IF NOT EXISTS disclosure TEXT;

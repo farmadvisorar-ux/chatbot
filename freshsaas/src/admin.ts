@@ -190,6 +190,109 @@ function renderPeople(users: Person[], waitlist: WaitlistRow[]): void {
     `).join('') : '<div class="empty">Nobody on the waitlist yet.</div>';
 }
 
+type Analytics = {
+    days: number;
+    totals: { events: number; visitors: number; pageviews: number; outbound: number };
+    daily: Array<{ day: string; visitors: number; pageviews: number }>;
+    referrers: Array<{ source: string; visitors: number }>;
+    countries: Array<{ country: string; visitors: number }>;
+    devices: Array<{ device: string; visitors: number }>;
+    topListings: Array<{ label: string; clicks: number }>;
+    searches: Array<{ term: string; searches: number }>;
+    pages: Array<{ path: string; views: number }>;
+};
+
+/** Horizontal bars scaled to the largest value in the set. */
+function bars(rows: Array<[string, number]>, emptyText: string): string {
+    if (!rows.length) return `<div class="empty small">${escapeHtml(emptyText)}</div>`;
+    const max = Math.max(...rows.map(([, value]) => value)) || 1;
+    return rows.map(([label, value]) => `
+      <div class="bar">
+        <span class="bar-label">${escapeHtml(label)}</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${Math.max(3, Math.round((value / max) * 100))}%"></span></span>
+        <span class="bar-value">${value}</span>
+      </div>`).join('');
+}
+
+function renderAnalytics(data: Analytics): void {
+    const t = data.totals;
+    $('#analytics-stats').innerHTML = [
+        ['Visitors', String(t.visitors)],
+        ['Pageviews', String(t.pageviews)],
+        ['Outbound clicks', String(t.outbound)],
+        ['Events', String(t.events)],
+    ].map(([label, value]) => `<div class="stat"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('');
+
+    const max = Math.max(1, ...data.daily.map(d => d.visitors));
+    $('#analytics-chart').innerHTML = data.daily.length
+        ? data.daily.map(d => `<span class="col" title="${escapeHtml(d.day)}: ${d.visitors} visitors"><span style="height:${Math.max(2, Math.round((d.visitors / max) * 100))}%"></span></span>`).join('')
+        : '<div class="empty small">No traffic recorded yet.</div>';
+
+    $('#an-referrers').innerHTML = bars(data.referrers.map(r => [r.source, r.visitors]), 'No referrers yet.');
+    $('#an-countries').innerHTML = bars(data.countries.map(r => [r.country, r.visitors]), 'No country data yet.');
+    $('#an-listings').innerHTML = bars(data.topListings.map(r => [r.label, r.clicks]), 'No launch clicks yet.');
+    $('#an-searches').innerHTML = bars(data.searches.map(r => [r.term, r.searches]), 'No searches yet.');
+    $('#an-devices').innerHTML = bars(data.devices.map(r => [r.device, r.visitors]), 'No device data yet.');
+    $('#an-pages').innerHTML = bars(data.pages.map(r => [r.path, r.views]), 'No pageviews yet.');
+}
+
+type InsightLink = { name: string; url: string; note?: string; affiliateUrl?: string | null };
+type Insight = {
+    slug: string; title: string; keyword: string; category: string;
+    links: InsightLink[]; published: boolean; updatedAt: string;
+};
+
+let insights: Insight[] = [];
+
+function renderInsights(): void {
+    const query = $<HTMLInputElement>('#insight-search').value.trim().toLowerCase();
+    const visible = insights.filter(article =>
+        !query || [article.title, article.keyword, article.category, ...article.links.map(l => l.name)]
+            .join(' ').toLowerCase().includes(query));
+
+    const monetised = insights.reduce((sum, a) => sum + a.links.filter(l => l.affiliateUrl).length, 0);
+    $('#count-insights').textContent = String(insights.length);
+
+    $('#insights-list').innerHTML = visible.length ? visible.map(article => `
+        <div class="item${article.published ? '' : ' is-pending'}">
+            <div class="item-head">
+                <h3>${escapeHtml(article.title)}</h3>
+                ${article.published ? '' : '<span class="badge warn-badge">Unpublished</span>'}
+                ${article.links.some(l => l.affiliateUrl) ? '<span class="badge ok">Earning</span>' : ''}
+            </div>
+            <p class="meta">Keyword: ${escapeHtml(article.keyword)} · ${escapeHtml(article.category)} ·
+               <a href="/insights.html#${escapeHtml(article.slug)}" target="_blank" rel="noopener">View article</a></p>
+            <div class="aff-rows">
+                ${article.links.map(link => `
+                    <div class="aff-row">
+                        <div class="aff-name">
+                            <strong>${escapeHtml(link.name)}</strong>
+                            <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">${escapeHtml(link.url)}</a>
+                        </div>
+                        <input type="url" placeholder="https://your-affiliate-link…"
+                               value="${escapeHtml(link.affiliateUrl || '')}"
+                               data-aff-slug="${escapeHtml(article.slug)}"
+                               data-aff-link="${escapeHtml(link.name)}">
+                        <button type="button" class="ghost" data-aff-save="${escapeHtml(article.slug)}"
+                                data-aff-name="${escapeHtml(link.name)}">Save</button>
+                    </div>`).join('')}
+            </div>
+            <div class="row">
+                <button type="button" class="ghost"
+                        data-insight-toggle="${escapeHtml(article.slug)}"
+                        data-insight-action="${article.published ? 'insight-unpublish' : 'insight-publish'}">
+                    ${article.published ? 'Unpublish' : 'Publish'}
+                </button>
+            </div>
+        </div>`).join('')
+        : '<div class="empty">No guides match that search.</div>';
+
+    $('#insights-status').textContent = monetised
+        ? `${monetised} affiliate link${monetised === 1 ? '' : 's'} live across ${insights.length} guides.`
+        : 'No affiliate links set yet. Paste one against any tool above to start earning from it.';
+    $('#insights-status').className = 'status';
+}
+
 async function loadAll(): Promise<void> {
     const params = new URLSearchParams({
         view: 'listings',
@@ -197,13 +300,19 @@ async function loadAll(): Promise<void> {
         filter: filterView.value,
         source: filterSource.value,
     });
-    const [overview, live, rels, market, people] = await Promise.all([
+    const days = $<HTMLSelectElement>('#analytics-days').value || '30';
+    const [overview, live, rels, market, people, analytics, guides] = await Promise.all([
         callAdmin<Overview>('/api/admin?view=overview'),
         callAdmin<{ listings: Listing[] }>(`/api/admin?${params}`),
         callAdmin<{ awaitingRelease: Release[] }>('/api/admin?view=releases'),
         callAdmin<{ marketplace: MarketListing[] }>('/api/admin?view=marketplace'),
         callAdmin<{ users: Person[]; waitlist: WaitlistRow[] }>('/api/admin?view=people'),
+        callAdmin<Analytics>(`/api/admin?view=analytics&days=${days}`),
+        callAdmin<{ insights: Insight[] }>('/api/admin?view=insights'),
     ]);
+    insights = guides.insights ?? [];
+    renderInsights();
+    renderAnalytics(analytics);
     renderStats(overview);
     renderListings(live.listings ?? []);
     renderPayouts(rels.awaitingRelease ?? []);
@@ -381,6 +490,7 @@ listingSearch.addEventListener('input', () => {
 });
 filterView.addEventListener('change', () => { void loadAll(); });
 filterSource.addEventListener('change', () => { void loadAll(); });
+$('#analytics-days').addEventListener('change', () => { void loadAll(); });
 
 const stored = localStorage.getItem(STORAGE_KEY);
 if (stored) {
@@ -389,3 +499,62 @@ if (stored) {
         adminKey = '';
     });
 }
+
+/* Insights: affiliate links and publish state ------------------------- */
+$('#insight-search').addEventListener('input', renderInsights);
+
+$('#insights-list').addEventListener('click', async event => {
+    const target = event.target as HTMLElement;
+
+    const save = target.closest<HTMLButtonElement>('[data-aff-save]');
+    if (save) {
+        const slug = save.dataset.affSave!;
+        const linkName = save.dataset.affName!;
+        const input = $('#insights-list').querySelector<HTMLInputElement>(
+            `input[data-aff-slug="${CSS.escape(slug)}"][data-aff-link="${CSS.escape(linkName)}"]`);
+        if (!input) return;
+
+        save.disabled = true;
+        const original = save.textContent;
+        save.textContent = 'Saving…';
+        try {
+            await callAdmin('/api/admin', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'insight-affiliate', slug, linkName, affiliateUrl: input.value.trim() }),
+            });
+            // Update in place so the "Earning" badge and the counter stay
+            // truthful without refetching every guide.
+            const article = insights.find(a => a.slug === slug);
+            const link = article?.links.find(l => l.name === linkName);
+            if (link) link.affiliateUrl = input.value.trim() || null;
+            renderInsights();
+            $('#insights-status').textContent = input.value.trim()
+                ? `Affiliate link saved for ${linkName}.`
+                : `Affiliate link cleared for ${linkName}.`;
+            $('#insights-status').className = 'status success';
+        } catch (err) {
+            $('#insights-status').textContent = err instanceof Error ? err.message : 'Could not save that link.';
+            $('#insights-status').className = 'status error';
+            save.disabled = false;
+            save.textContent = original;
+        }
+        return;
+    }
+
+    const toggle = target.closest<HTMLButtonElement>('[data-insight-toggle]');
+    if (toggle) {
+        const slug = toggle.dataset.insightToggle!;
+        const action = toggle.dataset.insightAction!;
+        toggle.disabled = true;
+        try {
+            await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ action, slug }) });
+            const article = insights.find(a => a.slug === slug);
+            if (article) article.published = action === 'insight-publish';
+            renderInsights();
+        } catch (err) {
+            $('#insights-status').textContent = err instanceof Error ? err.message : 'Could not update that guide.';
+            $('#insights-status').className = 'status error';
+            toggle.disabled = false;
+        }
+    }
+});

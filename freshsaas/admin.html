@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>FreshSAAS Admin</title>
-    <meta name="theme-color" content="#c9ff57">
+    <meta name="theme-color" content="#0b0e14">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="apple-touch-icon" href="/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,11 +42,41 @@
 
             <nav class="tabs">
                 <button class="tab active" data-tab="listings" type="button">Directory <span id="count-listings">0</span></button>
+                <button class="tab" data-tab="analytics" type="button">Analytics</button>
+                <button class="tab" data-tab="insights" type="button">Insights <span id="count-insights">0</span></button>
                 <button class="tab" data-tab="marketplace" type="button">Marketplace <span id="count-marketplace">0</span></button>
                 <button class="tab" data-tab="payouts" type="button">Payouts <span id="count-payouts">0</span></button>
                 <button class="tab" data-tab="people" type="button">People <span id="count-people">0</span></button>
                 <button class="tab" data-tab="tools" type="button">Tools</button>
             </nav>
+
+            <div class="panel" data-panel="analytics">
+                <div class="filters">
+                    <p class="muted" style="margin:0">Cookie-free, first-party. No IP addresses stored, so no consent banner needed.</p>
+                    <select id="analytics-days" aria-label="Time range">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                </div>
+                <div id="analytics-stats" class="stats"></div>
+                <div id="analytics-chart" class="chart"></div>
+                <div class="grid-2">
+                    <div><h3 class="subhead">Traffic sources</h3><div id="an-referrers" class="bars"></div></div>
+                    <div><h3 class="subhead">Countries</h3><div id="an-countries" class="bars"></div></div>
+                    <div><h3 class="subhead">Most clicked launches</h3><div id="an-listings" class="bars"></div></div>
+                    <div><h3 class="subhead">What people search for</h3><div id="an-searches" class="bars"></div></div>
+                    <div><h3 class="subhead">Devices</h3><div id="an-devices" class="bars"></div></div>
+                    <div><h3 class="subhead">Pages</h3><div id="an-pages" class="bars"></div></div>
+                </div>
+            </div>
+
+            <div class="panel" data-panel="insights">
+                <p class="muted">Buyer's guides that pull search traffic. Paste an affiliate URL against any tool to monetise that link — the article then marks it <code>rel="sponsored nofollow"</code> and shows a disclosure automatically, which is what keeps it compliant. Leave a field blank to go back to the plain link.</p>
+                <label class="search"><input id="insight-search" type="search" placeholder="Search guides or tools"></label>
+                <div id="insights-list" class="list"></div>
+                <p id="insights-status" class="status" role="status" aria-live="polite"></p>
+            </div>
 
             <div class="panel" data-panel="marketplace">
                 <p class="muted">SaaS businesses listed for sale. New listings arrive pending review and are only purchasable once approved and the seller has finished payout setup.</p>

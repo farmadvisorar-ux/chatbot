@@ -78,6 +78,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'analytics') {
+            const days = Math.max(1, Math.min(90, Number(req.query.days) || 30));
+            const window = `${days} days`;
+            const [totals, daily, referrers, countries, devices, topListings, searches, pages] = await Promise.all([
+                pool.query(`SELECT count(*)::int AS events,
+                                   count(DISTINCT session_id)::int AS visitors,
+                                   count(*) FILTER (WHERE type='pageview')::int AS pageviews,
+                                   count(*) FILTER (WHERE type='outbound')::int AS outbound
+                            FROM analytics_events WHERE created_at > now() - $1::interval`, [window]),
+                pool.query(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+                                   count(DISTINCT session_id)::int AS visitors,
+                                   count(*) FILTER (WHERE type='pageview')::int AS pageviews
+                            FROM analytics_events WHERE created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY 1`, [window]),
+                pool.query(`SELECT COALESCE(referrer_host,'direct') AS source, count(DISTINCT session_id)::int AS visitors
+                            FROM analytics_events WHERE created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY visitors DESC LIMIT 12`, [window]),
+                pool.query(`SELECT COALESCE(country,'??') AS country, count(DISTINCT session_id)::int AS visitors
+                            FROM analytics_events WHERE created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY visitors DESC LIMIT 12`, [window]),
+                pool.query(`SELECT COALESCE(device,'unknown') AS device, count(DISTINCT session_id)::int AS visitors
+                            FROM analytics_events WHERE created_at > now() - $1::interval GROUP BY 1 ORDER BY visitors DESC`, [window]),
+                pool.query(`SELECT a.label, count(*)::int AS clicks
+                            FROM analytics_events a
+                            WHERE a.type IN ('listing_click','outbound') AND a.created_at > now() - $1::interval AND a.label IS NOT NULL
+                            GROUP BY 1 ORDER BY clicks DESC LIMIT 15`, [window]),
+                pool.query(`SELECT label AS term, count(*)::int AS searches
+                            FROM analytics_events WHERE type='search' AND created_at > now() - $1::interval AND label IS NOT NULL
+                            GROUP BY 1 ORDER BY searches DESC LIMIT 15`, [window]),
+                pool.query(`SELECT path, count(*)::int AS views
+                            FROM analytics_events WHERE type='pageview' AND created_at > now() - $1::interval
+                            GROUP BY 1 ORDER BY views DESC LIMIT 10`, [window]),
+            ]);
+            json(res, 200, {
+                days,
+                totals: totals.rows[0],
+                daily: daily.rows,
+                referrers: referrers.rows,
+                countries: countries.rows,
+                devices: devices.rows,
+                topListings: topListings.rows,
+                searches: searches.rows,
+                pages: pages.rows,
+            });
+            return;
+        }
+
         if (view === 'marketplace') {
             // Marketplace listings start pending_review and had no approval
             // path before this — they could only be made live by editing the
@@ -109,6 +156,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 pool.query('SELECT email, source, created_at AS "createdAt" FROM waitlist ORDER BY created_at DESC LIMIT 200'),
             ]);
             json(res, 200, { users: users.rows, waitlist: waitlist.rows });
+            return;
+        }
+
+        if (view === 'insights') {
+            const { rows } = await pool.query(
+                `SELECT slug, title, keyword, category, links, published, updated_at AS "updatedAt"
+                 FROM insight_articles ORDER BY rank ASC, created_at ASC`,
+            );
+            json(res, 200, { insights: rows });
             return;
         }
 
@@ -151,6 +207,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const body = (req.body || {}) as {
         id?: string; orderId?: string; action?: string;
         name?: string; tagline?: string; category?: string; rank?: number | string;
+        slug?: string; linkName?: string; affiliateUrl?: string;
     };
     const action = clean(body.action, 20);
 
@@ -188,6 +245,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
         json(res, 200, { ok: true, name: updated.rows[0].name, status: updated.rows[0].status });
+        return;
+    }
+
+    if (action === 'insight-affiliate') {
+        const slug = clean(body.slug, 120);
+        const linkName = clean(body.linkName, 120);
+        // An empty string clears the affiliate link and reverts to the plain
+        // outbound URL, so the operator can undo a partnership.
+        const affiliateUrl = clean(body.affiliateUrl, 500);
+
+        if (!slug || !linkName) {
+            error(res, 400, 'Provide the article slug and link name');
+            return;
+        }
+        if (affiliateUrl && !/^https:\/\/\S+$/i.test(affiliateUrl)) {
+            error(res, 400, 'Affiliate URL must start with https://');
+            return;
+        }
+
+        const current = await pool.query<{ links: Array<{ name: string; url: string; note?: string; affiliateUrl?: string | null }> }>(
+            'SELECT links FROM insight_articles WHERE slug = $1', [slug],
+        );
+        if (!current.rows[0]) {
+            error(res, 404, 'Article not found');
+            return;
+        }
+        const links = current.rows[0].links || [];
+        if (!links.some(link => link.name === linkName)) {
+            error(res, 404, 'That link is not in this article');
+            return;
+        }
+        const next = links.map(link =>
+            link.name === linkName ? { ...link, affiliateUrl: affiliateUrl || null } : link);
+
+        await pool.query(
+            'UPDATE insight_articles SET links = $2::jsonb, updated_at = now() WHERE slug = $1',
+            [slug, JSON.stringify(next)],
+        );
+        json(res, 200, { ok: true, slug, linkName, affiliateUrl: affiliateUrl || null });
+        return;
+    }
+
+    if (action === 'insight-publish' || action === 'insight-unpublish') {
+        const slug = clean(body.slug, 120);
+        if (!slug) {
+            error(res, 400, 'Provide the article slug');
+            return;
+        }
+        const updated = await pool.query(
+            'UPDATE insight_articles SET published = $2, updated_at = now() WHERE slug = $1 RETURNING title, published',
+            [slug, action === 'insight-publish'],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Article not found');
+            return;
+        }
+        json(res, 200, { ok: true, title: updated.rows[0].title, published: updated.rows[0].published });
         return;
     }
 
