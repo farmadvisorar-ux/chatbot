@@ -1,6 +1,7 @@
 import { escapeHtml } from './escape-html.js';
 
 export interface FindingRow {
+    id?: string;
     check_id: string;
     title: string;
     severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -9,6 +10,10 @@ export interface FindingRow {
     remediation: string;
     references: string[];
     affected_url: string | null;
+    auto_fixable?: boolean;
+    fix_status?: 'none' | 'pr_open' | 'pr_merged' | 'failed';
+    fix_pr_url?: string | null;
+    fix_error?: string | null;
 }
 
 export interface SeveritySummary { critical: number; high: number; medium: number; low: number; info: number }
@@ -33,7 +38,29 @@ export function summaryChipsHtml(summary: SeveritySummary): string {
     `).join('')}</div>`;
 }
 
-function findingHtml(f: FindingRow, index: number): string {
+/**
+ * The "Fix with PR" affordance only ever renders when the caller passes
+ * `onFix` (the dashboard, where the viewer is authenticated and may own a
+ * connected repo) — the public report page and the free quick-check pass no
+ * callback, so they only ever show fix *status*, never an actionable button.
+ */
+function fixSectionHtml(f: FindingRow, showAction: boolean): string {
+    if (f.fix_status === 'pr_open' || f.fix_status === 'pr_merged') {
+        return `<div class="fix-row fix-ok">✓ Fix ${f.fix_status === 'pr_merged' ? 'merged' : 'PR opened'} — <a href="${escapeHtml(f.fix_pr_url ?? '#')}" target="_blank" rel="noopener noreferrer">view on GitHub →</a></div>`;
+    }
+    if (!f.auto_fixable) return '';
+    if (!showAction) {
+        return `<div class="fix-row muted">Auto-fixable on the Audit + Fix plan.</div>`;
+    }
+    const errorHtml = f.fix_status === 'failed' && f.fix_error
+        ? `<div class="fix-error">${escapeHtml(f.fix_error)}</div>` : '';
+    return `<div class="fix-row">
+        <button type="button" class="fix-btn" data-fix-id="${escapeHtml(f.id ?? '')}">Fix with PR →</button>
+        ${errorHtml}
+    </div>`;
+}
+
+function findingHtml(f: FindingRow, index: number, showFixAction: boolean): string {
     return `<div class="finding" data-severity="${f.severity}" data-index="${index}">
         <div class="finding-header" data-toggle="${index}">
             <span class="sev-badge sev-${f.severity}">${SEVERITY_LABEL[f.severity]}</span>
@@ -47,8 +74,14 @@ function findingHtml(f: FindingRow, index: number): string {
             <div class="label">How to fix it</div>
             <p>${escapeHtml(f.remediation)}</p>
             ${f.references?.length ? `<div class="label">References</div><p>${f.references.map(r => `<a href="${escapeHtml(r)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r)}</a>`).join('<br>')}</p>` : ''}
+            ${fixSectionHtml(f, showFixAction)}
         </div>
     </div>`;
+}
+
+export interface RenderFindingsOptions {
+    /** Present only in the dashboard: called when "Fix with PR" is clicked. Resolves once the fix attempt completes (success or failure). */
+    onFix?: (findingId: string, button: HTMLButtonElement) => Promise<void>;
 }
 
 /**
@@ -57,7 +90,7 @@ function findingHtml(f: FindingRow, index: number): string {
  * quick check, the dashboard's scan view, and the public report page, so
  * all three present findings identically.
  */
-export function renderFindings(container: HTMLElement, findings: FindingRow[]): void {
+export function renderFindings(container: HTMLElement, findings: FindingRow[], options: RenderFindingsOptions = {}): void {
     if (!findings.length) {
         container.innerHTML = '<div class="empty">No issues found by these checks. Nice work.</div>';
         return;
@@ -72,7 +105,7 @@ export function renderFindings(container: HTMLElement, findings: FindingRow[]): 
 
     container.innerHTML = `
         <div class="filter-row">${filterRow}<button type="button" class="filter-chip" data-filter="__clear">Clear filters</button></div>
-        <div class="findings-list">${findings.map(findingHtml).join('')}</div>
+        <div class="findings-list">${findings.map((f, i) => findingHtml(f, i, Boolean(options.onFix))).join('')}</div>
     `;
 
     const activeFilters = new Set(SEVERITY_ORDER.filter(s => counts[s]));
@@ -106,4 +139,15 @@ export function renderFindings(container: HTMLElement, findings: FindingRow[]): 
     container.querySelectorAll<HTMLElement>('[data-toggle]').forEach(header => {
         header.addEventListener('click', () => header.closest('.finding')?.classList.toggle('open'));
     });
+
+    if (options.onFix) {
+        container.querySelectorAll<HTMLButtonElement>('[data-fix-id]').forEach(button => {
+            button.addEventListener('click', async event => {
+                event.stopPropagation();
+                const findingId = button.dataset.fixId;
+                if (!findingId) return;
+                await options.onFix!(findingId, button);
+            });
+        });
+    }
 }

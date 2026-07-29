@@ -8,6 +8,7 @@ import { isActiveSubscription } from '../_lib/stripe.js';
 import { runScan } from '../../lib/scanner/engine.js';
 import { DisallowedTargetError } from '../../lib/scanner/net.js';
 import type { Finding } from '../../lib/scanner/types.js';
+import { isAutoFixable } from '../../lib/fixers/registry.js';
 
 export const config = { maxDuration: 30 };
 
@@ -21,9 +22,9 @@ export async function persistScanResult(
 ): Promise<void> {
     for (const f of outcome.findings) {
         await pool.query(
-            `INSERT INTO findings (scan_id, check_id, title, severity, description, evidence, remediation, references, affected_url)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-            [scanId, f.checkId, f.title, f.severity, f.description, f.evidence ?? null, f.remediation, f.references ?? [], f.affectedUrl ?? null],
+            `INSERT INTO findings (scan_id, check_id, title, severity, description, evidence, remediation, references, affected_url, auto_fixable)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            [scanId, f.checkId, f.title, f.severity, f.description, f.evidence ?? null, f.remediation, f.references ?? [], f.affectedUrl ?? null, isAutoFixable(f.checkId, f.title)],
         );
     }
     await pool.query(

@@ -1,9 +1,10 @@
 # AuditPulse
 
 A vulnerability audit platform: enter a URL, get a comprehensive, interactive
-security report with severity-ranked findings and step-by-step fixes. Sign up
-for unlimited on-demand audits, automatic re-audits every 30 days, and
-one-click report emails to clients — $100/month.
+security report with severity-ranked findings and step-by-step fixes. Two
+plans, both unlimited audits and automatic re-audits every 30 days: **Audit**
+($7/mo) and **Audit + Fix** ($14/mo), which additionally connects a GitHub
+repo per site and can open a real pull request that fixes what it found.
 
 Built as a static Vite frontend with Vercel serverless functions and
 Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
@@ -15,9 +16,10 @@ Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
 - Scan engine: `lib/scanner/` — plain Node/TypeScript, no external scanning service
 - Database: any Postgres (Vercel Postgres, Neon, Supabase, etc.) via `DATABASE_URL`
 - Auth: [Clerk](https://clerk.com) — Google, Microsoft, email+password, email magic link
-- Billing: [Stripe](https://stripe.com) — one recurring $100/month "Unlimited" price
+- Billing: [Stripe](https://stripe.com) — two recurring prices, "Audit" ($7/mo) and "Audit + Fix" ($14/mo)
 - Transactional email: [Resend](https://resend.com) — report emails, welcome email
 - Scheduling: Vercel Cron (`vercel.json`) — daily automatic 30-day re-audits
+- Auto-fix: `lib/fixers/` — opens pull requests via the GitHub REST API using a per-site fine-grained PAT (Audit + Fix plan only)
 
 ## What the scanner actually does
 
@@ -51,6 +53,39 @@ mid-scan.
 
 **This tool is for auditing sites you own or are explicitly authorized to
 test. Do not point it at third-party sites without permission.**
+
+## What the auto-fix feature actually does (Audit + Fix plan)
+
+AuditPulse only ever talks to your **live website** over HTTP — it never has
+access to your source code. So "fix it" only works for a specific, narrow
+set of findings where the fixer (`lib/fixers/`) can reliably guess *where in
+a connected repo* the fix belongs, and always via a **pull request you
+review and merge yourself** — nothing is ever pushed straight to a branch
+you deploy from:
+
+| Finding type | What the PR changes | Skipped if... |
+|---|---|---|
+| Missing/misconfigured security header | Adds the header to `vercel.json`'s `headers` block | No `vercel.json` in the repo |
+| Outdated JS library (jQuery, Bootstrap, AngularJS, Lodash, Moment.js, Handlebars) | Bumps the version range in `package.json` | The library isn't an npm dependency (e.g. loaded from a CDN `<script>` tag) — lockfile isn't touched, so re-run your install after merging |
+| Missing `security.txt` | Adds `public/.well-known/security.txt` or `static/.well-known/security.txt` | Neither directory exists in the repo |
+
+Everything else (TLS/certificate issues, DNS records, CORS logic, cookie
+flags, exposed credential files, mixed content, HTTP methods, subdomain
+exposure, open redirects) stays a **manual fix** with the same
+plain-English remediation text every plan gets — these either aren't
+file-based (DNS, TLS), require an app-logic judgment call (CORS, cookies,
+redirects), or need action outside repo content entirely (credential
+rotation). A finding only shows a "Fix with PR" button when it's one of the
+three types above.
+
+**Connecting a repo**: per-site, the user pastes a **fine-grained GitHub
+Personal Access Token** scoped to just that repo, with Contents and Pull
+requests permissions set to Read and write (`api/targets/[id]/github.ts`).
+The token is encrypted at rest with AES-256-GCM (`api/_lib/crypto.ts`,
+`TOKEN_ENCRYPTION_KEY`) and only decrypted in-memory when opening a fix PR.
+This is a v1: a proper GitHub App with an OAuth installation flow (no token
+copy-pasting, installable per-organization, narrower default permissions) is
+the natural next step before this scales past early users.
 
 ## Local setup
 
@@ -93,17 +128,24 @@ webhook (`user.created`/`user.updated`/`user.deleted`) at
 
 ## Setting up billing (Stripe)
 
-1. In the Stripe Dashboard, create a **Product** ("AuditPulse Unlimited")
-   with a **recurring price** of $100.00/month. Copy the price id
-   (`price_...`) into `STRIPE_PRICE_ID`.
+1. In the Stripe Dashboard, create one **Product** ("AuditPulse") with two
+   **recurring prices**: $7.00/month ("Audit") and $14.00/month ("Audit +
+   Fix"). Copy the two price ids (`price_...`) into `STRIPE_PRICE_ID_AUDIT`
+   and `STRIPE_PRICE_ID_AUDIT_FIX`.
 2. Copy your **Secret key** into `STRIPE_SECRET_KEY`.
 3. Add a webhook endpoint at `https://<your-domain>/api/webhooks/stripe`
    subscribed to `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, and `customer.subscription.deleted`.
    Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-4. Users upgrade from `account.html`, which calls `/api/billing/checkout`
-   (Stripe Checkout) and `/api/billing/portal` (Stripe Billing Portal for
-   self-serve cancellation/plan management).
+4. Users choose a plan from `account.html`, which calls `/api/billing/checkout`
+   with `{ plan: 'audit' | 'audit_fix' }` (Stripe Checkout) and
+   `/api/billing/portal` (Stripe Billing Portal for self-serve
+   cancellation). The webhook derives `users.plan` from which price id the
+   subscription's line item is for (`planForPriceId` in `api/_lib/stripe.ts`)
+   — if a subscriber wants to switch plans in the Stripe-hosted portal
+   rather than via `account.html`, enable "Update subscription" in the
+   portal's configuration (Stripe Dashboard → Settings → Billing → Customer
+   portal) and add both prices to it.
 
 ## Setting up report emails (Resend)
 
@@ -133,6 +175,10 @@ webhook (`user.created`/`user.updated`/`user.deleted`) at
 - `api/cron/rescan.ts` processes a small batch (5) per run to stay within
   function time limits; a large subscriber base needs a proper job queue
   instead of a single cron sweep.
+- The auto-fix feature is PAT-based (see above) rather than a full GitHub
+  App — fine for early users, but a token pasted into a text field is a
+  weaker trust boundary than an App installation with per-repo, revocable
+  access. Upgrade this before broad rollout.
 
 ## Security notes
 
@@ -148,3 +194,9 @@ webhook (`user.created`/`user.updated`/`user.deleted`) at
 - Report links use an unguessable, unique `share_token` (not the scan's
   sequential id) so a client can view their report without an account
   without exposing other users' reports.
+- GitHub PATs are encrypted at rest with AES-256-GCM (`api/_lib/crypto.ts`)
+  and are only ever decrypted server-side, in-memory, at the moment a fix PR
+  is opened — never sent back to the browser.
+- Every auto-fix runs on a **new branch and opens a PR**; nothing is ever
+  committed directly to a default/deploy branch, so a bad fix is always a
+  no-op until a human merges it.

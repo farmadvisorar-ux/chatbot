@@ -49,12 +49,16 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .feature-grid .card p{color:var(--muted);font-size:14px;margin:0}
 
 /* Pricing */
-.pricing-card{max-width:420px;margin:40px auto;text-align:center;border-color:rgba(53,224,161,.35)}
-.price{font-size:48px;font-weight:800;font-family:'Syne',sans-serif;margin:12px 0 4px}
+.pricing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;max-width:800px;margin:40px auto 0}
+.pricing-card{text-align:center;position:relative}
+.pricing-card.featured{border-color:var(--accent)}
+.pricing-badge{display:inline-block;background:var(--accent);color:var(--accent-ink);font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+.price{font-size:44px;font-weight:800;font-family:'Syne',sans-serif;margin:8px 0 4px}
 .price span{font-size:16px;color:var(--muted);font-weight:600}
 .pricing-list{list-style:none;padding:0;margin:20px 0;text-align:left;display:grid;gap:10px}
 .pricing-list li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--ink)}
 .pricing-list li::before{content:"✓";color:var(--accent);font-weight:800}
+@media(max-width:640px){.pricing-grid{grid-template-columns:1fr}}
 
 /* Grade badge */
 .grade-badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:16px;font-family:'Syne',sans-serif;font-weight:800;font-size:26px;background:var(--surface-2);border:1px solid var(--line)}
@@ -89,6 +93,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .finding-body .label:first-child{margin-top:0}
 .finding-body pre{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--muted)}
 .finding-body a{color:var(--accent)}
+.fix-row{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.fix-btn{background:transparent;border:1px solid var(--accent);color:var(--accent);padding:8px 14px;font-size:13px;border-radius:8px}
+.fix-btn:hover{background:rgba(53,224,161,.1)}
+.fix-btn:disabled{opacity:.6}
+.fix-ok{color:var(--accent);font-size:13px}
+.fix-ok a{color:var(--accent);font-weight:700}
+.fix-error{color:var(--critical);font-size:12px;margin-top:8px}
 
 /* Filters */
 .filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}

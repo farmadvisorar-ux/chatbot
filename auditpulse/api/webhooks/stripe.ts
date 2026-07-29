@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type Stripe from 'stripe';
 import { getPool } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
-import { getStripe } from '../_lib/stripe.js';
+import { getStripe, planForPriceId } from '../_lib/stripe.js';
 
 // Signature verification needs the exact bytes Stripe signed.
 export const config = { api: { bodyParser: false } };
@@ -21,10 +21,11 @@ async function syncSubscription(customerId: string, subscription: Stripe.Subscri
     // across API versions; read from whichever shape the installed SDK types.
     const subscriptionAny = subscription as unknown as { current_period_end?: number };
     const periodEnd = subscriptionAny.current_period_end ?? subscription.items.data[0]?.current_period_end;
+    const plan = planForPriceId(subscription.items.data[0]?.price?.id);
     await getPool().query(
-        `UPDATE users SET stripe_subscription_id = $2, subscription_status = $3, subscription_current_period_end = to_timestamp($4)
+        `UPDATE users SET stripe_subscription_id = $2, subscription_status = $3, subscription_current_period_end = to_timestamp($4), plan = COALESCE($5, plan)
          WHERE stripe_customer_id = $1`,
-        [customerId, subscription.id, subscription.status, periodEnd ?? null],
+        [customerId, subscription.id, subscription.status, periodEnd ?? null, plan],
     );
 }
 

@@ -11,14 +11,18 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Stripe subscription state ($100/month "Unlimited" plan). subscription_status
--- mirrors Stripe's status field directly ('active', 'trialing', 'past_due',
--- 'canceled', 'unpaid', ...) so the webhook handler never has to invent its
--- own vocabulary; a NULL/absent row means the user has never subscribed.
+-- Stripe subscription state. Two paid plans exist: 'audit' ($7/mo, unlimited
+-- audits) and 'audit_fix' ($14/mo, unlimited audits + the GitHub auto-fix
+-- feature). subscription_status mirrors Stripe's status field directly
+-- ('active', 'trialing', 'past_due', 'canceled', 'unpaid', ...) so the
+-- webhook handler never has to invent its own vocabulary; `plan` is derived
+-- from which Stripe price the subscription's line item is for. A NULL/absent
+-- row means the user has never subscribed (still gets the free trial).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT CHECK (plan IN ('audit', 'audit_fix'));
 
 -- A website the user wants audited. Scanning is gated on `verified` (proof of
 -- ownership/control) so the platform can't be used to run active checks
@@ -47,6 +51,14 @@ CREATE TABLE IF NOT EXISTS targets (
 );
 CREATE INDEX IF NOT EXISTS targets_user ON targets (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS targets_due_for_rescan ON targets (next_rescan_at) WHERE auto_rescan AND verified;
+
+-- Optional GitHub repo connection for the auto-fix feature (audit_fix plan
+-- only). A fine-grained Personal Access Token scoped to just this repo
+-- (Contents + Pull requests, read & write) is pasted in by the user and
+-- stored encrypted at rest (api/_lib/crypto.ts) — never in plaintext.
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS github_repo TEXT; -- "owner/repo"
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS github_token_encrypted TEXT;
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS github_connected_at TIMESTAMPTZ;
 
 -- One run of the scan engine against one target. `share_token` lets the
 -- emailed report be opened by the client with no account (report.html?token=),
@@ -84,6 +96,16 @@ CREATE TABLE IF NOT EXISTS findings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS findings_scan ON findings (scan_id, severity);
+
+-- Auto-fix (audit_fix plan): auto_fixable is set at scan time for check
+-- types the fixer engine (lib/fixers/) knows how to patch (outdated JS
+-- dependency, missing security header, missing security.txt) — whether a fix
+-- can actually be opened still depends on the connected repo containing the
+-- expected file/stack, checked at fix time, not scan time.
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS auto_fixable BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS fix_status TEXT NOT NULL DEFAULT 'none' CHECK (fix_status IN ('none', 'pr_open', 'pr_merged', 'failed'));
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS fix_pr_url TEXT;
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS fix_error TEXT;
 
 -- Audit trail of report emails sent to clients (dashboard "Email report").
 CREATE TABLE IF NOT EXISTS scan_emails (

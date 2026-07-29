@@ -44,7 +44,11 @@ form.addEventListener('submit', async event => {
     }
 });
 
-document.querySelector<HTMLButtonElement>('#pricing-cta')?.addEventListener('click', async () => {
-    const signedIn = await requireSignIn();
-    if (signedIn) window.location.href = '/dashboard.html';
+document.querySelectorAll<HTMLButtonElement>('.pricing-cta').forEach(button => {
+    button.addEventListener('click', async () => {
+        const signedIn = await requireSignIn();
+        if (!signedIn) return;
+        const plan = button.dataset.plan;
+        window.location.href = plan ? `/account.html?plan=${encodeURIComponent(plan)}` : '/dashboard.html';
+    });
 });

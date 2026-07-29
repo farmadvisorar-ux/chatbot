@@ -62,20 +62,34 @@
         </section>
 
         <section class="wrap" id="pricing">
-            <div class="card pricing-card">
-                <h2>Unlimited</h2>
-                <div class="price">$100<span>/month</span></div>
-                <p class="muted">Cancel anytime.</p>
-                <ul class="pricing-list">
-                    <li>Unlimited websites and unlimited on-demand audits</li>
-                    <li>Automatic full re-audit every 30 days per site</li>
-                    <li>Unlimited report emails to clients and teammates</li>
-                    <li>Shareable interactive report links — no account needed for recipients</li>
-                    <li>Priority support</li>
-                </ul>
-                <button id="pricing-cta" type="button" style="width:100%">Start with a free audit</button>
-                <p class="muted" style="font-size:12px;margin-top:10px">New accounts get 1 free site and 1 free full audit before upgrading.</p>
+            <div class="pricing-grid">
+                <div class="card pricing-card">
+                    <h2>Audit</h2>
+                    <div class="price">$7<span>/month</span></div>
+                    <p class="muted">Cancel anytime.</p>
+                    <ul class="pricing-list">
+                        <li>Unlimited websites and unlimited on-demand audits</li>
+                        <li>Automatic full re-audit every 30 days per site</li>
+                        <li>Unlimited report emails to clients and teammates</li>
+                        <li>Shareable interactive report links — no account needed for recipients</li>
+                    </ul>
+                    <button type="button" class="pricing-cta ghost-button" data-plan="audit" style="width:100%">Start with a free audit</button>
+                </div>
+                <div class="card pricing-card featured">
+                    <span class="pricing-badge">Also fixes what it finds</span>
+                    <h2>Audit + Fix</h2>
+                    <div class="price">$14<span>/month</span></div>
+                    <p class="muted">Cancel anytime.</p>
+                    <ul class="pricing-list">
+                        <li>Everything in Audit</li>
+                        <li>Connect a GitHub repo per site</li>
+                        <li>One-click "Fix with PR" for fixable findings — missing security headers, outdated JS libraries, missing security.txt</li>
+                        <li>Priority support</li>
+                    </ul>
+                    <button type="button" class="pricing-cta" data-plan="audit_fix" style="width:100%">Start with a free audit</button>
+                </div>
             </div>
+            <p class="muted" style="text-align:center;font-size:12px;margin-top:16px">New accounts get 1 free site and 1 free full audit before choosing a plan.</p>
         </section>
     </main>
 

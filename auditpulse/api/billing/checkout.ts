@@ -2,16 +2,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { error, json, requireMethod } from '../_lib/http.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
-import { getStripe, siteOrigin } from '../_lib/stripe.js';
+import { getStripe, siteOrigin, priceIdForPlan, type PlanId } from '../_lib/stripe.js';
 
-/** Creates a Stripe Checkout Session for the $100/month "Unlimited" subscription. */
+/** Creates a Stripe Checkout Session for either the $7/mo "Audit" or $14/mo "Audit + Fix" plan. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
     const user = await requireAuth(req, res);
     if (!user) return;
 
+    const plan: PlanId = req.body?.plan === 'audit_fix' ? 'audit_fix' : 'audit';
     const stripe = getStripe();
-    const priceId = process.env.STRIPE_PRICE_ID;
+    const priceId = priceIdForPlan(plan);
     if (!stripe || !priceId) {
         error(res, 501, 'Billing is not configured on this deployment yet.');
         return;
