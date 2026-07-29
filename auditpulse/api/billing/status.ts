@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, requireMethod } from '../_lib/http.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
-import { isActiveSubscription, hasFixAccess } from '../_lib/stripe.js';
+import { hasActiveAccess, hasFixAccess } from '../_lib/stripe.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['GET'])) return;
@@ -10,16 +10,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!user) return;
 
     const { rows } = await getPool().query(
-        'SELECT subscription_status, subscription_current_period_end, plan FROM users WHERE id = $1',
+        'SELECT subscription_status, subscription_current_period_end, plan, plan_expires_at FROM users WHERE id = $1',
         [user.userId],
     );
-    const status = rows[0]?.subscription_status ?? null;
-    const plan = rows[0]?.plan ?? null;
+    const row = rows[0] ?? {};
     json(res, 200, {
-        subscriptionStatus: status,
-        active: isActiveSubscription(status),
-        plan,
-        fixAccess: hasFixAccess(status, plan),
-        currentPeriodEnd: rows[0]?.subscription_current_period_end ?? null,
+        subscriptionStatus: row.subscription_status ?? null,
+        active: hasActiveAccess(row),
+        plan: row.plan ?? null,
+        fixAccess: hasFixAccess(row),
+        currentPeriodEnd: row.subscription_current_period_end ?? null,
+        planExpiresAt: row.plan_expires_at ?? null,
     });
 }

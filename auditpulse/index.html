@@ -62,10 +62,15 @@
         </section>
 
         <section class="wrap" id="pricing">
+            <div class="billing-toggle" id="billing-toggle">
+                <button type="button" class="toggle-option active" data-interval="month">Monthly</button>
+                <button type="button" class="toggle-option" data-interval="year">Annual — pay once</button>
+            </div>
             <div class="pricing-grid">
-                <div class="card pricing-card">
+                <div class="card pricing-card" data-plan="audit">
                     <h2>Audit</h2>
-                    <div class="price">$7<span>/month</span></div>
+                    <div class="price"><span class="price-amount">$7</span><span class="price-suffix">/month</span></div>
+                    <p class="save-badge" hidden>One-time fee, no auto-renewal</p>
                     <p class="muted">Cancel anytime.</p>
                     <ul class="pricing-list">
                         <li>Unlimited websites and unlimited on-demand audits</li>
@@ -75,10 +80,11 @@
                     </ul>
                     <button type="button" class="pricing-cta ghost-button" data-plan="audit" style="width:100%">Start with a free audit</button>
                 </div>
-                <div class="card pricing-card featured">
+                <div class="card pricing-card featured" data-plan="audit_fix">
                     <span class="pricing-badge">Also fixes what it finds</span>
                     <h2>Audit + Fix</h2>
-                    <div class="price">$14<span>/month</span></div>
+                    <div class="price"><span class="price-amount">$14</span><span class="price-suffix">/month</span></div>
+                    <p class="save-badge" hidden>One-time fee, no auto-renewal</p>
                     <p class="muted">Cancel anytime.</p>
                     <ul class="pricing-list">
                         <li>Everything in Audit</li>

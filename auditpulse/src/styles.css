@@ -60,6 +60,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .pricing-list li::before{content:"✓";color:var(--accent);font-weight:800}
 @media(max-width:640px){.pricing-grid{grid-template-columns:1fr}}
 
+/* Billing interval toggle */
+.billing-toggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:4px;gap:2px;margin:0 auto;justify-content:center}
+#pricing .billing-toggle{display:flex;width:fit-content}
+.toggle-option{background:transparent;color:var(--muted);padding:8px 16px;font-size:13px;font-weight:700;border-radius:999px}
+.toggle-option.active{background:var(--accent);color:var(--accent-ink)}
+.save-badge{color:var(--accent);font-weight:700;font-size:12px;margin:4px 0 0}
+
 /* Grade badge */
 .grade-badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:16px;font-family:'Syne',sans-serif;font-weight:800;font-size:26px;background:var(--surface-2);border:1px solid var(--line)}
 .grade-A{color:#35e0a1;border-color:rgba(53,224,161,.4)}

@@ -16,9 +16,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const id = typeof req.query.id === 'string' ? req.query.id : '';
     const pool = getPool();
 
-    const { rows: userRows } = await pool.query('SELECT subscription_status, plan FROM users WHERE id = $1', [user.userId]);
-    if (!hasFixAccess(userRows[0]?.subscription_status, userRows[0]?.plan)) {
-        error(res, 402, 'Automatic fixes require the Audit + Fix plan ($14/mo). Upgrade from your account page.');
+    const { rows: userRows } = await pool.query('SELECT subscription_status, plan, plan_expires_at FROM users WHERE id = $1', [user.userId]);
+    if (!hasFixAccess(userRows[0] ?? {})) {
+        error(res, 402, 'Automatic fixes require the Audit + Fix plan ($14/mo or $99.99/yr). Upgrade from your account page.');
         return;
     }
 

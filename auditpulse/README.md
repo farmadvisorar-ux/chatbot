@@ -2,9 +2,12 @@
 
 A vulnerability audit platform: enter a URL, get a comprehensive, interactive
 security report with severity-ranked findings and step-by-step fixes. Two
-plans, both unlimited audits and automatic re-audits every 30 days: **Audit**
-($7/mo) and **Audit + Fix** ($14/mo), which additionally connects a GitHub
-repo per site and can open a real pull request that fixes what it found.
+tiers, both unlimited audits and automatic re-audits every 30 days: **Audit**
+and **Audit + Fix** (the latter additionally connects a GitHub repo per site
+and can open a real pull request that fixes what it found). Each tier is
+billable two ways: **monthly** ($7 / $14, a recurring subscription) or
+**annually** ($59.99 / $99.99, a one-time payment for 365 days of access —
+no auto-renewal).
 
 Built as a static Vite frontend with Vercel serverless functions and
 Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
@@ -128,24 +131,36 @@ webhook (`user.created`/`user.updated`/`user.deleted`) at
 
 ## Setting up billing (Stripe)
 
-1. In the Stripe Dashboard, create one **Product** ("AuditPulse") with two
-   **recurring prices**: $7.00/month ("Audit") and $14.00/month ("Audit +
-   Fix"). Copy the two price ids (`price_...`) into `STRIPE_PRICE_ID_AUDIT`
-   and `STRIPE_PRICE_ID_AUDIT_FIX`.
+1. In the Stripe Dashboard, create one **Product** ("AuditPulse") with four
+   **prices**:
+   - $7.00/month, **recurring** — "Audit" monthly → `STRIPE_PRICE_ID_AUDIT`
+   - $14.00/month, **recurring** — "Audit + Fix" monthly → `STRIPE_PRICE_ID_AUDIT_FIX`
+   - $59.99, **one-time** — "Audit" annual → `STRIPE_PRICE_ID_AUDIT_ANNUAL`
+   - $99.99, **one-time** — "Audit + Fix" annual → `STRIPE_PRICE_ID_AUDIT_FIX_ANNUAL`
+
+   The annual prices must be created as **one-time** (not recurring) — they're
+   billed once for a year of access, not on an auto-renewing schedule.
 2. Copy your **Secret key** into `STRIPE_SECRET_KEY`.
 3. Add a webhook endpoint at `https://<your-domain>/api/webhooks/stripe`
    subscribed to `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, and `customer.subscription.deleted`.
    Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-4. Users choose a plan from `account.html`, which calls `/api/billing/checkout`
-   with `{ plan: 'audit' | 'audit_fix' }` (Stripe Checkout) and
-   `/api/billing/portal` (Stripe Billing Portal for self-serve
-   cancellation). The webhook derives `users.plan` from which price id the
-   subscription's line item is for (`planForPriceId` in `api/_lib/stripe.ts`)
-   — if a subscriber wants to switch plans in the Stripe-hosted portal
-   rather than via `account.html`, enable "Update subscription" in the
-   portal's configuration (Stripe Dashboard → Settings → Billing → Customer
-   portal) and add both prices to it.
+4. Users choose a plan and billing interval from `account.html` (or the
+   landing page's Monthly/Annual toggle), which calls `/api/billing/checkout`
+   with `{ plan: 'audit' | 'audit_fix', interval: 'month' | 'year' }`.
+   - `interval: 'month'` creates a **subscription**-mode Checkout Session;
+     the webhook syncs `users.subscription_status`/`plan` from it as usual,
+     and `/api/billing/portal` (Stripe Billing Portal) handles self-serve
+     cancellation. If a subscriber wants to switch between Audit and
+     Audit + Fix inside the portal rather than via `account.html`, enable
+     "Update subscription" in the portal's configuration (Stripe Dashboard
+     → Settings → Billing → Customer portal) and add both monthly prices to it.
+   - `interval: 'year'` creates a **payment**-mode Checkout Session (no
+     Stripe Subscription object at all); the webhook grants 365 days of
+     access by setting `users.plan_expires_at`, stacking on top of any
+     remaining time if they renew early. There's no Billing Portal entry for
+     these since there's no subscription to manage — they simply lapse
+     unless repurchased.
 
 ## Setting up report emails (Resend)
 

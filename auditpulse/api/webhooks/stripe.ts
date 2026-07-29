@@ -29,6 +29,23 @@ async function syncSubscription(customerId: string, subscription: Stripe.Subscri
     );
 }
 
+/**
+ * The annual plans are a one-time Checkout payment (mode: 'payment'), not a
+ * Stripe Subscription, so there's no subscription object to sync — instead
+ * this grants 365 days of access via plan_expires_at. Buying another year
+ * before the current one lapses stacks on top of the remaining time rather
+ * than resetting the clock (GREATEST(existing expiry, now)).
+ */
+async function grantAnnualAccess(customerId: string, plan: 'audit' | 'audit_fix'): Promise<void> {
+    await getPool().query(
+        `UPDATE users
+         SET plan = $2,
+             plan_expires_at = GREATEST(COALESCE(plan_expires_at, now()), now()) + interval '365 days'
+         WHERE stripe_customer_id = $1`,
+        [customerId, plan],
+    );
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
 
@@ -53,11 +70,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
+    // Stripe may redeliver the same event; skip anything already applied so
+    // an annual payment's 365 days can't get double-granted on a retry.
+    const { rows: dedupRows } = await getPool().query(
+        'INSERT INTO stripe_events_processed (event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING event_id',
+        [event.id],
+    );
+    if (!dedupRows.length) {
+        json(res, 200, { received: true, duplicate: true });
+        return;
+    }
+
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session;
-        if (typeof session.customer === 'string' && typeof session.subscription === 'string') {
+        if (session.mode === 'subscription' && typeof session.customer === 'string' && typeof session.subscription === 'string') {
             const subscription = await stripe.subscriptions.retrieve(session.subscription);
             await syncSubscription(session.customer, subscription);
+        } else if (session.mode === 'payment' && typeof session.customer === 'string' && session.payment_status === 'paid') {
+            const plan = session.metadata?.plan === 'audit_fix' ? 'audit_fix' : 'audit';
+            await grantAnnualAccess(session.customer, plan);
         }
     }
 

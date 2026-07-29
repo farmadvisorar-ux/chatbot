@@ -2,8 +2,10 @@ import './styles.css';
 import { initAuth, requireSignIn } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
 import { renderFindings, gradeBadgeHtml, summaryChipsHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
+import { initPricingToggle } from './pricing-toggle.js';
 
 initAuth();
+const getBillingInterval = initPricingToggle();
 
 const form = document.querySelector<HTMLFormElement>('#quick-check-form')!;
 const input = document.querySelector<HTMLInputElement>('#quick-check-url')!;
@@ -49,6 +51,6 @@ document.querySelectorAll<HTMLButtonElement>('.pricing-cta').forEach(button => {
         const signedIn = await requireSignIn();
         if (!signedIn) return;
         const plan = button.dataset.plan;
-        window.location.href = plan ? `/account.html?plan=${encodeURIComponent(plan)}` : '/dashboard.html';
+        window.location.href = plan ? `/account.html?plan=${encodeURIComponent(plan)}&interval=${getBillingInterval()}` : '/dashboard.html';
     });
 });

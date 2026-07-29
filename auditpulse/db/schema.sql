@@ -23,6 +23,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT CHECK (plan IN ('audit', 'audit_fix'));
+-- Set only for the one-time-payment annual plans ($59.99/yr Audit, $99.99/yr
+-- Audit + Fix) rather than a Stripe Subscription — access is granted as long
+-- as this is in the future, independent of subscription_status. Buying
+-- another year before this expires stacks on top of the remaining time
+-- rather than resetting it (see the Stripe webhook).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 
 -- A website the user wants audited. Scanning is gated on `verified` (proof of
 -- ownership/control) so the platform can't be used to run active checks
@@ -118,6 +124,15 @@ CREATE TABLE IF NOT EXISTS scan_emails (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS scan_emails_scan ON scan_emails (scan_id, created_at DESC);
+
+-- Dedupes Stripe webhook deliveries by event id. Stripe retries webhooks
+-- that don't return 2xx promptly, and can redeliver the same event more than
+-- once — without this, a redelivered one-time-payment event would grant
+-- another 365 days of access on top of the first.
+CREATE TABLE IF NOT EXISTS stripe_events_processed (
+    event_id TEXT PRIMARY KEY,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS rate_limit_events (
     id BIGSERIAL PRIMARY KEY,
