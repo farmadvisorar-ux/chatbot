@@ -113,16 +113,59 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .filter-chip{background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer}
 .filter-chip.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 
+/* Dashboard header + stat tiles */
+.dash-header{display:flex;justify-content:space-between;align-items:center;margin-top:24px;flex-wrap:wrap;gap:12px}
+.stat-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}
+.stat-tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.stat-tile-warn{border-color:rgba(255,77,109,.4)}
+.stat-tile-warn .stat-value{color:var(--critical)}
+.stat-value{font-family:'Syne',sans-serif;font-weight:800;font-size:24px}
+.stat-label{color:var(--muted);font-size:12px;margin-top:2px}
+@media(max-width:640px){.stat-tiles{grid-template-columns:repeat(2,1fr)}}
+
 /* Dashboard layout */
-.dash-layout{display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start;margin-top:20px}
+.dash-layout{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;margin-top:8px}
+.target-panel{display:grid;gap:10px}
+.target-panel-controls{display:flex;gap:8px}
+.target-panel-controls input{flex:1;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:9px 12px;font-size:13px}
 .target-list{display:grid;gap:10px}
-.target-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer}
+.target-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer}
 .target-item.active{border-color:var(--accent)}
-.target-item h4{margin:0 0 4px;font-size:14px}
+.target-item h4{margin:0 0 2px;font-size:14px}
 .target-item .meta{font-size:12px;color:var(--muted)}
+.target-item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.target-item-bottom{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
 .badge-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
 .badge-verified{background:rgba(53,224,161,.15);color:var(--accent)}
 .badge-pending{background:rgba(255,204,77,.15);color:var(--medium)}
+.grade-badge-sm{width:34px;height:34px;border-radius:9px;font-size:14px;flex-shrink:0}
+
+/* Overview: needs-attention + activity feed */
+.attention-list,.activity-list{display:grid;gap:8px}
+.attention-row,.activity-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--surface-2);cursor:pointer;transition:background .1s}
+.attention-row:hover,.activity-row:hover{background:var(--surface)}
+.attention-info,.activity-info{display:flex;flex-direction:column;gap:1px;font-size:13px;overflow:hidden}
+.attention-info strong,.activity-info strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attention-info .muted,.activity-info .muted{font-size:12px}
+
+/* Setup collapsible */
+.setup-details{margin-top:14px}
+.setup-details summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;padding:8px 0}
+.setup-details summary::-webkit-details-marker{display:none}
+.setup-details .chevron{margin-left:auto;color:var(--muted);transition:transform .15s;font-size:11px}
+.setup-details[open] .chevron{transform:rotate(90deg)}
+.setup-body{padding-top:4px}
+
+/* Sparkline */
+.sparkline-row{display:flex;align-items:center;gap:12px;margin-top:6px}
+.sparkline-row canvas{width:160px;height:36px;flex-shrink:0}
+
+/* Loading skeletons */
+.skeleton-line{background:linear-gradient(90deg,var(--surface-2) 25%,var(--line) 37%,var(--surface-2) 63%);background-size:400% 100%;border-radius:6px;height:14px;animation:skeleton-shine 1.4s ease infinite}
+.skeleton-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:520px;margin:0 auto}
+.skeleton-tile{height:56px;border-radius:12px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--line) 37%,var(--surface-2) 63%);background-size:400% 100%;animation:skeleton-shine 1.4s ease infinite}
+@keyframes skeleton-shine{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media(prefers-reduced-motion:reduce){.skeleton-line,.skeleton-tile{animation:none}}
 
 /* Forms */
 .field{display:grid;gap:6px;margin-bottom:14px}

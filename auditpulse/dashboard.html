@@ -23,22 +23,32 @@
         </section>
 
         <section id="loading" class="card center" style="margin-top:60px">
-            <p class="muted">Loading your dashboard…</p>
+            <div class="skeleton-stats">
+                <div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+                <div class="skeleton-tile"></div><div class="skeleton-tile"></div>
+            </div>
+            <p class="muted" style="margin-top:16px">Loading your dashboard…</p>
         </section>
 
         <section id="signed-in" hidden>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;flex-wrap:wrap;gap:12px">
+            <div class="dash-header">
                 <h1>Your sites</h1>
                 <button id="add-target-btn" type="button">+ Add a site</button>
             </div>
             <div id="plan-banner" class="card" style="margin-top:16px;display:none"></div>
 
+            <div id="stat-tiles" class="stat-tiles" hidden></div>
+
             <div class="dash-layout">
-                <div>
+                <div class="target-panel">
+                    <div class="target-panel-controls">
+                        <input id="target-search" type="text" placeholder="Search sites…" aria-label="Search sites">
+                        <button type="button" id="overview-btn" class="ghost-button mini-cta" title="Back to overview">Overview</button>
+                    </div>
                     <div id="target-list" class="target-list"></div>
                 </div>
                 <div id="detail-panel">
-                    <div class="empty">Select a site on the left, or add a new one to get started.</div>
+                    <div class="empty">Loading…</div>
                 </div>
             </div>
         </section>

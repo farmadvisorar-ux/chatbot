@@ -33,12 +33,30 @@ export async function persistScanResult(
     );
 }
 
+const RECENT_ACTIVITY_LIMIT = 20;
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-    if (!requireMethod(req, res, ['POST'])) return;
+    if (!requireMethod(req, res, ['GET', 'POST'])) return;
     const user = await requireAuth(req, res);
     if (!user) return;
-    const targetId = typeof req.body?.targetId === 'string' ? req.body.targetId : '';
     const pool = getPool();
+
+    if (req.method === 'GET') {
+        // Recent activity across every site the user owns — feeds the
+        // dashboard's overview activity feed without a request per target.
+        const { rows } = await pool.query(
+            `SELECT s.id, s.kind, s.status, s.score, s.grade, s.summary, s.started_at, s.completed_at, s.triggered_by,
+                    t.id AS target_id, t.label AS target_label, t.hostname
+             FROM scans s JOIN targets t ON t.id = s.target_id
+             WHERE s.user_id = $1
+             ORDER BY s.started_at DESC LIMIT $2`,
+            [user.userId, RECENT_ACTIVITY_LIMIT],
+        );
+        json(res, 200, { scans: rows });
+        return;
+    }
+
+    const targetId = typeof req.body?.targetId === 'string' ? req.body.targetId : '';
 
     const { rows: targetRows } = await pool.query('SELECT * FROM targets WHERE id = $1 AND user_id = $2', [targetId, user.userId]);
     const target = targetRows[0];

@@ -11,13 +11,19 @@ interface Target {
     verified: boolean; verification_token: string; verification_method: string | null;
     last_scanned_at: string | null; next_rescan_at: string | null; auto_rescan: boolean;
     github_repo: string | null;
+    latest_scan_id: string | null; latest_grade: string | null; latest_score: number | null;
+    latest_summary: SeveritySummary | null; latest_scanned_at: string | null;
 }
 interface ScanSummaryRow {
     id: string; kind: 'quick' | 'full'; status: 'running' | 'completed' | 'failed';
     score: number | null; grade: string | null; summary: SeveritySummary; started_at: string;
     completed_at: string | null; triggered_by: string; share_token: string;
 }
-interface BillingStatus { subscriptionStatus: string | null; active: boolean; plan: 'audit' | 'audit_fix' | null; fixAccess: boolean }
+interface ActivityRow extends ScanSummaryRow { target_id: string; target_label: string | null; hostname: string }
+interface BillingStatus {
+    subscriptionStatus: string | null; active: boolean; plan: 'audit' | 'audit_fix' | null; fixAccess: boolean;
+    currentPeriodEnd: string | null; planExpiresAt: string | null;
+}
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const signedOutSection = el<HTMLElement>('signed-out');
@@ -26,12 +32,18 @@ const signedInSection = el<HTMLElement>('signed-in');
 const targetListEl = el<HTMLElement>('target-list');
 const detailPanel = el<HTMLElement>('detail-panel');
 const planBanner = el<HTMLElement>('plan-banner');
+const statTilesEl = el<HTMLElement>('stat-tiles');
+const searchInput = el<HTMLInputElement>('target-search');
 const toast = el<HTMLElement>('toast');
 
 let targets: Target[] = [];
+let activity: ActivityRow[] = [];
 let selectedTargetId: string | null = null;
 let selectedScanId: string | null = null;
-let billing: BillingStatus = { subscriptionStatus: null, active: false, plan: null, fixAccess: false };
+let searchQuery = '';
+let billing: BillingStatus = { subscriptionStatus: null, active: false, plan: null, fixAccess: false, currentPeriodEnd: null, planExpiresAt: null };
+
+// ---------------------------------------------------------------- helpers --
 
 function showToast(message: string, isError = false): void {
     toast.textContent = message;
@@ -45,42 +57,170 @@ function fmtDate(value: string | null): string {
     return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** "3 days ago" / "in 5 days" — makes the site list scannable without reading full timestamps. */
+function fmtRelative(value: string | null, future = false): string {
+    if (!value) return future ? 'not scheduled' : 'never';
+    const diffMs = new Date(value).getTime() - Date.now();
+    const diffDays = Math.round(Math.abs(diffMs) / 86_400_000);
+    const inPast = diffMs < 0;
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return inPast ? 'yesterday' : 'tomorrow';
+    return inPast ? `${diffDays}d ago` : `in ${diffDays}d`;
+}
+
+function gradeBucket(grade: string): 'A' | 'B' | 'C' | 'D' | 'F' {
+    if (grade.startsWith('A')) return 'A';
+    if (grade.startsWith('B')) return 'B';
+    if (grade.startsWith('C')) return 'C';
+    if (grade.startsWith('D')) return 'D';
+    return 'F';
+}
+
+function smallGradeBadge(grade: string | null, fallback = ''): string {
+    if (!grade) return fallback;
+    return `<div class="grade-badge grade-badge-sm grade-${gradeBucket(grade)}">${escapeHtml(grade)}</div>`;
+}
+
+/** Higher = more urgent. Unverified/unscanned sites surface above scored ones since their risk is simply unknown. */
+function concernScore(t: Target): number {
+    if (!t.verified) return 1000;
+    if (!t.latest_summary) return 900;
+    const s = t.latest_summary;
+    return s.critical * 100 + s.high * 30 + s.medium * 8 + s.low * 2;
+}
+
+function matchesSearch(t: Target): boolean {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (t.label ?? '').toLowerCase().includes(q) || t.hostname.toLowerCase().includes(q);
+}
+
+function sortedFilteredTargets(): Target[] {
+    return targets
+        .filter(matchesSearch)
+        .sort((a, b) => concernScore(b) - concernScore(a) || a.hostname.localeCompare(b.hostname));
+}
+
+/** Tiny inline sparkline of scan scores over time — canvas gives crisper lines than hand-built SVG paths at this size. */
+function renderSparkline(canvas: HTMLCanvasElement, scores: number[]): void {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || scores.length < 2) {
+        if (canvas.parentElement) canvas.parentElement.hidden = scores.length < 2;
+        return;
+    }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.clientWidth || 160;
+    const h = canvas.clientHeight || 36;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const min = Math.min(...scores, 0);
+    const max = Math.max(...scores, 100);
+    const pad = 4;
+    const points = scores.map((s, i) => {
+        const x = pad + (i / (scores.length - 1)) * (w - pad * 2);
+        const y = h - pad - ((s - min) / Math.max(1, max - min)) * (h - pad * 2);
+        return [x, y];
+    });
+
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#35e0a1';
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (const [x, y] of points.slice(1)) ctx.lineTo(x, y);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.75;
+    ctx.stroke();
+
+    const [lastX, lastY] = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = accent;
+    ctx.fill();
+}
+
+// ---------------------------------------------------------- data loading --
+
 async function loadBilling(): Promise<void> {
     try {
         billing = await apiFetch<BillingStatus>('/billing/status');
     } catch {
-        billing = { subscriptionStatus: null, active: false, plan: null, fixAccess: false };
+        billing = { subscriptionStatus: null, active: false, plan: null, fixAccess: false, currentPeriodEnd: null, planExpiresAt: null };
     }
     if (billing.active) {
         if (billing.fixAccess) {
             planBanner.style.display = 'none';
         } else {
             planBanner.style.display = 'block';
-            planBanner.innerHTML = `On the <strong>Audit</strong> plan. <a href="/account.html" style="color:var(--accent)">Upgrade to Audit + Fix ($14/mo)</a> to open automatic fix pull requests for fixable findings.`;
+            planBanner.innerHTML = `On the <strong>Audit</strong> plan. <a href="/account.html" style="color:var(--accent)">Upgrade to Audit + Fix</a> to open automatic fix pull requests for fixable findings.`;
         }
     } else {
         planBanner.style.display = 'block';
-        planBanner.innerHTML = `<strong>Free trial:</strong> 1 site and 1 full audit included. <a href="/account.html" style="color:var(--accent)">Upgrade to Audit ($7/mo)</a> for unlimited sites and audits, or <a href="/account.html" style="color:var(--accent)">Audit + Fix ($14/mo)</a> to also auto-fix what's found.`;
+        planBanner.innerHTML = `<strong>Free trial:</strong> 1 site and 1 full audit included. <a href="/account.html" style="color:var(--accent)">Upgrade to Audit</a> for unlimited sites and audits, or <a href="/account.html" style="color:var(--accent)">Audit + Fix</a> to also auto-fix what's found.`;
     }
 }
 
 async function loadTargets(): Promise<void> {
     const data = await apiFetch<{ targets: Target[] }>('/targets');
     targets = data.targets;
+    renderStatTiles();
     renderTargetList();
 }
 
-function renderTargetList(): void {
+async function loadActivity(): Promise<void> {
+    try {
+        const data = await apiFetch<{ scans: ActivityRow[] }>('/scans');
+        activity = data.scans;
+    } catch {
+        activity = [];
+    }
+}
+
+// --------------------------------------------------------------- render --
+
+function renderStatTiles(): void {
     if (!targets.length) {
-        targetListEl.innerHTML = '<div class="empty">No sites yet.</div>';
+        statTilesEl.hidden = true;
         return;
     }
-    targetListEl.innerHTML = targets.map(t => `
+    statTilesEl.hidden = false;
+    const verified = targets.filter(t => t.verified).length;
+    const openSevere = targets.reduce((sum, t) => sum + (t.latest_summary?.critical ?? 0) + (t.latest_summary?.high ?? 0), 0);
+    const weekMs = 7 * 86_400_000;
+    const dueSoon = targets.filter(t => t.next_rescan_at && new Date(t.next_rescan_at).getTime() - Date.now() < weekMs).length;
+
+    statTilesEl.innerHTML = `
+        <div class="stat-tile"><div class="stat-value">${targets.length}</div><div class="stat-label">Site${targets.length === 1 ? '' : 's'}</div></div>
+        <div class="stat-tile"><div class="stat-value">${verified}/${targets.length}</div><div class="stat-label">Verified</div></div>
+        <div class="stat-tile ${openSevere ? 'stat-tile-warn' : ''}"><div class="stat-value">${openSevere}</div><div class="stat-label">Critical + high findings</div></div>
+        <div class="stat-tile"><div class="stat-value">${dueSoon}</div><div class="stat-label">Due for re-audit (7d)</div></div>
+    `;
+}
+
+function renderTargetList(): void {
+    const list = sortedFilteredTargets();
+    if (!targets.length) {
+        targetListEl.innerHTML = '<div class="empty">No sites yet. Add one to get started.</div>';
+        return;
+    }
+    if (!list.length) {
+        targetListEl.innerHTML = '<div class="empty">No sites match your search.</div>';
+        return;
+    }
+    targetListEl.innerHTML = list.map(t => `
         <div class="target-item ${t.id === selectedTargetId ? 'active' : ''}" data-id="${t.id}">
-            <h4>${escapeHtml(t.label || t.hostname)}</h4>
-            <div class="meta">${escapeHtml(t.hostname)}</div>
-            <div style="margin-top:8px">
+            <div class="target-item-top">
+                <div>
+                    <h4>${escapeHtml(t.label || t.hostname)}</h4>
+                    <div class="meta">${escapeHtml(t.hostname)}</div>
+                </div>
+                ${smallGradeBadge(t.latest_grade)}
+            </div>
+            <div class="target-item-bottom">
                 <span class="badge-pill ${t.verified ? 'badge-verified' : 'badge-pending'}">${t.verified ? 'Verified' : 'Unverified'}</span>
+                ${t.github_repo ? '<span class="badge-pill badge-verified" title="GitHub connected">⚡ Fix-ready</span>' : ''}
+                <span class="meta">${t.latest_scanned_at ? `scanned ${fmtRelative(t.latest_scanned_at)}` : 'never scanned'}</span>
             </div>
         </div>`).join('');
 
@@ -93,15 +233,83 @@ async function selectTarget(id: string): Promise<void> {
     selectedTargetId = id;
     selectedScanId = null;
     renderTargetList();
-    detailPanel.innerHTML = '<div class="card center"><span class="spinner"></span></div>';
+    detailPanel.innerHTML = renderSkeleton();
     await renderDetail();
+}
+
+function showOverview(): void {
+    selectedTargetId = null;
+    selectedScanId = null;
+    renderTargetList();
+    renderOverview();
+}
+
+function renderSkeleton(): string {
+    return `<div class="card"><div class="skeleton-line" style="width:40%"></div><div class="skeleton-line" style="width:65%;margin-top:10px"></div><div class="skeleton-line" style="width:90%;margin-top:22px;height:60px"></div></div>`;
+}
+
+function renderOverview(): void {
+    if (!targets.length) {
+        detailPanel.innerHTML = '<div class="empty">Add your first site to get started — you\'ll see it summarized here once it\'s been audited.</div>';
+        return;
+    }
+
+    const attention = [...targets].sort((a, b) => concernScore(b) - concernScore(a)).slice(0, 5);
+    const attentionHtml = attention.map(t => `
+        <div class="attention-row" data-id="${t.id}">
+            ${t.latest_grade ? smallGradeBadge(t.latest_grade) : `<div class="grade-badge grade-badge-sm" style="color:var(--muted)">${t.verified ? '?' : '!'}</div>`}
+            <div class="attention-info">
+                <strong>${escapeHtml(t.label || t.hostname)}</strong>
+                <span class="muted">${!t.verified ? 'Needs ownership verification' : !t.latest_summary ? 'Never audited yet' : `${t.latest_summary.critical} critical, ${t.latest_summary.high} high finding(s)`}</span>
+            </div>
+        </div>`).join('');
+
+    const recentHtml = activity.slice(0, 8).map(s => {
+        const indicator = s.status === 'completed' && s.grade
+            ? smallGradeBadge(s.grade)
+            : `<div class="grade-badge grade-badge-sm" style="color:${s.status === 'failed' ? 'var(--critical)' : 'var(--muted)'}">${s.status === 'failed' ? '✕' : '…'}</div>`;
+        return `
+        <div class="activity-row" data-target="${s.target_id}" data-scan="${s.id}">
+            ${indicator}
+            <div class="activity-info">
+                <strong>${escapeHtml(s.target_label || s.hostname)}</strong>
+                <span class="muted">${s.status === 'running' ? 'Running' : s.status === 'failed' ? 'Failed' : (s.kind === 'full' ? 'Full audit' : 'Quick check')}${s.triggered_by === 'auto_rescan' ? ' · auto' : ''} · ${fmtRelative(s.started_at)}</span>
+            </div>
+        </div>`;
+    }).join('') || '<div class="empty">No scans yet.</div>';
+
+    detailPanel.innerHTML = `
+        <div class="card">
+            <h3 style="font-size:15px;margin-bottom:4px">Needs attention</h3>
+            <p class="muted" style="font-size:12px;margin:0 0 12px">Sorted by risk — unverified and unscanned sites first, then by open critical/high findings.</p>
+            <div class="attention-list">${attentionHtml}</div>
+        </div>
+        <div class="card" style="margin-top:16px">
+            <h3 style="font-size:15px;margin-bottom:12px">Recent activity</h3>
+            <div class="activity-list">${recentHtml}</div>
+        </div>
+    `;
+
+    detailPanel.querySelectorAll<HTMLElement>('.attention-row').forEach(row => {
+        row.addEventListener('click', () => selectTarget(row.dataset.id!));
+    });
+    detailPanel.querySelectorAll<HTMLElement>('.activity-row').forEach(row => {
+        row.addEventListener('click', async () => {
+            await selectTarget(row.dataset.target!);
+            if (row.dataset.scan) await selectScan(row.dataset.scan);
+        });
+    });
 }
 
 async function renderDetail(): Promise<void> {
     if (!selectedTargetId) return;
     const { target, scans } = await apiFetch<{ target: Target; scans: ScanSummaryRow[] }>(`/targets/${selectedTargetId}`);
 
-    const verificationBlock = target.verified ? `
+    const setupComplete = target.verified && (target.github_repo || !billing.fixAccess);
+    const verificationDone = target.verified;
+    const githubDone = Boolean(target.github_repo);
+
+    const verificationBlock = verificationDone ? `
         <p class="status ok">✓ Ownership verified via ${escapeHtml(target.verification_method || 'unknown method')}</p>
     ` : `
         <div class="card" style="background:var(--surface-2);margin:14px 0">
@@ -118,16 +326,12 @@ async function renderDetail(): Promise<void> {
         </div>
     `;
 
-    const githubBlock = target.github_repo ? `
-        <div class="card" style="background:var(--surface-2);margin:14px 0">
-            <strong>GitHub repo connected</strong>
-            <p class="muted" style="font-size:13px">Fixable findings below can open pull requests against <code>${escapeHtml(target.github_repo)}</code>.</p>
-            <button type="button" class="ghost-button mini-cta" id="github-disconnect-btn">Disconnect</button>
-        </div>
+    const githubBlock = githubDone ? `
+        <p class="status ok">✓ GitHub repo connected: <code>${escapeHtml(target.github_repo!)}</code> <button type="button" class="text-button" id="github-disconnect-btn" style="text-decoration:underline;padding:0;font-size:12px">Disconnect</button></p>
     ` : `
         <div class="card" style="background:var(--surface-2);margin:14px 0">
             <strong>Connect GitHub for auto-fix</strong>
-            <p class="muted" style="font-size:13px">Requires the Audit + Fix plan ($14/mo). Once connected, fixable findings (missing security headers, outdated JS libraries, missing security.txt) get a "Fix with PR" button that opens a real pull request.</p>
+            <p class="muted" style="font-size:13px">Requires the Audit + Fix plan. Once connected, fixable findings get a "Fix with PR" button that opens a real pull request.</p>
             <div class="field"><label for="github-repo-input">Repository (owner/repo)</label><input id="github-repo-input" type="text" placeholder="your-org/your-site" autocomplete="off"></div>
             <div class="field"><label for="github-token-input">Fine-grained personal access token</label><input id="github-token-input" type="password" placeholder="github_pat_…" autocomplete="off"></div>
             <p class="muted" style="font-size:12px">Create one at github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens. Limit repository access to just this repo, with permissions Contents (Read and write) and Pull requests (Read and write).</p>
@@ -135,6 +339,26 @@ async function renderDetail(): Promise<void> {
             <span id="github-connect-status" class="status" style="display:inline-block;margin-left:10px"></span>
         </div>
     `;
+
+    const setupSummary = setupComplete
+        ? `<span class="muted" style="font-weight:400;font-size:12px">— verified${githubDone ? ' · GitHub connected' : ''}</span>`
+        : '';
+    const setupSectionHtml = `
+        <details class="setup-details" ${setupComplete ? '' : 'open'}>
+            <summary>Setup ${setupSummary}<span class="chevron">▶</span></summary>
+            <div class="setup-body">
+                ${verificationBlock}
+                ${githubBlock}
+            </div>
+        </details>
+    `;
+
+    const completedScans = scans.filter(s => s.status === 'completed' && s.score !== null).slice().reverse();
+    const sparklineHtml = completedScans.length >= 2 ? `
+        <div class="sparkline-row">
+            <canvas id="score-sparkline" width="160" height="36"></canvas>
+            <span class="muted" style="font-size:12px">Score trend, last ${completedScans.length} audits</span>
+        </div>` : '';
 
     const scansHtml = scans.length ? scans.map(s => `
         <div class="target-item scan-item ${s.id === selectedScanId ? 'active' : ''}" data-id="${s.id}">
@@ -150,23 +374,36 @@ async function renderDetail(): Promise<void> {
         <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
                 <div>
-                    <h2>${escapeHtml(target.label || target.hostname)}</h2>
-                    <p class="muted" style="font-size:13px">${escapeHtml(target.url)}</p>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        ${smallGradeBadge(target.latest_grade)}
+                        <div>
+                            <h2 style="font-size:18px">${escapeHtml(target.label || target.hostname)}</h2>
+                            <p class="muted" style="font-size:13px">${escapeHtml(target.url)}</p>
+                        </div>
+                    </div>
                 </div>
                 <div style="display:flex;gap:8px">
                     <button type="button" id="run-scan-btn" ${!target.verified ? 'disabled title="Verify ownership first"' : ''}>Run full audit</button>
                     <button type="button" class="danger-button" id="delete-target-btn">Delete</button>
                 </div>
             </div>
-            ${verificationBlock}
-            ${githubBlock}
-            <p class="muted" style="font-size:12px">Last scanned: ${fmtDate(target.last_scanned_at)} ${target.auto_rescan && target.next_rescan_at ? `· Next auto re-audit: ${fmtDate(target.next_rescan_at)}` : ''}</p>
+            ${setupSectionHtml}
+            <p class="muted" style="font-size:12px;margin-top:10px">Last scanned: ${fmtDate(target.last_scanned_at)} ${target.auto_rescan && target.next_rescan_at ? `· Next auto re-audit: ${fmtDate(target.next_rescan_at)} (${fmtRelative(target.next_rescan_at, true)})` : ''}</p>
         </div>
 
-        <h3 style="margin-top:22px;margin-bottom:10px;font-size:16px">Scan history</h3>
-        <div id="scan-list">${scansHtml}</div>
+        <div class="card" style="margin-top:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <h3 style="font-size:15px">Scan history</h3>
+            </div>
+            ${sparklineHtml}
+            <div id="scan-list" style="margin-top:10px">${scansHtml}</div>
+        </div>
         <div id="scan-detail" style="margin-top:16px"></div>
     `;
+
+    if (completedScans.length >= 2) {
+        renderSparkline(el<HTMLCanvasElement>('score-sparkline'), completedScans.map(s => s.score!));
+    }
 
     el<HTMLButtonElement>('run-scan-btn')?.addEventListener('click', () => runScan(target.id));
     el<HTMLButtonElement>('delete-target-btn')?.addEventListener('click', () => deleteTarget(target.id));
@@ -229,8 +466,7 @@ async function runScan(targetId: string): Promise<void> {
         const { scanId } = await apiFetch<{ scanId: string }>('/scans', { method: 'POST', body: { targetId } });
         showToast('Audit complete.');
         selectedScanId = scanId;
-        await renderDetail();
-        await loadBilling();
+        await Promise.all([renderDetail(), loadTargets(), loadActivity()]);
     } catch (err) {
         showToast(err instanceof ApiError ? err.message : 'Scan failed.', true);
         btn.disabled = false;
@@ -241,9 +477,7 @@ async function runScan(targetId: string): Promise<void> {
 async function deleteTarget(targetId: string): Promise<void> {
     if (!confirm('Remove this site and all its scan history?')) return;
     await apiFetch(`/targets/${targetId}`, { method: 'DELETE' });
-    selectedTargetId = null;
-    selectedScanId = null;
-    detailPanel.innerHTML = '<div class="empty">Select a site on the left, or add a new one to get started.</div>';
+    showOverview();
     await loadTargets();
 }
 
@@ -251,7 +485,7 @@ async function selectScan(scanId: string): Promise<void> {
     selectedScanId = scanId;
     detailPanel.querySelectorAll<HTMLElement>('.scan-item').forEach(item => item.classList.toggle('active', item.dataset.id === scanId));
     const scanDetailEl = el<HTMLElement>('scan-detail');
-    scanDetailEl.innerHTML = '<div class="card center"><span class="spinner"></span></div>';
+    scanDetailEl.innerHTML = renderSkeleton();
 
     const { scan, findings } = await apiFetch<{ scan: ScanSummaryRow & { share_token: string }; findings: FindingRow[] }>(`/scans/${scanId}`);
 
@@ -295,6 +529,13 @@ async function handleFix(findingId: string, button: HTMLButtonElement): Promise<
     }
 }
 
+// ---- Search + overview nav ----
+searchInput.addEventListener('input', () => {
+    searchQuery = searchInput.value.trim();
+    renderTargetList();
+});
+el<HTMLButtonElement>('overview-btn').addEventListener('click', showOverview);
+
 // ---- Add target modal ----
 const addModal = el<HTMLElement>('add-target-modal');
 el<HTMLButtonElement>('add-target-btn').addEventListener('click', () => {
@@ -303,8 +544,10 @@ el<HTMLButtonElement>('add-target-btn').addEventListener('click', () => {
     el<HTMLInputElement>('target-attest-input').checked = false;
     el<HTMLElement>('add-target-status').textContent = '';
     addModal.hidden = false;
+    el<HTMLInputElement>('target-url-input').focus();
 });
 el<HTMLButtonElement>('add-target-cancel').addEventListener('click', () => { addModal.hidden = true; });
+addModal.addEventListener('keydown', e => { if (e.key === 'Escape') addModal.hidden = true; });
 el<HTMLButtonElement>('add-target-submit').addEventListener('click', async () => {
     const statusEl = el<HTMLElement>('add-target-status');
     let url = el<HTMLInputElement>('target-url-input').value.trim();
@@ -315,10 +558,11 @@ el<HTMLButtonElement>('add-target-submit').addEventListener('click', async () =>
     statusEl.textContent = '';
     statusEl.className = 'status';
     try {
-        await apiFetch('/targets', { method: 'POST', body: { url, label: label || undefined, attestedAuthorization } });
+        const { target } = await apiFetch<{ target: Target }>('/targets', { method: 'POST', body: { url, label: label || undefined, attestedAuthorization } });
         addModal.hidden = true;
         await loadTargets();
         showToast('Site added — verify ownership to run a full audit.');
+        await selectTarget(target.id);
     } catch (err) {
         statusEl.textContent = err instanceof ApiError ? err.message : 'Could not add site.';
         statusEl.className = 'status error';
@@ -334,8 +578,10 @@ function openEmailModal(scanId: string): void {
     el<HTMLTextAreaElement>('email-note-input').value = '';
     el<HTMLElement>('email-report-status').textContent = '';
     emailModal.hidden = false;
+    el<HTMLInputElement>('email-recipient-input').focus();
 }
 el<HTMLButtonElement>('email-report-cancel').addEventListener('click', () => { emailModal.hidden = true; });
+emailModal.addEventListener('keydown', e => { if (e.key === 'Escape') emailModal.hidden = true; });
 el<HTMLButtonElement>('email-report-submit').addEventListener('click', async () => {
     if (!emailModalScanId) return;
     const statusEl = el<HTMLElement>('email-report-status');
@@ -365,5 +611,6 @@ el<HTMLButtonElement>('email-report-submit').addEventListener('click', async () 
         return;
     }
     signedInSection.hidden = false;
-    await Promise.all([loadTargets(), loadBilling()]);
+    await Promise.all([loadTargets(), loadBilling(), loadActivity()]);
+    showOverview();
 })();

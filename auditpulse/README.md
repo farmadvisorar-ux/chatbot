@@ -170,6 +170,20 @@ webhook (`user.created`/`user.updated`/`user.deleted`) at
    verified domain, Resend's sandbox sender can only deliver to your own
    Resend account address.
 
+## The dashboard
+
+Signed-in users land on an **overview**: stat tiles (site count, verified
+count, open critical/high findings across every site, sites due for
+re-audit soon), a risk-sorted "needs attention" list, and a cross-site
+recent-activity feed — all from two requests (`GET /api/targets`, which
+joins in each site's latest completed scan, and `GET /api/scans`, which
+lists recent scans across every site the user owns). The site list is
+searchable and sorted by urgency (unverified → unscanned → worst findings
+first) rather than just creation date. Selecting a site shows a score
+sparkline across its scan history, a collapsible "Setup" section that
+collapses to one line once verification + GitHub are both done, and the
+existing scan history / findings / email / fix-with-PR flows.
+
 ## What's implemented vs. what to harden before real-world launch
 
 - All scan checks are real and functional (see table above) — this is not a

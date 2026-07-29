@@ -16,9 +16,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const pool = getPool();
 
     if (req.method === 'GET') {
+        // LEFT JOIN LATERAL pulls in each target's most recent *completed*
+        // scan (if any) in the same query, so the dashboard can render grade
+        // badges and an overview without a request per site.
         const { rows } = await pool.query(
-            `SELECT t.*, s.subscription_status
-             FROM targets t JOIN users s ON s.id = t.user_id
+            `SELECT t.*, u.subscription_status,
+                    latest.id AS latest_scan_id, latest.grade AS latest_grade, latest.score AS latest_score,
+                    latest.summary AS latest_summary, latest.started_at AS latest_scanned_at
+             FROM targets t
+             JOIN users u ON u.id = t.user_id
+             LEFT JOIN LATERAL (
+                 SELECT id, grade, score, summary, started_at FROM scans
+                 WHERE target_id = t.id AND status = 'completed'
+                 ORDER BY started_at DESC LIMIT 1
+             ) latest ON true
              WHERE t.user_id = $1 ORDER BY t.created_at DESC`,
             [user.userId],
         );
