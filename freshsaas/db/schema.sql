@@ -192,3 +192,20 @@ CREATE INDEX IF NOT EXISTS insight_articles_live ON insight_articles (published,
 -- "best of" list is a deceptive endorsement under the FTC guides, and the
 -- disclosure is what keeps the promotional guides defensible.
 ALTER TABLE insight_articles ADD COLUMN IF NOT EXISTS disclosure TEXT;
+
+-- Upvotes. Every competing launch directory runs on this loop and FreshSAAS
+-- had no engagement mechanic at all. The count is denormalised onto the entry
+-- so the directory read stays a single table scan; directory_votes exists to
+-- stop one visitor voting twice.
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS votes INT NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS directory_votes (
+    entry_id UUID NOT NULL REFERENCES directory_entries(id) ON DELETE CASCADE,
+    -- Random key held in the visitor's localStorage. Anonymous by design: no
+    -- account needed to vote, and clearing storage lets someone vote again,
+    -- which is the same trade every directory in this category makes.
+    voter_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (entry_id, voter_key)
+);
+CREATE INDEX IF NOT EXISTS directory_votes_entry ON directory_votes (entry_id);
+CREATE INDEX IF NOT EXISTS directory_entries_votes ON directory_entries (votes DESC) WHERE status = 'live';

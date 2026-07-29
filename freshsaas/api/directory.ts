@@ -67,6 +67,51 @@ async function recordEvent(req: VercelRequest, res: VercelResponse): Promise<voi
     json(res, 202, { ok: true });
 }
 
+
+/**
+ * Records or withdraws an upvote.
+ *
+ * Anonymous: the voter key is a random value the browser keeps in
+ * localStorage, so voting needs no account. A primary key on
+ * (entry_id, voter_key) is what actually enforces one vote per visitor —
+ * the count on directory_entries is only a cache of that table.
+ */
+async function handleVote(req: VercelRequest, res: VercelResponse): Promise<void> {
+    const body = (req.body || {}) as { entryId?: string; voterKey?: string; withdraw?: boolean };
+    const entryId = String(body.entryId ?? '').replace(/^db-/, '');
+    const voterKey = String(body.voterKey ?? '').slice(0, 64);
+
+    if (!/^[0-9a-f-]{36}$/i.test(entryId) || voterKey.length < 8) {
+        json(res, 400, { error: 'Invalid vote' });
+        return;
+    }
+
+    const pool = getPool();
+    if (body.withdraw) {
+        const removed = await pool.query('DELETE FROM directory_votes WHERE entry_id = $1 AND voter_key = $2', [entryId, voterKey]);
+        if (removed.rowCount) {
+            // GREATEST guards against the counter going negative if a row is
+            // ever removed without the entry being decremented.
+            await pool.query('UPDATE directory_entries SET votes = GREATEST(0, votes - 1) WHERE id = $1', [entryId]);
+        }
+    } else {
+        const added = await pool.query(
+            'INSERT INTO directory_votes (entry_id, voter_key) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [entryId, voterKey],
+        );
+        if (added.rowCount) {
+            await pool.query('UPDATE directory_entries SET votes = votes + 1 WHERE id = $1', [entryId]);
+        }
+    }
+
+    const { rows } = await pool.query('SELECT votes FROM directory_entries WHERE id = $1', [entryId]);
+    if (!rows[0]) {
+        json(res, 404, { error: 'Listing not found' });
+        return;
+    }
+    json(res, 200, { ok: true, votes: rows[0].votes, voted: !body.withdraw });
+}
+
 /**
  * Published Insights articles.
  *
@@ -110,6 +155,10 @@ async function sendInsights(req: VercelRequest, res: VercelResponse): Promise<vo
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (req.method === 'POST') {
+        if (req.query.action === 'vote') {
+            await handleVote(req, res);
+            return;
+        }
         await recordEvent(req, res);
         return;
     }
@@ -122,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const { rows } = await getPool().query(
         `SELECT id, name, tagline, description, url, category, tags, source, source_url,
-                discovered_at, featured, featured_rank
+                discovered_at, featured, featured_rank, votes
          FROM directory_entries WHERE status = 'live'
          ORDER BY featured DESC, featured_rank ASC, discovered_at DESC LIMIT 500`,
     );
@@ -141,6 +190,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             audience: `${row.category} teams, founders and early adopters`,
             pricing: 'See launch page',
             launched: launchedLabel(row.discovered_at),
+            // Raw timestamp as well as the label: the client groups the feed
+            // into Today / Yesterday / This week, which a label cannot drive.
+            discoveredAt: new Date(row.discovered_at).toISOString(),
+            votes: row.votes ?? 0,
             featured: Boolean(row.featured),
             // Featured entries sit above the freshness sort so a hand-picked
             // launch stays at the top rather than sinking as it ages.
@@ -153,6 +206,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         };
     });
 
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
     json(res, 200, { launches });
 }
