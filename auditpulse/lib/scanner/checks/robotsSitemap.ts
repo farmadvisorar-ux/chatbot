@@ -21,6 +21,7 @@ export const robotsSitemapCheck: CheckDefinition = {
                 checkId: 'robots-disclosure',
                 title: 'robots.txt hints at sensitive paths',
                 severity: 'low',
+                impact: 'You\'ve effectively published a list of "here\'s where the interesting stuff is" for anyone who bothers to read robots.txt — which attackers routinely do, even though well-behaved search engines are the only ones actually meant to respect it.',
                 description: 'robots.txt only asks well-behaved crawlers not to index these paths — it does not restrict access. Listing them here can point an attacker directly at areas worth targeting.',
                 evidence: interesting.slice(0, 15).join('\n'),
                 remediation: 'Do not rely on robots.txt to hide sensitive paths; enforce authentication/authorization on them server-side. Remove paths from robots.txt that reveal internal structure unnecessarily.',

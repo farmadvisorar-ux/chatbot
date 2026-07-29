@@ -27,12 +27,25 @@ Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
 ## What the scanner actually does
 
 Every check is passive and non-destructive — no exploitation, no brute
-forcing, no DoS-style traffic:
+forcing, no DoS-style traffic. A full audit isn't limited to the homepage:
+it crawls up to 5 same-origin pages linked from it (`lib/scanner/crawl.ts`)
+so mixed-content, exposed-secrets, and subresource-integrity checks see more
+than just `/`.
 
 | Tier | Checks | Requires |
 |---|---|---|
 | **Quick check** (free, public) | Security headers, TLS/certificate health, cookie flags, server fingerprinting | Nothing — one GET request, same as any browser visit |
-| **Full audit** | Everything above, plus: exposed files/backups (well-known-path probes), CORS misconfiguration, mixed content, DNS email security (SPF/DMARC/CAA), outdated JS library detection, risky HTTP methods, subdomain exposure (via public Certificate Transparency logs), robots.txt disclosure, open-redirect heuristics | Sign-in + **proof of domain ownership** |
+| **Full audit** | Everything above, plus: exposed files/backups (well-known-path probes), directory-listing exposure, CORS misconfiguration, mixed content (crawled), HTTPS-redirect enforcement, subresource integrity on third-party scripts (crawled), hardcoded secrets in JS bundles (crawled), GraphQL introspection exposure, DNS email security (SPF/DMARC/CAA), outdated JS library detection, risky HTTP methods, subdomain exposure (via public Certificate Transparency logs), robots.txt disclosure, open-redirect heuristics | Sign-in + **proof of domain ownership** |
+
+Every finding carries two write-ups, not one: a plain-English **impact**
+sentence (“what could actually go wrong”, aimed at the site owner, always
+visible without expanding the row) and a **technical description** (aimed at
+whoever fixes it, behind the expand toggle) plus remediation steps. Every
+scan result also opens with one auto-generated executive-summary sentence
+("Scored a C+. Top priority: … — fix this first.") and a collapsible
+severity glossary explaining what Critical/High/Medium/Low/Info actually
+mean in terms of urgency — see `executiveSummaryHtml` / `severityGlossaryHtml`
+in `src/findings-view.ts`.
 
 ### Why ownership verification exists
 
@@ -213,6 +226,14 @@ existing scan history / findings / email / fix-with-PR flows.
 
 - All API input is validated and length-capped server-side; SQL uses
   parameterized queries throughout.
+- The exposed-secrets check (`lib/scanner/checks/exposedSecrets.ts`) never
+  stores a matched credential in full — the `evidence` saved to the database
+  is redacted (`AKIAABCD••••••••MNOP`) to a handful of leading/trailing
+  characters, enough to identify the credential without the report itself
+  becoming a second place it leaks from.
+- The GraphQL introspection check sends a single standard, read-only
+  introspection query (the same one GraphiQL/Apollo Studio send) — it never
+  reads or mutates application data.
 - `escapeHtml` is applied everywhere user- or scan-supplied text is inserted
   via `innerHTML`, including inside report emails.
 - The scan engine never fetches private/internal IP ranges (RFC1918,

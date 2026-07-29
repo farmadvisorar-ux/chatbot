@@ -10,6 +10,7 @@ export type SeveritySummary = { critical: number; high: number; medium: number; 
 export interface ReportEmailFinding {
     title: string;
     severity: keyof SeveritySummary;
+    impact: string;
     description: string;
     remediation: string;
 }
@@ -76,7 +77,7 @@ export async function sendReportEmail(params: {
             </td>
             <td style="padding:8px 10px;border-bottom:1px solid #22283a;">
                 <strong>${escapeHtml(f.title)}</strong><br/>
-                <span style="color:#93a0b5;font-size:13px;">${escapeHtml(f.description)}</span>
+                <span style="color:#c9d1e0;font-size:13px;">${escapeHtml(f.impact)}</span>
             </td>
         </tr>`).join('');
 
@@ -106,7 +107,7 @@ export async function sendReportEmail(params: {
     const text = `AuditPulse security audit for ${params.targetLabel} (${params.targetUrl})\n\n` +
         `Grade: ${params.grade} (score ${params.score}/100)\n` +
         `${totalFindings} finding(s): ${params.summary.critical} critical, ${params.summary.high} high, ${params.summary.medium} medium, ${params.summary.low} low, ${params.summary.info} info\n\n` +
-        params.topFindings.map(f => `[${f.severity.toUpperCase()}] ${f.title}\n${f.description}\nFix: ${f.remediation}\n`).join('\n') +
+        params.topFindings.map(f => `[${f.severity.toUpperCase()}] ${f.title}\n${f.impact}\nFix: ${f.remediation}\n`).join('\n') +
         `\nFull interactive report: ${reportUrl}\n`;
 
     try {

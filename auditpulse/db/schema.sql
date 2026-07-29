@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS findings (
     check_id TEXT NOT NULL,
     title TEXT NOT NULL,
     severity TEXT NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
+    impact TEXT NOT NULL DEFAULT '', -- plain-English "what could go wrong" — separate from the technical description
     description TEXT NOT NULL,
     evidence TEXT,
     remediation TEXT NOT NULL,

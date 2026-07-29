@@ -5,6 +5,7 @@ export interface FindingRow {
     check_id: string;
     title: string;
     severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+    impact: string;
     description: string;
     evidence: string | null;
     remediation: string;
@@ -21,6 +22,14 @@ export interface SeveritySummary { critical: number; high: number; medium: numbe
 const SEVERITY_ORDER: FindingRow['severity'][] = ['critical', 'high', 'medium', 'low', 'info'];
 const SEVERITY_LABEL: Record<FindingRow['severity'], string> = {
     critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info',
+};
+/** Plain-English urgency guidance shown in the severity glossary — not a technical CVSS-style definition. */
+const SEVERITY_GUIDANCE: Record<FindingRow['severity'], string> = {
+    critical: 'Fix immediately. Actively exploitable, or already exposing credentials/data.',
+    high: 'Fix this week. A real path to serious harm, even if it takes a bit more effort.',
+    medium: 'Fix this month. Weakens your defenses but usually needs another factor to cause harm.',
+    low: 'Fix when convenient. Minor hardening, unlikely to decide the outcome of an attack on its own.',
+    info: 'Good to know. No immediate risk — just useful context about your setup.',
 };
 
 export function gradeBadgeHtml(grade: string, score: number): string {
@@ -39,11 +48,44 @@ export function summaryChipsHtml(summary: SeveritySummary): string {
 }
 
 /**
- * The "Fix with PR" affordance only ever renders when the caller passes
- * `onFix` (the dashboard, where the viewer is authenticated and may own a
- * connected repo) — the public report page and the free quick-check pass no
- * callback, so they only ever show fix *status*, never an actionable button.
+ * One auto-generated sentence translating grade + findings into what a
+ * non-technical site owner should actually do next — shown above the
+ * findings list everywhere a scan result is rendered (quick check,
+ * dashboard, public report).
  */
+export function executiveSummaryHtml(grade: string, score: number, findings: FindingRow[]): string {
+    const critical = findings.filter(f => f.severity === 'critical');
+    const high = findings.filter(f => f.severity === 'high');
+    const actionable = findings.filter(f => f.severity !== 'info');
+
+    let sentence: string;
+    if (!findings.length) {
+        sentence = `Nothing found by these checks — a clean scan.`;
+    } else if (critical.length) {
+        sentence = `Scored a ${escapeHtml(grade)} (${score}/100). Top priority: <strong>${escapeHtml(critical[0].title)}</strong>${critical.length > 1 ? ` (plus ${critical.length - 1} more critical issue${critical.length > 2 ? 's' : ''})` : ''} — fix this first.`;
+    } else if (high.length) {
+        sentence = `Scored a ${escapeHtml(grade)}. No critical issues, but <strong>${escapeHtml(high[0].title)}</strong>${high.length > 1 ? ` (plus ${high.length - 1} more high-priority issue${high.length > 2 ? 's' : ''})` : ''} needs attention soon.`;
+    } else if (actionable.length) {
+        sentence = `Scored a ${escapeHtml(grade)}. Nothing urgent — ${actionable.length} smaller item${actionable.length > 1 ? 's are' : ' is'} worth cleaning up when convenient.`;
+    } else {
+        sentence = `Scored a ${escapeHtml(grade)}. No real risk found, just a few informational notes below.`;
+    }
+    return `<p class="exec-summary">${sentence}</p>`;
+}
+
+export function severityGlossaryHtml(): string {
+    return `<details class="glossary">
+        <summary>What do these severities mean? <span class="chevron">▶</span></summary>
+        <div class="glossary-body">
+            ${SEVERITY_ORDER.map(sev => `
+                <div class="glossary-row">
+                    <span class="sev-badge sev-${sev}">${SEVERITY_LABEL[sev]}</span>
+                    <span>${escapeHtml(SEVERITY_GUIDANCE[sev])}</span>
+                </div>`).join('')}
+        </div>
+    </details>`;
+}
+
 function fixSectionHtml(f: FindingRow, showAction: boolean): string {
     if (f.fix_status === 'pr_open' || f.fix_status === 'pr_merged') {
         return `<div class="fix-row fix-ok">✓ Fix ${f.fix_status === 'pr_merged' ? 'merged' : 'PR opened'} — <a href="${escapeHtml(f.fix_pr_url ?? '#')}" target="_blank" rel="noopener noreferrer">view on GitHub →</a></div>`;
@@ -64,10 +106,14 @@ function findingHtml(f: FindingRow, index: number, showFixAction: boolean): stri
     return `<div class="finding" data-severity="${f.severity}" data-index="${index}">
         <div class="finding-header" data-toggle="${index}">
             <span class="sev-badge sev-${f.severity}">${SEVERITY_LABEL[f.severity]}</span>
-            <h4>${escapeHtml(f.title)}</h4>
+            <div class="finding-title-group">
+                <h4>${escapeHtml(f.title)}</h4>
+                <p class="finding-impact">${escapeHtml(f.impact)}</p>
+            </div>
             <span class="chevron">▶</span>
         </div>
         <div class="finding-body">
+            <div class="label">Technical details</div>
             <p>${escapeHtml(f.description)}</p>
             ${f.affected_url ? `<div class="label">Affected URL</div><pre>${escapeHtml(f.affected_url)}</pre>` : ''}
             ${f.evidence ? `<div class="label">Evidence</div><pre>${escapeHtml(f.evidence)}</pre>` : ''}
@@ -88,7 +134,10 @@ export interface RenderFindingsOptions {
  * Renders severity filter chips + the findings list into `container`, and
  * wires up filtering and expand/collapse. Reused by the landing page's free
  * quick check, the dashboard's scan view, and the public report page, so
- * all three present findings identically.
+ * all three present findings identically. The impact line is always
+ * visible — even collapsed — so a non-technical reader gets "why should I
+ * care" without having to open every row; the technical description,
+ * evidence, and references stay behind the expand toggle.
  */
 export function renderFindings(container: HTMLElement, findings: FindingRow[], options: RenderFindingsOptions = {}): void {
     if (!findings.length) {
@@ -104,6 +153,7 @@ export function renderFindings(container: HTMLElement, findings: FindingRow[], o
     ).join('');
 
     container.innerHTML = `
+        ${severityGlossaryHtml()}
         <div class="filter-row">${filterRow}<button type="button" class="filter-chip" data-filter="__clear">Clear filters</button></div>
         <div class="findings-list">${findings.map((f, i) => findingHtml(f, i, Boolean(options.onFix))).join('')}</div>
     `;

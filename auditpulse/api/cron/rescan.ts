@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
             const recipients = [target.owner_email, ...(target.client_emails || [])];
             const { rows: topFindings } = await pool.query(
-                `SELECT title, severity, description, remediation FROM findings WHERE scan_id = $1
+                `SELECT title, severity, impact, description, remediation FROM findings WHERE scan_id = $1
                  ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END LIMIT 8`,
                 [scanId],
             );

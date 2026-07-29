@@ -42,6 +42,7 @@ export const openRedirectCheck: CheckDefinition = {
                 checkId: 'open-redirect-heuristic',
                 title: 'Links with redirect-style parameters found (needs manual review)',
                 severity: 'low',
+                impact: 'If this turns out to be exploitable, a scammer could send links that start with your real, trusted domain but end up redirecting the victim to a phishing site — people are far more likely to click a link that begins with a brand they recognize.',
                 description: 'The homepage links to URLs whose query string carries a full URL in a parameter commonly used for post-action redirects. If the target endpoint redirects to that URL without validating it against an allowlist, it can be abused for phishing (open redirect).',
                 evidence: Array.from(flagged).join('\n'),
                 remediation: 'Validate any redirect-target parameter against an allowlist of your own domains/paths before issuing a redirect; never redirect to an arbitrary user-supplied URL.',

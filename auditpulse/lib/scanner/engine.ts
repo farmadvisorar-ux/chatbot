@@ -12,8 +12,14 @@ import { httpMethodsCheck } from './checks/httpMethods.js';
 import { subdomainEnumCheck } from './checks/subdomainEnum.js';
 import { robotsSitemapCheck } from './checks/robotsSitemap.js';
 import { openRedirectCheck } from './checks/openRedirect.js';
+import { exposedSecretsCheck } from './checks/exposedSecrets.js';
+import { directoryListingCheck } from './checks/directoryListing.js';
+import { httpsRedirectCheck } from './checks/httpsRedirect.js';
+import { subresourceIntegrityCheck } from './checks/subresourceIntegrity.js';
+import { graphqlIntrospectionCheck } from './checks/graphqlIntrospection.js';
 import { computeScore, scoreToGrade, summarizeBySeverity } from './grade.js';
 import { assertPublicHost, DisallowedTargetError } from './net.js';
+import { discoverPages, fetchHomepageHtml } from './crawl.js';
 
 const QUICK_CHECKS: CheckDefinition[] = [headersCheck, tlsCheck, cookiesCheck, serverFingerprintCheck];
 const FULL_CHECKS: CheckDefinition[] = [
@@ -27,7 +33,14 @@ const FULL_CHECKS: CheckDefinition[] = [
     subdomainEnumCheck,
     robotsSitemapCheck,
     openRedirectCheck,
+    exposedSecretsCheck,
+    directoryListingCheck,
+    httpsRedirectCheck,
+    subresourceIntegrityCheck,
+    graphqlIntrospectionCheck,
 ];
+
+const MAX_CRAWL_PAGES = 5;
 
 export interface ScanRunResult {
     findings: Finding[];
@@ -35,6 +48,7 @@ export interface ScanRunResult {
     grade: string;
     summary: Record<string, number>;
     checkErrors: { checkId: string; error: string }[];
+    pagesScanned: number;
 }
 
 export function normalizeTargetUrl(input: string): { targetUrl: string; hostname: string } {
@@ -51,13 +65,26 @@ export function normalizeTargetUrl(input: string): { targetUrl: string; hostname
  * (Promise.allSettled) so one slow/broken check never takes the whole scan
  * down. Re-validates the target isn't a private/internal address up front,
  * on top of the same guard inside every network call each check makes.
+ *
+ * Full scans additionally crawl a few same-origin pages linked from the
+ * homepage (lib/scanner/crawl.ts) — checks that benefit from seeing more of
+ * the site than just the homepage (mixed content, exposed secrets in JS
+ * bundles, missing subresource integrity) read from ctx.additionalPages.
  */
 export async function runScan(rawUrl: string, kind: 'quick' | 'full'): Promise<ScanRunResult> {
     const { targetUrl, hostname } = normalizeTargetUrl(rawUrl);
     await assertPublicHost(hostname);
 
     const checks = kind === 'quick' ? QUICK_CHECKS : FULL_CHECKS;
-    const ctx: ScanContext = { targetUrl, hostname, kind, timeoutMs: 7000 };
+    const timeoutMs = 7000;
+
+    let additionalPages: string[] = [targetUrl];
+    if (kind === 'full') {
+        const homepageHtml = await fetchHomepageHtml(targetUrl, timeoutMs);
+        additionalPages = homepageHtml ? await discoverPages(targetUrl, homepageHtml, MAX_CRAWL_PAGES) : [targetUrl];
+    }
+
+    const ctx: ScanContext = { targetUrl, hostname, kind, timeoutMs, additionalPages };
 
     const results = await Promise.allSettled(checks.map(check => check.run(ctx)));
 
@@ -82,5 +109,6 @@ export async function runScan(rawUrl: string, kind: 'quick' | 'full'): Promise<S
         grade: scoreToGrade(score),
         summary: summarizeBySeverity(findings),
         checkErrors,
+        pagesScanned: additionalPages.length,
     };
 }

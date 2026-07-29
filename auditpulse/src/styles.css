@@ -82,6 +82,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .sev-low{background:var(--low)}
 .sev-info{background:var(--info)}
 
+/* Executive summary + severity glossary */
+.exec-summary{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;font-size:14px;margin:0 0 4px}
+.glossary{margin:12px 0}
+.glossary summary{cursor:pointer;list-style:none;font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.glossary summary::-webkit-details-marker{display:none}
+.glossary summary .chevron{transition:transform .15s;font-size:10px}
+.glossary[open] summary .chevron{transform:rotate(90deg)}
+.glossary-body{display:grid;gap:8px;margin-top:10px;padding:12px;background:var(--surface-2);border-radius:10px}
+.glossary-row{display:flex;align-items:baseline;gap:10px;font-size:12.5px;color:var(--ink)}
+.glossary-row .sev-badge{flex-shrink:0;min-width:56px;text-align:center}
+
 /* Summary chips row */
 .summary-row{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:18px 0}
 .summary-chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -90,9 +101,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 
 /* Findings list */
 .finding{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
-.finding-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
-.finding-header h4{margin:0;font-size:15px;font-family:'DM Sans',sans-serif;font-weight:700;flex:1}
-.finding-header .chevron{transition:transform .15s;color:var(--muted)}
+.finding-header{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;cursor:pointer}
+.finding-header .sev-badge{margin-top:2px;flex-shrink:0}
+.finding-title-group{flex:1;min-width:0}
+.finding-header h4{margin:0;font-size:15px;font-family:'DM Sans',sans-serif;font-weight:700}
+.finding-impact{margin:4px 0 0;font-size:13px;color:var(--muted);line-height:1.45}
+.finding-header .chevron{transition:transform .15s;color:var(--muted);margin-top:3px;flex-shrink:0}
 .finding.open .chevron{transform:rotate(90deg)}
 .finding-body{display:none;padding:0 16px 16px;font-size:14px}
 .finding.open .finding-body{display:block}

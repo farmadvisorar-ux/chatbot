@@ -46,6 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 check_id: f.checkId,
                 title: f.title,
                 severity: f.severity,
+                impact: f.impact,
                 description: f.description,
                 evidence: f.evidence ?? null,
                 remediation: f.remediation,

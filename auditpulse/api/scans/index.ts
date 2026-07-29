@@ -22,9 +22,9 @@ export async function persistScanResult(
 ): Promise<void> {
     for (const f of outcome.findings) {
         await pool.query(
-            `INSERT INTO findings (scan_id, check_id, title, severity, description, evidence, remediation, references, affected_url, auto_fixable)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-            [scanId, f.checkId, f.title, f.severity, f.description, f.evidence ?? null, f.remediation, f.references ?? [], f.affectedUrl ?? null, isAutoFixable(f.checkId, f.title)],
+            `INSERT INTO findings (scan_id, check_id, title, severity, impact, description, evidence, remediation, references, affected_url, auto_fixable)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+            [scanId, f.checkId, f.title, f.severity, f.impact, f.description, f.evidence ?? null, f.remediation, f.references ?? [], f.affectedUrl ?? null, isAutoFixable(f.checkId, f.title)],
         );
     }
     await pool.query(

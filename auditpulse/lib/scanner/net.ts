@@ -63,6 +63,7 @@ export interface SafeFetchOptions {
     timeoutMs?: number;
     maxRedirects?: number;
     maxBodyBytes?: number;
+    body?: string;
 }
 
 export interface SafeFetchResult {
@@ -98,6 +99,7 @@ export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Pr
             response = await fetch(currentUrl, {
                 method: opts.method ?? 'GET',
                 headers: { 'User-Agent': 'AuditPulseBot/1.0 (+https://auditpulse.example.com/about-our-scanner)', ...opts.headers },
+                body: opts.body,
                 redirect: 'manual',
                 signal: controller.signal,
             });

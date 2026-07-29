@@ -1,7 +1,7 @@
 import './styles.css';
 import { initAuth, resolveSession, requireSignIn } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
-import { renderFindings, gradeBadgeHtml, summaryChipsHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
+import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
 import { escapeHtml } from './escape-html.js';
 
 initAuth();
@@ -499,6 +499,7 @@ async function selectScan(scanId: string): Promise<void> {
         <div class="card">
             <div class="summary-row">${gradeBadgeHtml(scan.grade!, scan.score!)}</div>
             ${summaryChipsHtml(scan.summary)}
+            ${executiveSummaryHtml(scan.grade!, scan.score!, findings)}
             <div style="display:flex;gap:10px;margin:14px 0;flex-wrap:wrap">
                 <button type="button" id="email-report-btn">Email report to client</button>
                 <button type="button" class="ghost-button" id="copy-link-btn">Copy shareable link</button>

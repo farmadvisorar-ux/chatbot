@@ -50,6 +50,7 @@ export const outdatedJsLibrariesCheck: CheckDefinition = {
                     checkId: 'outdated-js-libraries',
                     title: `Potentially outdated ${rule.name} (${version}) in use`,
                     severity: 'medium',
+                    impact: 'Older library versions like this one often have publicly documented vulnerabilities, complete with example attack code — an attacker doesn\'t need to find a new bug, just check what version you\'re running against a known list.',
                     description: `Detected ${rule.name} version ${version} referenced on the page; ${rule.note}. Verify manually — the filename may not reflect the actual served content.`,
                     evidence: match[0],
                     remediation: `Upgrade ${rule.name} to ${rule.belowVersion} or later.`,

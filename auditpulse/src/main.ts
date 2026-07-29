@@ -1,7 +1,7 @@
 import './styles.css';
 import { initAuth, requireSignIn } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
-import { renderFindings, gradeBadgeHtml, summaryChipsHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
+import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
 import { initPricingToggle } from './pricing-toggle.js';
 
 initAuth();
@@ -32,8 +32,9 @@ form.addEventListener('submit', async event => {
             <div class="card">
                 <div class="summary-row">${gradeBadgeHtml(data.grade, data.score)}</div>
                 ${summaryChipsHtml(data.summary)}
+                ${executiveSummaryHtml(data.grade, data.score, data.findings)}
                 <div id="quick-findings" style="margin-top:16px"></div>
-                <p class="muted" style="font-size:13px;margin-top:18px">This free check only looked at response headers, TLS, and cookies. <a href="#pricing" style="color:var(--accent)">Sign up</a> to run a full audit (exposed files, CORS, DNS security, outdated libraries, and more) with automatic re-audits every 30 days.</p>
+                <p class="muted" style="font-size:13px;margin-top:18px">This free check only looked at response headers, TLS, and cookies. <a href="#pricing" style="color:var(--accent)">Sign up</a> to run a full, deep audit — every page linked from your homepage, exposed files, secrets in your JS bundles, CORS, DNS security, outdated libraries, and more — with automatic re-audits every 30 days.</p>
             </div>`;
         renderFindings(document.querySelector('#quick-findings')!, data.findings);
         resultEl.hidden = false;
