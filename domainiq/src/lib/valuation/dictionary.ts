@@ -1,16 +1,15 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const dirname = path.dirname(fileURLToPath(import.meta.url));
+// Bundled as a genuine module import (not read from disk at runtime via
+// fs) so the dictionary is always available wherever this code runs —
+// serverless, edge, or plain Node — with no dependence on a platform's
+// file-tracing/packaging step finding a file that's only ever touched via
+// a dynamic fs.readFileSync path.
+import wordArray from '../../data/wordlist.json';
 
 let wordSet: Set<string> | null = null;
 
 function loadWords(): Set<string> {
     if (wordSet) return wordSet;
-    const filePath = path.join(dirname, '..', '..', 'data', 'wordlist.txt');
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    wordSet = new Set(raw.split('\n').map((w) => w.trim()).filter(Boolean));
+    wordSet = new Set(wordArray as string[]);
     return wordSet;
 }
 

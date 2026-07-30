@@ -11,6 +11,7 @@
     "migrate": "node scripts/migrate.mjs",
     "migrate:http": "node scripts/migrate-http.mjs",
     "seed": "tsx scripts/seed.ts",
+    "seed:http": "tsx scripts/seed-http.ts",
     "test": "node --test --import tsx tests/*.test.ts"
   },
   "dependencies": {

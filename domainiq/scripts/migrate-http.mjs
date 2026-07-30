@@ -25,7 +25,7 @@ const statements = schema
 
 try {
     for (const statement of statements) {
-        await sql.query(statement);
+        await sql(statement);
         console.log('Applied:', statement.split('\n')[0].slice(0, 70));
     }
     console.log('Schema applied successfully via HTTP driver.');
