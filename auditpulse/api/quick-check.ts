@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 description: f.description,
                 evidence: f.evidence ?? null,
                 remediation: f.remediation,
-                references: f.references ?? [],
+                reference_links: f.references ?? [],
                 affected_url: f.affectedUrl ?? null,
             })),
         });

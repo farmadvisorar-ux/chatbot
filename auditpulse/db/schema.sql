@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS findings (
     description TEXT NOT NULL,
     evidence TEXT,
     remediation TEXT NOT NULL,
-    references TEXT[] NOT NULL DEFAULT '{}',
+    reference_links TEXT[] NOT NULL DEFAULT '{}', -- named to avoid the reserved SQL keyword "references"
     affected_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

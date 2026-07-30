@@ -12,7 +12,13 @@ if (!process.env.DATABASE_URL) {
 
 const sql = neon(process.env.DATABASE_URL);
 const schema = readFileSync(join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
-const statements = schema
+// Strip trailing inline comments (e.g. `ADD COLUMN foo TEXT; -- note`) before
+// splitting on statement-terminating semicolons — otherwise a comment sitting
+// between a `;` and the next newline hides the split point and glues that
+// statement to the next one, which Neon's HTTP driver rejects outright
+// ("cannot insert multiple commands into a prepared statement").
+const withoutTrailingComments = schema.replace(/[ \t]+--[^\n]*(?=\n|$)/g, '');
+const statements = withoutTrailingComments
     .split(/;\s*\n/)
     .map(statement => statement.trim())
     .filter(statement => statement.length > 0);

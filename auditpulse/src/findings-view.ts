@@ -9,7 +9,7 @@ export interface FindingRow {
     description: string;
     evidence: string | null;
     remediation: string;
-    references: string[];
+    reference_links: string[];
     affected_url: string | null;
     auto_fixable?: boolean;
     fix_status?: 'none' | 'pr_open' | 'pr_merged' | 'failed';
@@ -119,7 +119,7 @@ function findingHtml(f: FindingRow, index: number, showFixAction: boolean): stri
             ${f.evidence ? `<div class="label">Evidence</div><pre>${escapeHtml(f.evidence)}</pre>` : ''}
             <div class="label">How to fix it</div>
             <p>${escapeHtml(f.remediation)}</p>
-            ${f.references?.length ? `<div class="label">References</div><p>${f.references.map(r => `<a href="${escapeHtml(r)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r)}</a>`).join('<br>')}</p>` : ''}
+            ${f.reference_links?.length ? `<div class="label">References</div><p>${f.reference_links.map(r => `<a href="${escapeHtml(r)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r)}</a>`).join('<br>')}</p>` : ''}
             ${fixSectionHtml(f, showFixAction)}
         </div>
     </div>`;

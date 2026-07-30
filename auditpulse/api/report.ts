@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const { rows: findings } = await pool.query(
-        `SELECT title, severity, impact, description, evidence, remediation, references, affected_url, fix_status, fix_pr_url FROM findings
+        `SELECT title, severity, impact, description, evidence, remediation, reference_links, affected_url, fix_status, fix_pr_url FROM findings
          WHERE scan_id = $1
          ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END`,
         [scan.id],
