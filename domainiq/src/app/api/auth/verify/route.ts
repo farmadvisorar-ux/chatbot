@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(`${baseUrl}/verify-email?status=missing`);
     }
 
-    const row = consumeEmailToken(token, 'verify');
+    const row = await consumeEmailToken(token, 'verify');
     if (!row) {
         return NextResponse.redirect(`${baseUrl}/verify-email?status=invalid`);
     }
 
-    markEmailVerified(row.user_id);
+    await markEmailVerified(row.user_id);
     return NextResponse.redirect(`${baseUrl}/verify-email?status=success`);
 }

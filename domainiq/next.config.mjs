@@ -2,7 +2,7 @@
 const nextConfig = {
     reactStrictMode: true,
     experimental: {
-        serverComponentsExternalPackages: ['better-sqlite3'],
+        serverComponentsExternalPackages: ['pg'],
     },
     async headers() {
         return [

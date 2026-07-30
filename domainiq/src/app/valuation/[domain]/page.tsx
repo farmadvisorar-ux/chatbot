@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { performValuation } from '@/lib/valuation-request';
 import { getSession } from '@/lib/auth';
-import { getDb } from '@/lib/db';
+import { getPool } from '@/lib/db';
 import { formatUsd, formatUsdExact } from '@/lib/format';
 import ScoreBar from '@/components/ScoreBar';
 import SaveToWatchlistButton from '@/components/SaveToWatchlistButton';
@@ -45,8 +45,8 @@ export default async function ValuationPage({ params }: Props) {
     const session = await getSession();
     let alreadySaved = false;
     if (session) {
-        const row = getDb().prepare('SELECT 1 FROM watchlist WHERE user_id = ? AND domain = ?').get(session.id, result.domain);
-        alreadySaved = Boolean(row);
+        const { rows } = await getPool().query('SELECT 1 FROM watchlist WHERE user_id = $1 AND domain = $2', [session.id, result.domain]);
+        alreadySaved = rows.length > 0;
     }
 
     return (

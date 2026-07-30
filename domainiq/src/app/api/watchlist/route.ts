@@ -1,26 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { getDb } from '@/lib/db';
+import { getPool } from '@/lib/db';
 import { isValidDomain, normalizeDomain } from '@/lib/domain';
+
+interface WatchlistRow {
+    id: number;
+    domain: string;
+    label: string | null;
+    created_at: string;
+}
+
+interface LatestValuationRow {
+    mid_usd: number;
+    low_usd: number;
+    high_usd: number;
+    confidence: string;
+    created_at: string;
+}
 
 export async function GET() {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
 
-    const db = getDb();
-    const rows = db
-        .prepare('SELECT id, domain, label, created_at FROM watchlist WHERE user_id = ? ORDER BY created_at DESC')
-        .all(session.id) as { id: number; domain: string; label: string | null; created_at: string }[];
+    const pool = getPool();
+    const { rows } = await pool.query<WatchlistRow>(
+        'SELECT id, domain, label, created_at FROM watchlist WHERE user_id = $1 ORDER BY created_at DESC',
+        [session.id],
+    );
 
-    const withHistory = rows.map((row) => {
-        const latest = db
-            .prepare('SELECT mid_usd, low_usd, high_usd, confidence, created_at FROM valuations WHERE domain = ? ORDER BY created_at DESC LIMIT 1')
-            .get(row.domain) as { mid_usd: number; low_usd: number; high_usd: number; confidence: string; created_at: string } | undefined;
-        const previous = db
-            .prepare('SELECT mid_usd FROM valuations WHERE domain = ? ORDER BY created_at DESC LIMIT 1 OFFSET 1')
-            .get(row.domain) as { mid_usd: number } | undefined;
-        return { ...row, latest: latest ?? null, previousMidUsd: previous?.mid_usd ?? null };
-    });
+    const withHistory = await Promise.all(
+        rows.map(async (row) => {
+            const { rows: recent } = await pool.query<LatestValuationRow>(
+                'SELECT mid_usd, low_usd, high_usd, confidence, created_at FROM valuations WHERE domain = $1 ORDER BY created_at DESC LIMIT 2',
+                [row.domain],
+            );
+            return { ...row, latest: recent[0] ?? null, previousMidUsd: recent[1]?.mid_usd ?? null };
+        }),
+    );
 
     return NextResponse.json({ items: withHistory });
 }
@@ -37,13 +53,16 @@ export async function POST(req: NextRequest) {
     const domain = normalizeDomain(domainInput);
     const label = typeof body.label === 'string' ? body.label.slice(0, 80) : null;
 
-    const db = getDb();
-    const count = (db.prepare('SELECT COUNT(*) as c FROM watchlist WHERE user_id = ?').get(session.id) as { c: number }).c;
-    if (count >= 200) {
+    const pool = getPool();
+    const { rows } = await pool.query<{ c: string }>('SELECT COUNT(*) as c FROM watchlist WHERE user_id = $1', [session.id]);
+    if (Number(rows[0]?.c ?? 0) >= 200) {
         return NextResponse.json({ error: 'Watchlist limit reached (200 domains)' }, { status: 400 });
     }
 
-    db.prepare('INSERT OR IGNORE INTO watchlist (user_id, domain, label) VALUES (?, ?, ?)').run(session.id, domain, label);
+    await pool.query(
+        'INSERT INTO watchlist (user_id, domain, label) VALUES ($1, $2, $3) ON CONFLICT (user_id, domain) DO NOTHING',
+        [session.id, domain, label],
+    );
     return NextResponse.json({ ok: true });
 }
 
@@ -54,6 +73,6 @@ export async function DELETE(req: NextRequest) {
     const domainInput = req.nextUrl.searchParams.get('domain') ?? '';
     const domain = normalizeDomain(domainInput);
 
-    getDb().prepare('DELETE FROM watchlist WHERE user_id = ? AND domain = ?').run(session.id, domain);
+    await getPool().query('DELETE FROM watchlist WHERE user_id = $1 AND domain = $2', [session.id, domain]);
     return NextResponse.json({ ok: true });
 }

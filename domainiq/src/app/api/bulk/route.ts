@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     if (!session) {
         const ip = getClientIp(req.headers);
-        const { allowed } = checkAndConsumeRateLimit(ip, 3, 'bulk');
+        const { allowed } = await checkAndConsumeRateLimit(ip, 3, 'bulk');
         if (!allowed) {
             return NextResponse.json({ error: 'Free anonymous bulk-check limit reached for today. Sign up (free) for larger batches.' }, { status: 429 });
         }
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
             }
             try {
                 const result = await evaluateDomain(raw, { lookupAge: false });
-                recordValuation(result);
+                await recordValuation(result);
                 return { domain: result.domain, result };
             } catch (err) {
                 return { domain: raw, error: err instanceof Error ? err.message : 'Valuation failed' };

@@ -11,15 +11,15 @@ export async function POST(req: NextRequest) {
     }
     const { email, password } = parsed.data;
 
-    if (findUserByEmail(email)) {
+    if (await findUserByEmail(email)) {
         return NextResponse.json({ error: 'An account with that email already exists. Try signing in instead.' }, { status: 409 });
     }
 
     const passwordHash = await hashPassword(password);
-    const user = createUser(email, passwordHash);
+    const user = await createUser(email, passwordHash);
     await createSessionCookie(user);
 
-    const token = createEmailToken(user.id, 'verify', 24 * 60 * 60 * 1000);
+    const token = await createEmailToken(user.id, 'verify', 24 * 60 * 60 * 1000);
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin;
     const link = `${baseUrl}/api/auth/verify?token=${token}`;
     await sendEmail(email, 'Verify your DomainIQ account', verifyEmailHtml(link));

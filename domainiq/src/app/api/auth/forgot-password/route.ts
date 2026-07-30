@@ -10,11 +10,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 });
     }
 
-    const user = findUserByEmail(parsed.data);
+    const user = await findUserByEmail(parsed.data);
     // Always respond with the same success message, whether or not the
     // account exists, so this endpoint can't be used to enumerate emails.
     if (user) {
-        const token = createEmailToken(user.id, 'reset', 60 * 60 * 1000);
+        const token = await createEmailToken(user.id, 'reset', 60 * 60 * 1000);
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin;
         const link = `${baseUrl}/reset-password?token=${token}`;
         await sendEmail(user.email, 'Reset your DomainIQ password', resetPasswordHtml(link));

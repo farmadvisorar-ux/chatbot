@@ -11,15 +11,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: parsed.success ? 'Missing reset token' : parsed.error.issues[0]?.message }, { status: 400 });
     }
 
-    const row = consumeEmailToken(token, 'reset');
+    const row = await consumeEmailToken(token, 'reset');
     if (!row) {
         return NextResponse.json({ error: 'This reset link is invalid or has expired. Request a new one.' }, { status: 400 });
     }
 
     const passwordHash = await hashPassword(parsed.data);
-    updatePassword(row.user_id, passwordHash);
+    await updatePassword(row.user_id, passwordHash);
 
-    const user = findUserById(row.user_id)!;
+    const user = (await findUserById(row.user_id))!;
     await createSessionCookie(user);
 
     return NextResponse.json({ ok: true });

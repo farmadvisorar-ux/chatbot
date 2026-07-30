@@ -7,8 +7,8 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
     if (session.emailVerified) return NextResponse.json({ ok: true, alreadyVerified: true });
 
-    const user = findUserById(session.id)!;
-    const token = createEmailToken(user.id, 'verify', 24 * 60 * 60 * 1000);
+    const user = (await findUserById(session.id))!;
+    const token = await createEmailToken(user.id, 'verify', 24 * 60 * 60 * 1000);
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin;
     const link = `${baseUrl}/api/auth/verify?token=${token}`;
     await sendEmail(user.email, 'Verify your DomainIQ account', verifyEmailHtml(link));
