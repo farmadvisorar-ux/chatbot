@@ -4,7 +4,7 @@ import { error, json, requireMethod } from '../_lib/http.js';
 import { getPool } from '../_lib/db.js';
 import { runScan } from '../../lib/scanner/engine.js';
 import { sendReportEmail } from '../_lib/email.js';
-import { persistScanResult } from '../scans/index.js';
+import { persistScanResult } from '../_lib/persistScan.js';
 
 export const config = { maxDuration: 60 };
 
