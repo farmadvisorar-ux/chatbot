@@ -370,6 +370,26 @@ async function renderDetail(): Promise<void> {
             </div>
         </div>`).join('') : '<div class="empty">No scans yet.</div>';
 
+    const badgeSvgUrl = `${window.location.origin}/api/targets/${target.id}/badge.svg`;
+    const verifyPageUrl = `${window.location.origin}/verify.html?t=${target.id}`;
+    const embedSnippet = `<a href="${verifyPageUrl}" target="_blank" rel="noopener noreferrer"><img src="${badgeSvgUrl}" alt="Secured by AuditPulse" width="168" height="58"></a>`;
+    const trustBadgeHtml = target.verified && target.latest_grade ? `
+        <div class="card" style="margin-top:16px">
+            <h3 style="font-size:15px">Trust badge</h3>
+            <p class="muted" style="font-size:13px;margin:6px 0 14px">Show visitors this site is independently, regularly audited. Paste this on your site — it updates automatically as new audits complete, no re-embedding needed.</p>
+            <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+                <img src="${badgeSvgUrl}" alt="AuditPulse trust badge preview" width="168" height="58" style="border-radius:10px;flex-shrink:0">
+                <div style="flex:1;min-width:220px">
+                    <div class="field" style="margin-bottom:8px">
+                        <label for="badge-embed-code">Embed code</label>
+                        <textarea id="badge-embed-code" readonly rows="3" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;resize:none;width:100%">${escapeHtml(embedSnippet)}</textarea>
+                    </div>
+                    <button type="button" id="copy-badge-btn" class="mini-cta ghost-button">Copy embed code</button>
+                    <a href="${verifyPageUrl}" target="_blank" rel="noopener noreferrer" class="text-button" style="margin-left:4px">Preview verification page →</a>
+                </div>
+            </div>
+        </div>` : '';
+
     detailPanel.innerHTML = `
         <div class="card">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
@@ -390,6 +410,7 @@ async function renderDetail(): Promise<void> {
             ${setupSectionHtml}
             <p class="muted" style="font-size:12px;margin-top:10px">Last scanned: ${fmtDate(target.last_scanned_at)} ${target.auto_rescan && target.next_rescan_at ? `· Next auto re-audit: ${fmtDate(target.next_rescan_at)} (${fmtRelative(target.next_rescan_at, true)})` : ''}</p>
         </div>
+        ${trustBadgeHtml}
 
         <div class="card" style="margin-top:16px">
             <div style="display:flex;justify-content:space-between;align-items:center">
@@ -410,6 +431,14 @@ async function renderDetail(): Promise<void> {
     el<HTMLButtonElement>('verify-btn')?.addEventListener('click', () => checkVerification(target.id));
     el<HTMLButtonElement>('github-connect-btn')?.addEventListener('click', () => connectGithub(target.id));
     el<HTMLButtonElement>('github-disconnect-btn')?.addEventListener('click', () => disconnectGithub(target.id));
+    el<HTMLButtonElement>('copy-badge-btn')?.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(embedSnippet);
+            showToast('Embed code copied.');
+        } catch {
+            showToast('Could not copy — select the text manually.', true);
+        }
+    });
     detailPanel.querySelectorAll<HTMLElement>('.scan-item').forEach(item => {
         item.addEventListener('click', () => selectScan(item.dataset.id!));
     });

@@ -15,7 +15,7 @@ export interface ReportEmailFinding {
     remediation: string;
 }
 
-function severityColor(severity: string): string {
+export function severityColor(severity: string): string {
     switch (severity) {
         case 'critical': return '#e0245e';
         case 'high': return '#ff6b4a';
@@ -63,6 +63,8 @@ export async function sendReportEmail(params: {
     topFindings: ReportEmailFinding[];
     shareToken: string;
     senderName: string | null;
+    /** Full audit-certificate PDF (cover page + every finding) attached as durable proof of the audit — separate from the top-8 findings shown inline in the email body. */
+    pdfBuffer?: Buffer;
 }): Promise<{ ok: boolean; error?: string }> {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return { ok: false, error: 'Email sending is not configured on this deployment.' };
@@ -119,6 +121,9 @@ export async function sendReportEmail(params: {
             subject: `Security audit report: ${params.targetLabel} — grade ${params.grade}`,
             html,
             text,
+            attachments: params.pdfBuffer
+                ? [{ filename: `auditpulse-report-${params.targetLabel.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pdf`, content: params.pdfBuffer, contentType: 'application/pdf' }]
+                : undefined,
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true };

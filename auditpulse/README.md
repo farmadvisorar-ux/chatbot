@@ -142,6 +142,12 @@ short: create a Clerk app, enable Email/Google/Microsoft, set
 webhook (`user.created`/`user.updated`/`user.deleted`) at
 `/api/webhooks/clerk` and set `CLERK_WEBHOOK_SECRET`.
 
+Sign-up, sign-in, and password reset are all handled by Clerk's hosted
+modal (`openSignUp`/`openSignIn` in `src/auth.ts`) — there's no custom
+auth code to write. As long as the Email/password strategy is turned on for
+the Clerk app, "Forgot password?" is included automatically; nothing further
+is needed here to get the full sign-up/login/reset flow working.
+
 ## Setting up billing (Stripe)
 
 1. In the Stripe Dashboard, create one **Product** ("AuditPulse") with four
@@ -196,6 +202,34 @@ first) rather than just creation date. Selecting a site shows a score
 sparkline across its scan history, a collapsible "Setup" section that
 collapses to one line once verification + GitHub are both done, and the
 existing scan history / findings / email / fix-with-PR flows.
+
+## Trust badge and PDF certificate
+
+Once a site is verified (proven ownership) and has at least one completed
+scan, two things become available from its dashboard detail panel:
+
+- **Embeddable trust badge** — `GET /api/targets/:id/badge.svg` (public, no
+  auth) returns a self-contained SVG showing the site's current grade, which
+  the dashboard gives the user as a ready-to-paste `<a><img></a>` snippet.
+  The image never loads external fonts or resources (it can't — an
+  `<img>`-embedded SVG on a third-party site can't reach cross-origin
+  resources), and it 404s cleanly for an unknown/deleted target id rather
+  than rendering a plausible-looking fake result. The badge links to
+  `verify.html?t=:id`, a public page backed by `GET
+  /api/targets/:id/badge-info` that shows the domain, grade, and last-audited
+  date — never findings or evidence, since that page has no authentication
+  and is meant to be viewed by anyone.
+- **Certificate-style PDF** — `lib/pdf/report.ts` (via `pdfkit`, no headless
+  browser needed) renders a cover page (grade, score, verification status, a
+  plain-English "what this certifies" statement) followed by every finding
+  in full detail. It's attached to the report email both when a user clicks
+  "Email report" and on every automatic 30-day re-audit, so the emailed
+  proof and the badge/report stay in sync without the user having to
+  regenerate anything.
+
+Both routes are intentionally unauthenticated — a target id is an
+unguessable UUID, and neither route exposes anything beyond what the badge
+itself already shows to anyone who sees it embedded.
 
 ## What's implemented vs. what to harden before real-world launch
 

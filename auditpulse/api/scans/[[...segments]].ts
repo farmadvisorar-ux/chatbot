@@ -10,6 +10,8 @@ import { sendReportEmail } from '../_lib/email.js';
 import { persistScanResult } from '../_lib/persistScan.js';
 import { runScan } from '../../lib/scanner/engine.js';
 import { DisallowedTargetError } from '../../lib/scanner/net.js';
+import { generateAuditPdf } from '../../lib/pdf/report.js';
+import { siteOrigin } from '../_lib/stripe.js';
 
 export const config = { maxDuration: 30 };
 
@@ -156,7 +158,7 @@ async function handleEmail(req: VercelRequest, res: VercelResponse, user: { user
     }
 
     const { rows: scanRows } = await pool.query(
-        `SELECT s.*, t.url AS target_url, t.label AS target_label
+        `SELECT s.*, t.url AS target_url, t.label AS target_label, t.hostname, t.verified, t.auto_rescan
          FROM scans s JOIN targets t ON t.id = s.target_id
          WHERE s.id = $1 AND s.user_id = $2 AND s.status = 'completed'`,
         [id, user.userId],
@@ -167,12 +169,27 @@ async function handleEmail(req: VercelRequest, res: VercelResponse, user: { user
         return;
     }
 
-    const { rows: topFindings } = await pool.query(
-        `SELECT title, severity, impact, description, remediation FROM findings WHERE scan_id = $1
-         ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END
-         LIMIT 8`,
+    const { rows: allFindings } = await pool.query(
+        `SELECT title, severity, impact, description, evidence, remediation, reference_links, affected_url FROM findings WHERE scan_id = $1
+         ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END`,
         [id],
     );
+
+    const reportUrl = `${siteOrigin()}/report.html?token=${encodeURIComponent(scan.share_token)}`;
+    const pdfBuffer = await generateAuditPdf({
+        targetLabel: scan.target_label || scan.target_url,
+        targetUrl: scan.target_url,
+        hostname: scan.hostname,
+        scanDate: new Date(scan.completed_at || scan.started_at),
+        kind: scan.kind,
+        grade: scan.grade,
+        score: scan.score,
+        summary: scan.summary,
+        findings: allFindings,
+        reportUrl,
+        verifiedOwnership: scan.verified,
+        autoRescan: scan.auto_rescan,
+    });
 
     const result = await sendReportEmail({
         toEmail: recipient,
@@ -182,9 +199,10 @@ async function handleEmail(req: VercelRequest, res: VercelResponse, user: { user
         grade: scan.grade,
         score: scan.score,
         summary: scan.summary,
-        topFindings,
+        topFindings: allFindings.slice(0, 8),
         shareToken: scan.share_token,
         senderName: user.name,
+        pdfBuffer,
     });
 
     if (!result.ok) {

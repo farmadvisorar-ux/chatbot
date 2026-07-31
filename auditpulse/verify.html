@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verified by AuditPulse</title>
+    <meta name="description" content="Confirm a site's AuditPulse security audit — grade, last checked date, and verification status.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="topbar wrap">
+        <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
+    </header>
+
+    <main class="wrap-narrow" style="padding:24px 0 80px">
+        <div id="verify-root">
+            <div class="card center"><span class="spinner"></span></div>
+        </div>
+    </main>
+
+    <script type="module" src="./src/verify.ts"></script>
+</body>
+</html>

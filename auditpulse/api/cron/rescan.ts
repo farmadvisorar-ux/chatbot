@@ -5,6 +5,8 @@ import { getPool } from '../_lib/db.js';
 import { runScan } from '../../lib/scanner/engine.js';
 import { sendReportEmail } from '../_lib/email.js';
 import { persistScanResult } from '../_lib/persistScan.js';
+import { generateAuditPdf } from '../../lib/pdf/report.js';
+import { siteOrigin } from '../_lib/stripe.js';
 
 export const config = { maxDuration: 60 };
 
@@ -62,11 +64,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             );
 
             const recipients = [target.owner_email, ...(target.client_emails || [])];
-            const { rows: topFindings } = await pool.query(
-                `SELECT title, severity, impact, description, remediation FROM findings WHERE scan_id = $1
-                 ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END LIMIT 8`,
+            const { rows: allFindings } = await pool.query(
+                `SELECT title, severity, impact, description, evidence, remediation, reference_links, affected_url FROM findings WHERE scan_id = $1
+                 ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END`,
                 [scanId],
             );
+            const reportUrl = `${siteOrigin()}/report.html?token=${encodeURIComponent(shareToken)}`;
+            const pdfBuffer = await generateAuditPdf({
+                targetLabel: target.label || target.url,
+                targetUrl: target.url,
+                hostname: target.hostname,
+                scanDate: new Date(),
+                kind: 'full',
+                grade: outcome.grade,
+                score: outcome.score,
+                summary: outcome.summary as never,
+                findings: allFindings,
+                reportUrl,
+                verifiedOwnership: target.verified,
+                autoRescan: target.auto_rescan,
+            });
             for (const recipient of recipients) {
                 await sendReportEmail({
                     toEmail: recipient,
@@ -76,9 +93,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                     grade: outcome.grade,
                     score: outcome.score,
                     summary: outcome.summary as never,
-                    topFindings,
+                    topFindings: allFindings.slice(0, 8),
                     shareToken,
                     senderName: target.owner_name,
+                    pdfBuffer,
                 });
             }
 

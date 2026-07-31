@@ -4,10 +4,11 @@ import { validUrl, clean } from '../_lib/validate.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
 import { generateVerificationToken, verifyDomainOwnership } from '../_lib/verification.js';
-import { hasActiveAccess } from '../_lib/stripe.js';
+import { hasActiveAccess, siteOrigin } from '../_lib/stripe.js';
 import { encryptSecret } from '../_lib/crypto.js';
 import { getRepo, GitHubApiError } from '../../lib/github.js';
 import { normalizeTargetUrl } from '../../lib/scanner/engine.js';
+import { renderBadgeSvg } from '../_lib/badge.js';
 
 const FREE_TARGET_LIMIT = 1;
 const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
@@ -18,18 +19,32 @@ const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
  * Vercel's Hobby plan caps a deployment at 12 serverless functions, and this
  * app's route count outgrew that. URLs the frontend calls are unchanged;
  * only the file layout is different. Routing is by path segment count:
- *   []                -> GET list / POST create
- *   [id]               -> GET detail / DELETE
- *   [id, 'verify']     -> POST check ownership verification
- *   [id, 'github']     -> POST connect / DELETE disconnect GitHub repo
+ *   []                  -> GET list / POST create
+ *   [id]                 -> GET detail / DELETE
+ *   [id, 'verify']       -> POST check ownership verification
+ *   [id, 'github']       -> POST connect / DELETE disconnect GitHub repo
+ *   [id, 'badge.svg']    -> GET embeddable trust badge image (public)
+ *   [id, 'badge-info']   -> GET public verification summary (public)
+ * The badge routes are intentionally checked before requireAuth: they're
+ * meant to be fetched by an <img> tag on a third-party site or the public
+ * verify.html page, neither of which carries a Clerk session.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+    const raw = req.query.segments;
+    const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    if (segments.length === 2 && segments[1] === 'badge.svg') {
+        await handleBadgeSvg(req, res, getPool(), segments[0]);
+        return;
+    }
+    if (segments.length === 2 && segments[1] === 'badge-info') {
+        await handleBadgeInfo(req, res, getPool(), segments[0]);
+        return;
+    }
+
     const user = await requireAuth(req, res);
     if (!user) return;
     const pool = getPool();
-
-    const raw = req.query.segments;
-    const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
 
     if (segments.length === 0) {
         await handleCollection(req, res, user, pool);
@@ -48,6 +63,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
     error(res, 404, 'Not found.');
+}
+
+interface BadgeState {
+    hostname: string; label: string | null; verified: boolean; auto_rescan: boolean;
+    grade: string | null; score: number | null; started_at: string | null;
+}
+
+async function loadBadgeState(pool: ReturnType<typeof getPool>, id: string): Promise<BadgeState | null> {
+    const { rows } = await pool.query(
+        `SELECT t.hostname, t.label, t.verified, t.auto_rescan,
+                latest.grade, latest.score, latest.started_at
+         FROM targets t
+         LEFT JOIN LATERAL (
+             SELECT grade, score, started_at FROM scans
+             WHERE target_id = t.id AND status = 'completed'
+             ORDER BY started_at DESC LIMIT 1
+         ) latest ON true
+         WHERE t.id = $1`,
+        [id],
+    );
+    return rows[0] ?? null;
+}
+
+async function handleBadgeSvg(req: VercelRequest, res: VercelResponse, pool: ReturnType<typeof getPool>, id: string): Promise<void> {
+    if (!requireMethod(req, res, ['GET'])) return;
+    let state: BadgeState | null;
+    try {
+        state = await loadBadgeState(pool, id);
+    } catch {
+        state = null;
+    }
+    if (!state) {
+        res.status(404).end();
+        return;
+    }
+    const dateLabel = state.started_at ? new Date(state.started_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : null;
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=1800, s-maxage=1800');
+    res.status(200).send(renderBadgeSvg({ verified: state.verified, grade: state.grade, dateLabel }));
+}
+
+async function handleBadgeInfo(req: VercelRequest, res: VercelResponse, pool: ReturnType<typeof getPool>, id: string): Promise<void> {
+    if (!requireMethod(req, res, ['GET'])) return;
+    let state: BadgeState | null;
+    try {
+        state = await loadBadgeState(pool, id);
+    } catch {
+        state = null;
+    }
+    if (!state) {
+        error(res, 404, 'Not found.');
+        return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=600');
+    json(res, 200, {
+        hostname: state.hostname,
+        label: state.label,
+        verified: state.verified,
+        grade: state.grade,
+        score: state.score,
+        lastScannedAt: state.started_at,
+        autoRescan: state.auto_rescan,
+        badgeUrl: `${siteOrigin()}/api/targets/${id}/badge.svg`,
+        verifyUrl: `${siteOrigin()}/verify.html?t=${id}`,
+    });
 }
 
 async function handleCollection(req: VercelRequest, res: VercelResponse, user: { userId: string }, pool: ReturnType<typeof getPool>): Promise<void> {

@@ -13,6 +13,7 @@ export default defineConfig({
                 dashboard: resolve(__dirname, 'dashboard.html'),
                 report: resolve(__dirname, 'report.html'),
                 account: resolve(__dirname, 'account.html'),
+                verify: resolve(__dirname, 'verify.html'),
             },
         },
     },
