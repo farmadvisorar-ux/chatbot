@@ -1,44 +1,43 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { error, json, requireMethod, clientKey } from '../_lib/http.js';
-import { validUrl, clean } from '../_lib/validate.js';
+import { error, json, requireMethod } from '../_lib/http.js';
+import { clean } from '../_lib/validate.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
-import { generateVerificationToken, verifyDomainOwnership } from '../_lib/verification.js';
-import { hasActiveAccess, siteOrigin } from '../_lib/stripe.js';
+import { verifyDomainOwnership } from '../_lib/verification.js';
+import { siteOrigin } from '../_lib/stripe.js';
 import { encryptSecret } from '../_lib/crypto.js';
 import { getRepo, GitHubApiError } from '../../lib/github.js';
-import { normalizeTargetUrl } from '../../lib/scanner/engine.js';
 import { renderBadgeSvg } from '../_lib/badge.js';
 
-const FREE_TARGET_LIMIT = 1;
 const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
 
 /**
- * Single catch-all for every /api/targets* route, consolidated from what
- * were four separate functions (index, [id], [id]/verify, [id]/github) —
- * Vercel's Hobby plan caps a deployment at 12 serverless functions, and this
- * app's route count outgrew that. URLs the frontend calls are unchanged;
- * only the file layout is different. Routing is by path segment count:
- *   []                  -> GET list / POST create
- *   [id]                 -> GET detail / DELETE
- *   [id, 'verify']       -> POST check ownership verification
- *   [id, 'github']       -> POST connect / DELETE disconnect GitHub repo
- *   [id, 'badge.svg']    -> GET embeddable trust badge image (public)
- *   [id, 'badge-info']   -> GET public verification summary (public)
- * The badge routes are intentionally checked before requireAuth: they're
- * meant to be fetched by an <img> tag on a third-party site or the public
- * verify.html page, neither of which carries a Clerk session.
+ * Single dynamic segment only — `[[...segments]].ts` / `[...segments].ts`
+ * catch-alls were tried here first, but this deployment's build generates a
+ * route regex for bracket catch-alls that only ever matches exactly one path
+ * segment (effectively identical to `[id].ts`), so a second path segment
+ * like `/verify` or `/github` 404s before reaching the function. Extra
+ * actions are dispatched via `?action=` on this single-segment route
+ * instead of extra path segments:
+ *   (no action)      -> GET detail / DELETE
+ *   ?action=verify    -> POST check ownership verification
+ *   ?action=github    -> POST connect / DELETE disconnect GitHub repo
+ *   ?action=badge-svg  -> GET embeddable trust badge image (public)
+ *   ?action=badge-info -> GET public verification summary (public)
+ * The badge actions are checked before requireAuth: they're meant to be
+ * fetched by an <img> tag on a third-party site or the public verify.html
+ * page, neither of which carries a Clerk session.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-    const raw = req.query.segments;
-    const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const id = typeof req.query.id === 'string' ? req.query.id : '';
+    const action = typeof req.query.action === 'string' ? req.query.action : '';
 
-    if (segments.length === 2 && segments[1] === 'badge.svg') {
-        await handleBadgeSvg(req, res, getPool(), segments[0]);
+    if (action === 'badge-svg') {
+        await handleBadgeSvg(req, res, getPool(), id);
         return;
     }
-    if (segments.length === 2 && segments[1] === 'badge-info') {
-        await handleBadgeInfo(req, res, getPool(), segments[0]);
+    if (action === 'badge-info') {
+        await handleBadgeInfo(req, res, getPool(), id);
         return;
     }
 
@@ -46,23 +45,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!user) return;
     const pool = getPool();
 
-    if (segments.length === 0) {
-        await handleCollection(req, res, user, pool);
+    if (action === 'verify') {
+        await handleVerify(req, res, user, pool, id);
         return;
     }
-    if (segments.length === 1) {
-        await handleSingle(req, res, user, pool, segments[0]);
+    if (action === 'github') {
+        await handleGithub(req, res, user, pool, id);
         return;
     }
-    if (segments.length === 2 && segments[1] === 'verify') {
-        await handleVerify(req, res, user, pool, segments[0]);
+    if (action) {
+        error(res, 404, 'Not found.');
         return;
     }
-    if (segments.length === 2 && segments[1] === 'github') {
-        await handleGithub(req, res, user, pool, segments[0]);
-        return;
-    }
-    error(res, 404, 'Not found.');
+    await handleSingle(req, res, user, pool, id);
 }
 
 interface BadgeState {
@@ -125,79 +120,9 @@ async function handleBadgeInfo(req: VercelRequest, res: VercelResponse, pool: Re
         score: state.score,
         lastScannedAt: state.started_at,
         autoRescan: state.auto_rescan,
-        badgeUrl: `${siteOrigin()}/api/targets/${id}/badge.svg`,
+        badgeUrl: `${siteOrigin()}/api/targets/${id}?action=badge-svg`,
         verifyUrl: `${siteOrigin()}/verify.html?t=${id}`,
     });
-}
-
-async function handleCollection(req: VercelRequest, res: VercelResponse, user: { userId: string }, pool: ReturnType<typeof getPool>): Promise<void> {
-    if (!requireMethod(req, res, ['GET', 'POST'])) return;
-
-    if (req.method === 'GET') {
-        // LEFT JOIN LATERAL pulls in each target's most recent *completed*
-        // scan (if any) in the same query, so the dashboard can render grade
-        // badges and an overview without a request per site.
-        const { rows } = await pool.query(
-            `SELECT t.*, u.subscription_status,
-                    latest.id AS latest_scan_id, latest.grade AS latest_grade, latest.score AS latest_score,
-                    latest.summary AS latest_summary, latest.started_at AS latest_scanned_at
-             FROM targets t
-             JOIN users u ON u.id = t.user_id
-             LEFT JOIN LATERAL (
-                 SELECT id, grade, score, summary, started_at FROM scans
-                 WHERE target_id = t.id AND status = 'completed'
-                 ORDER BY started_at DESC LIMIT 1
-             ) latest ON true
-             WHERE t.user_id = $1 ORDER BY t.created_at DESC`,
-            [user.userId],
-        );
-        json(res, 200, { targets: rows });
-        return;
-    }
-
-    // POST — add a new target.
-    const url = clean(req.body?.url, 2048);
-    const label = clean(req.body?.label, 200) || null;
-    const attested = req.body?.attestedAuthorization === true;
-
-    if (!validUrl(url)) {
-        error(res, 400, 'Enter a valid http(s):// URL.');
-        return;
-    }
-    if (!attested) {
-        error(res, 400, 'You must confirm you own this site or have explicit authorization to test it.');
-        return;
-    }
-
-    let hostname: string, targetUrl: string;
-    try {
-        ({ hostname, targetUrl } = normalizeTargetUrl(url));
-    } catch {
-        error(res, 400, 'Could not parse that URL.');
-        return;
-    }
-
-    const { rows: userRows } = await pool.query('SELECT subscription_status, plan, plan_expires_at FROM users WHERE id = $1', [user.userId]);
-    const subscribed = hasActiveAccess(userRows[0] ?? {});
-
-    if (!subscribed) {
-        const { rows: countRows } = await pool.query('SELECT count(*) FROM targets WHERE user_id = $1', [user.userId]);
-        if (Number(countRows[0].count) >= FREE_TARGET_LIMIT) {
-            error(res, 402, `Free accounts can add ${FREE_TARGET_LIMIT} site. Upgrade to Audit ($7/mo or $59.99/yr) to add more.`);
-            return;
-        }
-    }
-
-    const token = generateVerificationToken();
-    const ip = clientKey(req);
-    const { rows } = await pool.query(
-        `INSERT INTO targets (user_id, url, hostname, label, verification_token, attested_authorization, attested_at, attested_ip)
-         VALUES ($1, $2, $3, $4, $5, true, now(), $6)
-         RETURNING *`,
-        [user.userId, targetUrl, hostname, label, token, ip],
-    );
-
-    json(res, 201, { target: rows[0] });
 }
 
 async function handleSingle(req: VercelRequest, res: VercelResponse, user: { userId: string }, pool: ReturnType<typeof getPool>, id: string): Promise<void> {

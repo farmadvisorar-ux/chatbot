@@ -33,7 +33,7 @@ async function load(): Promise<void> {
         return;
     }
     try {
-        const res = await fetch(`/api/targets/${encodeURIComponent(targetId)}/badge-info`);
+        const res = await fetch(`/api/targets/${encodeURIComponent(targetId)}?action=badge-info`);
         const data: BadgeInfo & { error?: string } = await res.json();
         if (!res.ok) throw new Error(data.error || 'Not found.');
         render(data);

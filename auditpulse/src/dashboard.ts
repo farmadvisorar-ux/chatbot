@@ -370,7 +370,7 @@ async function renderDetail(): Promise<void> {
             </div>
         </div>`).join('') : '<div class="empty">No scans yet.</div>';
 
-    const badgeSvgUrl = `${window.location.origin}/api/targets/${target.id}/badge.svg`;
+    const badgeSvgUrl = `${window.location.origin}/api/targets/${target.id}?action=badge-svg`;
     const verifyPageUrl = `${window.location.origin}/verify.html?t=${target.id}`;
     const embedSnippet = `<a href="${verifyPageUrl}" target="_blank" rel="noopener noreferrer"><img src="${badgeSvgUrl}" alt="Secured by AuditPulse" width="168" height="58"></a>`;
     const trustBadgeHtml = target.verified && target.latest_grade ? `
@@ -451,7 +451,7 @@ async function checkVerification(targetId: string): Promise<void> {
     const statusEl = el<HTMLElement>('verify-status');
     statusEl.textContent = 'Checking…';
     try {
-        const result = await apiFetch<{ verified: boolean }>(`/targets/${targetId}/verify`, { method: 'POST' });
+        const result = await apiFetch<{ verified: boolean }>(`/targets/${targetId}?action=verify`, { method: 'POST' });
         if (result.verified) {
             showToast('Ownership verified!');
             await renderDetail();
@@ -472,7 +472,7 @@ async function connectGithub(targetId: string): Promise<void> {
     statusEl.textContent = 'Verifying…';
     statusEl.className = 'status';
     try {
-        await apiFetch(`/targets/${targetId}/github`, { method: 'POST', body: { repo, token } });
+        await apiFetch(`/targets/${targetId}?action=github`, { method: 'POST', body: { repo, token } });
         showToast('GitHub repo connected.');
         await renderDetail();
     } catch (err) {
@@ -482,7 +482,7 @@ async function connectGithub(targetId: string): Promise<void> {
 }
 
 async function disconnectGithub(targetId: string): Promise<void> {
-    await apiFetch(`/targets/${targetId}/github`, { method: 'DELETE' });
+    await apiFetch(`/targets/${targetId}?action=github`, { method: 'DELETE' });
     showToast('GitHub repo disconnected.');
     await renderDetail();
 }
@@ -620,7 +620,7 @@ el<HTMLButtonElement>('email-report-submit').addEventListener('click', async () 
     statusEl.textContent = 'Sending…';
     statusEl.className = 'status';
     try {
-        await apiFetch(`/scans/${emailModalScanId}/email`, { method: 'POST', body: { recipient, note: note || undefined } });
+        await apiFetch(`/scans/${emailModalScanId}?action=email`, { method: 'POST', body: { recipient, note: note || undefined } });
         emailModal.hidden = true;
         showToast(`Report sent to ${recipient}.`);
     } catch (err) {

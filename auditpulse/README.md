@@ -208,17 +208,19 @@ existing scan history / findings / email / fix-with-PR flows.
 Once a site is verified (proven ownership) and has at least one completed
 scan, two things become available from its dashboard detail panel:
 
-- **Embeddable trust badge** — `GET /api/targets/:id/badge.svg` (public, no
-  auth) returns a self-contained SVG showing the site's current grade, which
-  the dashboard gives the user as a ready-to-paste `<a><img></a>` snippet.
-  The image never loads external fonts or resources (it can't — an
+- **Embeddable trust badge** — `GET /api/targets/:id?action=badge-svg`
+  (public, no auth) returns a self-contained SVG showing the site's current
+  grade, which the dashboard gives the user as a ready-to-paste `<a><img></a>`
+  snippet. The image never loads external fonts or resources (it can't — an
   `<img>`-embedded SVG on a third-party site can't reach cross-origin
   resources), and it 404s cleanly for an unknown/deleted target id rather
   than rendering a plausible-looking fake result. The badge links to
   `verify.html?t=:id`, a public page backed by `GET
-  /api/targets/:id/badge-info` that shows the domain, grade, and last-audited
-  date — never findings or evidence, since that page has no authentication
-  and is meant to be viewed by anyone.
+  /api/targets/:id?action=badge-info` that shows the domain, grade, and
+  last-audited date — never findings or evidence, since that page has no
+  authentication and is meant to be viewed by anyone. (Actions are dispatched
+  via a query param rather than an extra path segment — see the comment atop
+  `api/targets/[id].ts` for why.)
 - **Certificate-style PDF** — `lib/pdf/report.ts` (via `pdfkit`, no headless
   browser needed) renders a cover page (grade, score, verification status, a
   plain-English "what this certifies" statement) followed by every finding
