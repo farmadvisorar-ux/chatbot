@@ -5,6 +5,7 @@ import { segmentLabel, isDictionaryWord } from './dictionary';
 import { scoreBrandability, scoreLength } from './linguistics';
 import { findComps, type MatchedComp } from './comps';
 import { lookupDomainAge, type RdapResult } from './rdap';
+import { baselineValueUsd } from './pricing-curve';
 import { getPool } from '../db';
 
 export type Confidence = 'low' | 'medium' | 'high';
@@ -38,12 +39,6 @@ export interface ValuationResult {
     highUsd: number;
     confidence: Confidence;
     generatedAt: string;
-}
-
-function curve(score: number): number {
-    const MIN_BASE = 15;
-    const GROWTH = 1.12;
-    return MIN_BASE * Math.pow(GROWTH, Math.max(0, Math.min(100, score)));
 }
 
 export async function evaluateDomain(input: string, opts: { lookupAge?: boolean } = {}): Promise<ValuationResult> {
@@ -92,7 +87,7 @@ export async function evaluateDomain(input: string, opts: { lookupAge?: boolean 
     ];
 
     const linguisticScore = factors.reduce((sum, f) => sum + f.score * f.weight, 0);
-    const linguisticBase = curve(linguisticScore);
+    const linguisticBase = baselineValueUsd(linguisticScore);
 
     const keywordMultiplier = keywordMatch?.multiplier ?? 1.0;
 
@@ -113,6 +108,7 @@ export async function evaluateDomain(input: string, opts: { lookupAge?: boolean 
         charCount,
         wordCount: wordCountTag,
         category: keywordMatch?.category ?? null,
+        referencePriceUsd: formulaPrice,
     });
 
     let midUsd: number;

@@ -1,7 +1,7 @@
 const STEPS = [
     {
         title: '1. Length & structure',
-        body: 'Shorter root labels score higher on a non-linear curve — a 4-character domain is worth disproportionately more than a 12-character one, mirroring real aftermarket pricing.',
+        body: 'Shorter root labels score higher, but not by a smooth exponential — the price mapping (step 6 below) is banded so that only truly exceptional short strings reach real premium territory, matching how the aftermarket actually behaves rather than a formula that explodes upward in the middle of the range.',
     },
     {
         title: '2. Word composition',
@@ -20,8 +20,12 @@ const STEPS = [
         body: 'The domain is checked against a curated table of high buyer-intent keywords (insurance, loans, AI, casino, crypto, and more), each with a demand multiplier reflecting typical end-buyer budgets in that category.',
     },
     {
-        title: '6. Comparable sales',
-        body: 'We match the domain against a curated dataset of real, publicly reported domain sales by extension, category and length, and blend a similarity-weighted implied price into the final estimate — the more relevant comps we find, the more they influence the number, and the higher the reported confidence.',
+        title: '6. Baseline price curve',
+        body: 'Length, word composition and brandability combine into a single 0-100 "linguistic score," which maps to a baseline dollar value via a set of authored price-band control points (log-interpolated between them), not a single runaway exponential. That baseline is then multiplied by the extension\'s price multiplier and any matched keyword\'s demand multiplier.',
+    },
+    {
+        title: '7. Comparable sales, price-gated',
+        body: 'We match the domain against a dataset of 100+ reference sales by extension, category and length — but a comp only gets real weight if its price is also in the same order of magnitude as this domain\'s own independent baseline estimate. Without that gate, a handful of famous multi-million-dollar headline sales (which is disproportionately what\'s publicly documented) would drag an ordinary domain\'s price toward them just because both happen to be, say, a 9-character .com. If the exact domain you searched has a recorded sale, that figure is used directly instead of the formula.',
     },
     {
         title: '+ Registration age (when available)',
@@ -50,19 +54,41 @@ export default function HowItWorksPage() {
             </div>
 
             <div className="card p-6">
-                <h2 className="font-semibold">Putting it together</h2>
+                <h2 className="font-semibold">What's in the comps dataset</h2>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                    Length, word composition and brandability combine into a single 0-100 &ldquo;linguistic score,&rdquo;
-                    which maps to a baseline dollar value through an exponential curve (short, clean, real-word domains
-                    are worth exponentially more, not linearly more). That baseline is then multiplied by the extension's
-                    price multiplier and any matched keyword's demand multiplier, and finally blended with the
-                    comparable-sales estimate in proportion to how many strong comps we found. The result is a midpoint
-                    estimate, a low/high range sized by how confident the comps signal is, and a confidence label.
+                    Two kinds of rows, and every valuation report tells you which kind matched:
                 </p>
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-                    This is a transparent heuristic model, not a machine-learning black box and not a live market feed —
-                    it won't know about a private negotiation that happened yesterday. Treat every number as a
-                    well-reasoned estimate to anchor your own research, not a guaranteed sale price.
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
+                    <li>
+                        <strong>Reported industry press sales</strong> — real domain-name transactions covered by
+                        domain-industry trade press or mainstream business reporting. These skew toward famous,
+                        high-dollar deals, since that's overwhelmingly what gets public coverage.
+                    </li>
+                    <li>
+                        <strong>Illustrative aftermarket-tier estimates</strong> — synthetic reference points spanning
+                        the price tiers that dominate the real aftermarket (hundreds to low tens-of-thousands of
+                        dollars) and extensions beyond .com, grounded in generally-known price-band ratios per
+                        extension and quality tier rather than any single transaction. These exist to give ordinary,
+                        non-headline domains something realistic to be compared against.
+                    </li>
+                </ul>
+            </div>
+
+            <div className="card p-6">
+                <h2 className="font-semibold">How this compares to paid appraisal tools</h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    Commercial tools like GoDaddy's appraisal, Estibot, or HumbleWorth draw on internal marketplace
+                    data covering hundreds of thousands of real listings and sales, plus signals this tool doesn't
+                    have access to — search volume/CPC data, backlink and traffic metrics, live marketplace asking
+                    prices. Some train a machine-learning model on that data rather than using authored rules.
+                </p>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    DomainIQ's methodology follows the same general shape (length + extension + keyword demand +
+                    comparable sales) but runs entirely on a small, transparent, hand-curated dataset with no paid
+                    data feed behind it. Expect it to track well for domains that closely resemble something in that
+                    dataset, and to be directionally reasonable — not precisely matched to any specific paid tool —
+                    everywhere else. Treat every number here as a well-reasoned estimate to anchor your own research,
+                    not a guaranteed sale price or a substitute for a professional appraisal on a high-value domain.
                 </p>
             </div>
         </div>
