@@ -17,52 +17,77 @@
     </header>
 
     <main>
-        <section class="hero wrap-narrow">
-            <span class="eyebrow">Security audits in minutes</span>
-            <h1>Find every vulnerability on your website — before someone else does.</h1>
-            <p class="lead">Enter a URL below for a free instant check. Sign up to run the full 18-check audit — crawled across your site, explained in plain English — with automatic re-audits every 30 days. Add Audit + Fix for one-click pull requests on what it finds.</p>
+        <section class="hero wrap">
+            <div class="hero-grid">
+                <div class="hero-copy">
+                    <span class="eyebrow">Security audits in minutes</span>
+                    <h1>Find every vulnerability on your website — before someone else does.</h1>
+                    <p class="lead">Enter a URL below for a free instant check. Sign up to run the full 18-check audit — crawled across your site, explained in plain English — with automatic re-audits every 30 days. Add Audit + Fix for one-click pull requests on what it finds.</p>
 
-            <form id="quick-check-form" class="quick-check-form">
-                <input id="quick-check-url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="off">
-                <button type="submit" id="quick-check-submit">Scan for free</button>
-            </form>
-            <p class="legal-note">One passive request — the same one your browser already makes — reading response headers, TLS, and cookies. No sign-up needed. Only scan sites you own or are authorized to test.</p>
+                    <form id="quick-check-form" class="quick-check-form">
+                        <input id="quick-check-url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="off">
+                        <button type="submit" id="quick-check-submit">Scan for free</button>
+                    </form>
+                    <p class="legal-note">One passive request — the same one your browser already makes — reading response headers, TLS, and cookies. No sign-up needed. Only scan sites you own or are authorized to test.</p>
 
-            <div id="quick-check-status" class="status" role="status" aria-live="polite"></div>
-            <div id="quick-check-result" style="text-align:left;margin-top:24px" hidden></div>
+                    <div id="quick-check-status" class="status" role="status" aria-live="polite"></div>
+                    <div id="quick-check-result" style="text-align:left;margin-top:24px" hidden></div>
+                </div>
+                <div class="hero-visual">
+                    <div class="scan-console" aria-hidden="true">
+                        <div class="console-bar">
+                            <span></span><span></span><span></span>
+                            <span class="console-title">auditpulse — sample scan</span>
+                        </div>
+                        <div class="console-body" id="console-body"></div>
+                    </div>
+                    <p class="hero-visual-caption" aria-hidden="true">What a scan looks like — illustrative, not a live result.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="wrap">
+            <div class="stat-strip" data-reveal>
+                <div class="stat-strip-item"><strong>18</strong><span>automated checks</span></div>
+                <div class="stat-strip-item"><strong>&lt;60s</strong><span>typical scan time</span></div>
+                <div class="stat-strip-item"><strong>100%</strong><span>passive, non-destructive</span></div>
+                <div class="stat-strip-item"><strong>0</strong><span>exploitation, ever</span></div>
+            </div>
         </section>
 
         <section class="wrap">
             <div class="feature-grid">
-                <div class="card feature-card">
+                <div class="card feature-card feature-card--lg" data-reveal>
                     <div class="feature-badge">18</div>
                     <h3>18 checks, every time</h3>
                     <p>Headers, TLS, cookies, CORS, hardcoded secrets in your JS bundles, exposed backups, outdated libraries, DNS email security, and more — crawled across the pages linked from your homepage, not just "/".</p>
                 </div>
-                <div class="card feature-card">
+                <div class="card feature-card" data-reveal>
                     <div class="feature-badge">≡</div>
                     <h3>Built to be understood</h3>
                     <p>Every finding leads with what could actually go wrong, in plain English. The technical detail and exact fix are one click away — not the whole story up front.</p>
                 </div>
-                <div class="card feature-card">
+                <div class="card feature-card" data-reveal>
                     <div class="feature-badge">↗</div>
                     <h3>Reports clients can open</h3>
                     <p>Email a report straight to a client or teammate. They open the full interactive findings from the link alone — no account, no password.</p>
                 </div>
-                <div class="card feature-card">
+                <div class="card feature-card" data-reveal>
                     <div class="feature-badge">↻</div>
                     <h3>Checked again in 30 days</h3>
                     <p>Verified sites on a paid plan get re-scanned automatically every month, with the new report landing in your inbox the moment it's done.</p>
                 </div>
-                <div class="card feature-card">
+                <div class="card feature-card" data-reveal>
                     <div class="feature-badge">✓</div>
                     <h3>Only sites you own</h3>
                     <p>A full audit requires proving control of the domain first — a DNS record or a file upload. There's no way to point AuditPulse at a site that isn't yours.</p>
                 </div>
-                <div class="card feature-card">
+                <div class="card feature-card feature-card--wide" data-reveal>
                     <div class="feature-badge">0</div>
-                    <h3>Nothing to install</h3>
-                    <p>No agent, no plugin, no config file. Paste a URL, verify it's yours, and the first audit is running in under a minute.</p>
+                    <div>
+                        <h3>Nothing to install</h3>
+                        <p>No agent, no plugin, no config file. Paste a URL, verify it's yours, and the first audit is running in under a minute.</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -73,7 +98,7 @@
                 <button type="button" class="toggle-option" data-interval="year">Annual — pay once</button>
             </div>
             <div class="pricing-grid">
-                <div class="card pricing-card" data-plan="audit">
+                <div class="card pricing-card" data-plan="audit" data-reveal>
                     <h2>Audit</h2>
                     <div class="price"><span class="price-amount">$7</span><span class="price-suffix">/month</span></div>
                     <p class="save-badge" hidden>One-time fee, no auto-renewal</p>
@@ -86,7 +111,7 @@
                     </ul>
                     <button type="button" class="pricing-cta ghost-button" data-plan="audit" style="width:100%">Choose Audit</button>
                 </div>
-                <div class="card pricing-card featured" data-plan="audit_fix">
+                <div class="card pricing-card featured" data-plan="audit_fix" data-reveal>
                     <span class="pricing-badge">Also fixes what it finds</span>
                     <h2>Audit + Fix</h2>
                     <div class="price"><span class="price-amount">$14</span><span class="price-suffix">/month</span></div>

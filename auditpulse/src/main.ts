@@ -3,9 +3,15 @@ import { initAuth, requireSignIn } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
 import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
 import { initPricingToggle } from './pricing-toggle.js';
+import { initScanConsole } from './scan-console.js';
+import { initScrollReveal } from './reveal.js';
+import { initHeroGlow } from './hero-glow.js';
 
 initAuth();
 const getBillingInterval = initPricingToggle();
+initScanConsole();
+initScrollReveal();
+initHeroGlow();
 
 const form = document.querySelector<HTMLFormElement>('#quick-check-form')!;
 const input = document.querySelector<HTMLInputElement>('#quick-check-url')!;
