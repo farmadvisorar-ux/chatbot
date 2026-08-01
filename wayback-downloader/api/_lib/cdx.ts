@@ -6,6 +6,13 @@
 const CDX_API_URL = 'https://web.archive.org/cdx/search/cdx';
 const FIELDS = ['timestamp', 'original', 'statuscode', 'digest', 'mimetype'];
 
+// Internet Archive's infrastructure is known to be more lenient toward
+// identified bots than anonymous default-fetch traffic (which is what
+// undici sends with no headers at all) — some cloud/datacenter IP ranges
+// see requests silently dropped without one.
+export const WAYBACK_USER_AGENT =
+    'wayback-downloader-web/1.0 (+https://github.com/farmadvisorar-ux/chatbot/tree/main/wayback-downloader)';
+
 export class CdxError extends Error {}
 
 export interface Snapshot {
@@ -69,6 +76,19 @@ export function parseCdxJson(data: unknown): Snapshot[] {
         .filter((s) => s.timestamp && s.original);
 }
 
+async function fetchOnce(url: string, timeoutMs: number): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': WAYBACK_USER_AGENT, Accept: 'application/json' },
+        });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export async function fetchSnapshots(
     domain: string,
     opts: CdxQueryOptions = {},
@@ -79,15 +99,21 @@ export async function fetchSnapshots(
     }
 
     const params = buildCdxParams(domain, opts);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const url = `${CDX_API_URL}?${params.toString()}`;
+
+    // A reset or hung connection can be transient network flakiness rather
+    // than a hard block, so one retry (splitting the time budget) is worth
+    // it before giving up.
+    const perAttemptTimeout = Math.max(5000, Math.floor(timeoutMs / 2));
     let response: Response;
     try {
-        response = await fetch(`${CDX_API_URL}?${params.toString()}`, { signal: controller.signal });
-    } catch (err) {
-        throw new CdxError(`Could not reach the Wayback Machine CDX API: ${(err as Error).message}`);
-    } finally {
-        clearTimeout(timer);
+        response = await fetchOnce(url, perAttemptTimeout);
+    } catch {
+        try {
+            response = await fetchOnce(url, perAttemptTimeout);
+        } catch (err) {
+            throw new CdxError(`Could not reach the Wayback Machine CDX API: ${(err as Error).message}`);
+        }
     }
 
     if (!response.ok) {
