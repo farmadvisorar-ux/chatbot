@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { json, error, requireMethod } from '../_lib/http.js';
+import { json, error, requireMethod, withErrorHandling } from '../_lib/http.js';
 import { loadJobState, saveJobState, toPublicJobState } from '../_lib/jobStore.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
 
     const id = String(req.query.id ?? '');
@@ -22,3 +22,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     json(res, 200, toPublicJobState(state));
 }
+
+export default withErrorHandling(handler);
