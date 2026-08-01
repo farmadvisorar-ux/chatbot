@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
 import { json, error, requireMethod, withErrorHandling } from '../../_lib/http.js';
-import { archiveUrl, type Snapshot } from '../../_lib/cdx.js';
+import { archiveUrl, WAYBACK_USER_AGENT, type Snapshot } from '../../_lib/cdx.js';
 import { urlToFilepath } from '../../_lib/urlmap.js';
 import {
     loadJobState,
@@ -32,7 +32,10 @@ async function downloadOne(jobId: string, snap: Snapshot, allSnapshots: boolean,
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-        const resp = await fetch(archiveUrl(snap), { signal: controller.signal });
+        const resp = await fetch(archiveUrl(snap), {
+            signal: controller.signal,
+            headers: { 'User-Agent': WAYBACK_USER_AGENT },
+        });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const buffer = await resp.arrayBuffer();
         const contentType = resp.headers.get('content-type') || 'application/octet-stream';
