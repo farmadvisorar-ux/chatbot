@@ -3,125 +3,371 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DAREALTYTE — Wayback Recovery &amp; Deployment Engine</title>
+<title>DAREALTYTE — Wayback Recovery &amp; Instant Deployment Engine</title>
+<meta name="description" content="DAREALTYTE recovers a domain's historical website from the Wayback Machine, sanitizes it, and deploys it live in one click — powered by Vercel.">
 <style>
     :root {
-        color-scheme: light dark;
-        --bg: #0b0d12;
-        --panel: #12151c;
-        --border: #262b36;
-        --text: #e8eaf0;
-        --muted: #9aa2b1;
-        --accent: #5b8cff;
-        --danger: #ff6b6b;
-        --ok: #35d399;
-    }
-    @media (prefers-color-scheme: light) {
-        :root {
-            --bg: #f5f6f8;
-            --panel: #ffffff;
-            --border: #dde1e8;
-            --text: #14161c;
-            --muted: #5b6270;
-        }
+        color-scheme: dark;
+        --bg: #07080c;
+        --bg-2: #0d1018;
+        --panel: #12151f;
+        --panel-2: #171b28;
+        --border: #262b3a;
+        --text: #f0f2f7;
+        --muted: #9aa2b8;
+        --accent: #6d8bff;
+        --accent-2: #a06dff;
+        --accent-3: #35d399;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
         margin: 0;
-        font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: var(--bg);
         color: var(--text);
     }
-    main { max-width: 880px; margin: 0 auto; padding: 40px 20px 80px; }
-    h1 { font-size: 1.6rem; margin: 0 0 4px; }
-    .tagline { color: var(--muted); margin: 0 0 32px; }
-    .panel {
+    a { color: inherit; text-decoration: none; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav.top {
+        position: sticky; top: 0; z-index: 10;
+        backdrop-filter: blur(10px);
+        background: rgba(7,8,12,0.75);
+        border-bottom: 1px solid var(--border);
+    }
+    nav.top .wrap { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; }
+    .logo { font-weight: 800; font-size: 1.1rem; letter-spacing: 0.02em; }
+    .logo .dot { color: var(--accent); }
+    .nav-links { display: flex; align-items: center; gap: 22px; font-size: 0.9rem; color: var(--muted); }
+    .nav-links a:hover { color: var(--text); }
+    .btn {
+        display: inline-block;
+        padding: 9px 18px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        border: 1px solid var(--border);
+    }
+    .btn.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        border: none;
+        color: white;
+    }
+
+    /* Hero */
+    .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 96px 0 80px;
+        text-align: center;
+    }
+    .hero::before {
+        content: "";
+        position: absolute;
+        inset: -40% -10% auto -10%;
+        height: 700px;
+        background:
+            radial-gradient(circle at 30% 20%, rgba(109,139,255,0.35), transparent 55%),
+            radial-gradient(circle at 75% 35%, rgba(160,109,255,0.28), transparent 50%);
+        filter: blur(40px);
+        animation: drift 14s ease-in-out infinite alternate;
+        z-index: -1;
+    }
+    @keyframes drift {
+        from { transform: translateY(0) scale(1); }
+        to { transform: translateY(30px) scale(1.05); }
+    }
+    .eyebrow {
+        display: inline-block;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        background: rgba(109,139,255,0.12);
+        border: 1px solid rgba(109,139,255,0.35);
+        padding: 6px 14px;
+        border-radius: 999px;
+        margin-bottom: 24px;
+    }
+    h1.hero-title {
+        font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+        line-height: 1.05;
+        font-weight: 800;
+        margin: 0 0 20px;
+        letter-spacing: -0.02em;
+    }
+    h1.hero-title .grad {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+    .hero p.sub {
+        max-width: 620px;
+        margin: 0 auto 36px;
+        color: var(--muted);
+        font-size: 1.1rem;
+    }
+    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn.large { padding: 14px 28px; font-size: 0.98rem; }
+
+    /* Sections */
+    section { padding: 88px 0; border-top: 1px solid var(--border); }
+    .section-head { max-width: 640px; margin: 0 auto 52px; text-align: center; }
+    .section-head h2 { font-size: 2rem; margin: 0 0 12px; letter-spacing: -0.01em; }
+    .section-head p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+
+    /* Acronym cards */
+    .acronym-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    @media (max-width: 760px) { .acronym-grid { grid-template-columns: 1fr; } }
+    .acronym-card {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 32px;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .acronym-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+    .acronym-card .short {
+        font-size: 2.6rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        margin: 0 0 4px;
+    }
+    .acronym-card .role { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 18px; }
+    .letter-breakdown { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .letter-breakdown li {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-size: 0.85rem;
+    }
+    .letter-breakdown b { color: var(--accent); }
+    .acronym-card .desc { color: var(--muted); margin: 0; font-size: 0.95rem; }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    @media (max-width: 880px) { .steps { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
+    .step {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px;
+        border-radius: 16px;
+        padding: 24px 20px;
+    }
+    .step .num {
+        width: 34px; height: 34px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: rgba(109,139,255,0.15);
+        color: var(--accent);
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+    .step h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .step p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+    /* What it does */
+    .what-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 760px) { .what-grid { grid-template-columns: 1fr; } }
+    .feature {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+    }
+    .feature h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .feature p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+    /* Vercel band */
+    .vercel-band {
+        border-top: 1px solid var(--border);
+        padding: 72px 0;
+        text-align: center;
+        background: radial-gradient(circle at 50% 0%, rgba(109,139,255,0.10), transparent 60%);
+    }
+    .vercel-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 20px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.03);
+        font-weight: 700;
         margin-bottom: 20px;
     }
-    label { display: block; font-size: 0.85rem; color: var(--muted); margin: 12px 0 4px; }
-    label:first-child { margin-top: 0; }
-    input {
-        width: 100%;
-        padding: 9px 11px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: transparent;
-        color: var(--text);
-        font: inherit;
-    }
-    .row { display: flex; gap: 12px; }
-    .row > div { flex: 1; }
-    .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-    button {
-        appearance: none;
-        border: 1px solid var(--border);
-        background: var(--accent);
-        color: white;
-        font: inherit;
-        font-weight: 600;
-        padding: 10px 16px;
-        border-radius: 8px;
-        cursor: pointer;
-    }
-    button.secondary { background: transparent; color: var(--text); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .status { margin-top: 14px; font-size: 0.9rem; white-space: pre-wrap; }
-    .status.error { color: var(--danger); }
-    .status.ok { color: var(--ok); }
-    iframe {
-        width: 100%;
-        height: 480px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-top: 16px;
-        background: white;
-    }
-    .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
-    a { color: var(--accent); }
-    code { background: rgba(127,127,127,0.15); padding: 1px 5px; border-radius: 4px; }
+    .vercel-badge svg { display: block; }
+    .vercel-band h2 { font-size: 1.7rem; margin: 0 0 14px; }
+    .vercel-band p { max-width: 560px; margin: 0 auto; color: var(--muted); }
+
+    footer { border-top: 1px solid var(--border); padding: 36px 0; }
+    footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    footer .muted { color: var(--muted); font-size: 0.85rem; }
 </style>
 </head>
 <body>
-<main>
-    <h1>DAREALTYTE</h1>
-    <p class="tagline">Wayback Machine recovery &amp; one-click Vercel deployment engine.</p>
 
-    <div class="panel">
-        <label for="apiKey">Admin key</label>
-        <input id="apiKey" type="password" autocomplete="off" placeholder="DAREAL_API_KEY">
-        <p class="hint">Kept only in this browser's local storage — never sent anywhere but this site's own API.</p>
+<nav class="top">
+    <div class="wrap">
+        <div class="logo">DAREALTYTE<span class="dot">.</span></div>
+        <div class="nav-links">
+            <a href="#engine">The engine</a>
+            <a href="#how">How it works</a>
+            <a href="#vercel">Vercel</a>
+            <a href="/admin.html" class="btn">Operator console</a>
+        </div>
     </div>
+</nav>
 
-    <div class="panel">
-        <div class="row">
-            <div>
-                <label for="domain">Domain</label>
-                <input id="domain" placeholder="oldhairwebsite.com">
+<header class="hero">
+    <div class="wrap">
+        <span class="eyebrow">Wayback recovery · one-click deployment</span>
+        <h1 class="hero-title">Bring dead domains<br><span class="grad">back to life instantly.</span></h1>
+        <p class="sub">
+            Point DAREALTYTE at any expired or dormant domain. It pulls the
+            site's historical snapshot straight out of the Internet Archive's
+            Wayback Machine, cleans it up, and pushes it live — preserving
+            the layout, styling, and content history that made the domain
+            worth buying in the first place.
+        </p>
+        <div class="hero-actions">
+            <a href="#engine" class="btn primary large">See how the engine works</a>
+            <a href="/admin.html" class="btn large">Operator console</a>
+        </div>
+    </div>
+</header>
+
+<section id="what">
+    <div class="wrap">
+        <div class="section-head">
+            <h2>What DAREALTYTE actually does</h2>
+            <p>Two problems, one pipeline: pulling a site out of the archive, and getting it back online without the mess that usually comes with it.</p>
+        </div>
+        <div class="what-grid">
+            <div class="feature">
+                <h3>Full historical reconstruction</h3>
+                <p>Retrieves the archived HTML, CSS, images, and scripts for a domain at a given point in time — not just a single page, but the layout and asset references that made the original site work.</p>
             </div>
-            <div>
-                <label for="timestamp">Timestamp (optional)</label>
-                <input id="timestamp" placeholder="20210101000000">
+            <div class="feature">
+                <h3>Automatic cleanup</h3>
+                <p>Strips the Wayback Machine's own injected toolbar, rewrites archived asset URLs back to their original form, and neutralizes a blocklist of known spam link patterns left behind by old link injections.</p>
+            </div>
+            <div class="feature">
+                <h3>One-click production deployment</h3>
+                <p>The cleaned result ships straight to a live, production Vercel deployment — no manual file wrangling, no separate hosting setup.</p>
+            </div>
+            <div class="feature">
+                <h3>Custom domain mapping</h3>
+                <p>Attach your own domain to the freshly deployed project and verify its DNS configuration directly from the same pipeline.</p>
             </div>
         </div>
-        <div class="actions">
-            <button id="recoverBtn">Preview recovery</button>
-            <button id="launchBtn" class="secondary">Launch &amp; deploy to Vercel</button>
-        </div>
-        <div id="status" class="status"></div>
-        <iframe id="preview" sandbox="allow-scripts" hidden></iframe>
     </div>
+</section>
 
-    <p class="hint">
-        This admin page and the API it calls are unauthenticated to anyone
-        without the admin key above. See the project README for what the
-        sanitizer does and doesn't guarantee, and a known risk around
-        server-side Wayback Machine fetches from datacenter IPs.
-    </p>
-</main>
-<script src="/app.js"></script>
+<section id="engine">
+    <div class="wrap">
+        <div class="section-head">
+            <h2>The engine behind the name</h2>
+            <p>DAREALTYTE is two systems working in sequence: one retrieves, the other deploys.</p>
+        </div>
+        <div class="acronym-grid">
+            <div class="acronym-card">
+                <p class="short">D.A.R.E.A.L.</p>
+                <p class="role">The archive retrieval agent</p>
+                <ul class="letter-breakdown">
+                    <li><b>D</b>igital</li>
+                    <li><b>A</b>rchive</li>
+                    <li><b>R</b>etrieval</li>
+                    <li><b>E</b>ngineering</li>
+                    <li><b>A</b>nd</li>
+                    <li><b>L</b>auncher</li>
+                </ul>
+                <p class="desc">
+                    The retrieval half of the pipeline. It queries the Wayback
+                    Machine for a domain's historical snapshot and reconstructs
+                    the original page's structure and asset references.
+                </p>
+            </div>
+            <div class="acronym-card">
+                <p class="short">T.Y.T.E.</p>
+                <p class="role">The deployment host</p>
+                <ul class="letter-breakdown">
+                    <li><b>T</b>ransmission</li>
+                    <li><b>Y</b>ield</li>
+                    <li><b>T</b>racking</li>
+                    <li><b>E</b>ngine</li>
+                </ul>
+                <p class="desc">
+                    The moment a snapshot is reconstructed, T.Y.T.E. takes over:
+                    cleaning up broken references, packaging the result, and
+                    pushing it live to production — locked down and ready to go.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="how">
+    <div class="wrap">
+        <div class="section-head">
+            <h2>How it works</h2>
+            <p>Four steps from an expired domain to a live, deployed site.</p>
+        </div>
+        <div class="steps">
+            <div class="step">
+                <div class="num">1</div>
+                <h3>Retrieve</h3>
+                <p>D.A.R.E.A.L. pulls the historical snapshot for your domain from the Wayback Machine.</p>
+            </div>
+            <div class="step">
+                <div class="num">2</div>
+                <h3>Sanitize</h3>
+                <p>T.Y.T.E. strips archive toolbar injections, rewrites asset URLs, and neutralizes known spam link patterns.</p>
+            </div>
+            <div class="step">
+                <div class="num">3</div>
+                <h3>Deploy</h3>
+                <p>The cleaned site ships to a new production deployment on Vercel.</p>
+            </div>
+            <div class="step">
+                <div class="num">4</div>
+                <h3>Map your domain</h3>
+                <p>Attach your own domain to the deployment and verify DNS is configured correctly.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="vercel-band" id="vercel">
+    <div class="wrap">
+        <span class="vercel-badge">Deployed on Vercel's infrastructure</span>
+        <h2>Every launch ships straight to production on Vercel</h2>
+        <p>
+            No servers to provision, no build pipeline to babysit. DAREALTYTE
+            uses Vercel's deployment API under the hood, so every site it
+            recovers goes live with automatic HTTPS and global distribution
+            from the moment it's deployed. DAREALTYTE is an independent tool
+            built on top of Vercel and isn't affiliated with or endorsed by
+            Vercel Inc.
+        </p>
+    </div>
+</div>
+
+<footer>
+    <div class="wrap">
+        <span class="muted">DAREALTYTE — Wayback recovery &amp; deployment engine.</span>
+        <a href="/admin.html" class="muted">Operator console →</a>
+    </div>
+</footer>
+
 </body>
 </html>
