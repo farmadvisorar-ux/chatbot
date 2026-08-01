@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wayback Downloader &mdash; rescue a website from the Wayback Machine</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <div class="page">
@@ -81,13 +81,8 @@
           </div>
 
           <label class="field">
-            <span>Concurrent downloads: <output id="concurrency-value">8</output></span>
-            <input type="range" id="concurrency" min="1" max="20" value="8">
-          </label>
-
-          <label class="field">
-            <span>Max files this run: <output id="max-files-value">{{ max_files_default }}</output></span>
-            <input type="range" id="max_files" min="10" max="{{ max_files_default }}" value="{{ max_files_default }}">
+            <span>Max files this run: <output id="max-files-value">1000</output></span>
+            <input type="range" id="max_files" min="10" max="1000" value="1000">
           </label>
         </details>
 
@@ -117,8 +112,9 @@
         </div>
         <div class="actions">
           <button type="button" id="cancel-btn" class="btn secondary">Cancel</button>
-          <a id="download-link" class="btn primary hidden" href="#">Download zip</a>
+          <button type="button" id="download-btn" class="btn primary hidden">Build &amp; download zip</button>
         </div>
+        <p id="zip-message" class="zip-message hidden"></p>
         <details class="log">
           <summary>Activity log</summary>
           <div id="log-output"></div>
@@ -133,13 +129,14 @@
 
     <footer>
       <p>
-        Uses the public <a href="https://archive.org/help/wayback_api.php" target="_blank" rel="noopener">Wayback CDX API</a>.
-        A modern, self-hosted, web-based take on
+        Uses the public <a href="https://archive.org/help/wayback_api.php" target="_blank" rel="noopener">Wayback CDX API</a>
+        and <a href="https://vercel.com/docs/storage/vercel-blob" target="_blank" rel="noopener">Vercel Blob</a> storage.
+        A modern, web-based take on
         <a href="https://github.com/hartator/wayback-machine-downloader" target="_blank" rel="noopener">hartator/wayback-machine-downloader</a>.
       </p>
     </footer>
   </div>
 
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

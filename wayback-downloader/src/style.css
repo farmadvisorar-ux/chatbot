@@ -246,6 +246,12 @@ button:focus-visible {
 
 .stats strong { color: var(--text); }
 
+.zip-message {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
 .log {
   margin-top: 16px;
 }
