@@ -1,34 +1,6 @@
-interface FileEntry {
-  name: string;
-  url: string;
-  size: number;
-}
-
-interface LogEntry {
-  type: "ok" | "error" | "skip";
-  url: string;
-  message?: string;
-}
-
-type JobStatus = "queued" | "downloading" | "done" | "error" | "cancelled";
-
-interface PublicJobState {
-  id: string;
-  status: JobStatus;
-  message: string;
-  error: string | null;
-  cursor: number;
-  total: number;
-  completed: number;
-  failed: number;
-  skipped: number;
-  files: FileEntry[];
-  recentEvents: LogEntry[];
-  cancelRequested: boolean;
-}
-
-const TERMINAL_STATUSES: JobStatus[] = ["done", "error", "cancelled"];
-const TICK_DELAY_MS = 250;
+import { fetchSnapshots, filterSnapshots, CdxError, type Snapshot } from "./lib/cdx";
+import { downloadSnapshots, type DownloadedFile } from "./lib/downloader";
+import { parseParams, BadRequest, type JobParams } from "./lib/params";
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -62,7 +34,10 @@ maxFilesInput.addEventListener("input", () => {
   maxFilesValue.textContent = maxFilesInput.value;
 });
 
-let currentJob: PublicJobState | null = null;
+let cancelRequested = false;
+let collectedFiles: DownloadedFile[] = [];
+let logLines = 0;
+const MAX_LOG_LINES = 300;
 
 function hide(el: HTMLElement): void {
   el.classList.add("hidden");
@@ -71,20 +46,7 @@ function show(el: HTMLElement): void {
   el.classList.remove("hidden");
 }
 
-interface FormParams {
-  domain: string;
-  fromTs: string;
-  toTs: string;
-  exactUrl: boolean;
-  allSnapshots: boolean;
-  onlyStatus200: boolean;
-  extensions: string[];
-  onlyPattern: string;
-  excludePattern: string;
-  maxFiles: number;
-}
-
-function collectParams(): FormParams {
+function readFormPayload(): Record<string, unknown> {
   const extensions = Array.from(
     document.querySelectorAll<HTMLInputElement>("#extension-chips input:checked"),
   ).map((el) => el.value);
@@ -110,184 +72,87 @@ function showError(message: string): void {
   show(errorPanel);
 }
 
-async function postJSON<T>(url: string, body?: unknown): Promise<T> {
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
+function friendlyNetworkError(err: unknown): string {
+  const message = (err as Error)?.message || String(err);
+  if (err instanceof CdxError) return message;
+  return (
+    `Could not reach the Wayback Machine from your browser (${message}). ` +
+    `This can happen if archive.org is temporarily unreachable, or if your network/extensions are blocking it.`
+  );
+}
+
+async function lookupSnapshots(params: JobParams): Promise<Snapshot[]> {
+  let snapshots = await fetchSnapshots(params.domain, {
+    fromTs: params.fromTs,
+    toTs: params.toTs,
+    exactUrl: params.exactUrl,
+    onlyStatus200: params.onlyStatus200,
+    allSnapshots: params.allSnapshots,
   });
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error((data as { error?: string }).error || `Request failed (${resp.status})`);
-  }
-  return data as T;
+  snapshots = filterSnapshots(snapshots, {
+    extensions: params.extensions.length ? params.extensions : null,
+    onlyPattern: params.onlyPattern,
+    excludePattern: params.excludePattern,
+  });
+  return snapshots;
 }
 
 previewBtn.addEventListener("click", async () => {
   hide(errorPanel);
-  const params = collectParams();
-  if (!params.domain) {
-    showError("Please enter a domain or URL first.");
+  let params: JobParams;
+  try {
+    params = parseParams(readFormPayload());
+  } catch (err) {
+    showError(err instanceof BadRequest ? err.message : (err as Error).message);
     return;
   }
+
   previewBtn.disabled = true;
   previewBtn.textContent = "Looking up...";
   try {
-    const data = await postJSON<{ count: number; sample: { url: string; timestamp: string }[]; truncatedAt: number | null }>(
-      "/api/preview",
-      params,
-    );
+    const snapshots = await lookupSnapshots(params);
+    const truncatedAt = snapshots.length > params.maxFiles ? params.maxFiles : null;
+
     previewSummary.textContent =
-      data.count === 0
+      snapshots.length === 0
         ? "No archived pages matched. Try widening your filters."
-        : `Found ${data.count.toLocaleString()} matching snapshot(s).` +
-          (data.truncatedAt ? ` Only the first ${data.truncatedAt.toLocaleString()} will be downloaded.` : "");
+        : `Found ${snapshots.length.toLocaleString()} matching snapshot(s).` +
+          (truncatedAt ? ` Only the first ${truncatedAt.toLocaleString()} will be downloaded.` : "");
     previewSample.innerHTML = "";
-    data.sample.forEach((item) => {
+    snapshots.slice(0, 25).forEach((s) => {
       const li = document.createElement("li");
-      li.textContent = `${item.url} (${item.timestamp})`;
+      li.textContent = `${s.original} (${s.timestamp})`;
       previewSample.appendChild(li);
     });
     hide(progressPanel);
     hide(errorPanel);
     show(previewPanel);
   } catch (err) {
-    showError((err as Error).message);
+    showError(friendlyNetworkError(err));
   } finally {
     previewBtn.disabled = false;
     previewBtn.textContent = "Preview";
   }
 });
 
-function renderLog(events: LogEntry[]): void {
-  logOutput.innerHTML = "";
-  events
-    .filter((e) => e.type !== "ok")
-    .forEach((e) => {
-      const div = document.createElement("div");
-      div.className = e.type === "error" ? "log-error" : "log-skip";
-      div.textContent = e.type === "error" ? `${e.url} — Failed: ${e.message}` : `${e.url} — Skipped (duplicate)`;
-      logOutput.appendChild(div);
-    });
+function appendLogLine(text: string, cls: string): void {
+  if (logLines >= MAX_LOG_LINES) return;
+  const div = document.createElement("div");
+  div.className = cls;
+  div.textContent = text;
+  logOutput.appendChild(div);
   logOutput.scrollTop = logOutput.scrollHeight;
+  logLines += 1;
 }
 
-function renderProgress(state: PublicJobState): void {
-  const done = state.completed + state.failed + state.skipped;
-  const pct = state.total > 0 ? Math.min(100, Math.round((done / state.total) * 100)) : 0;
+function updateStats(completed: number, failed: number, skipped: number, total: number): void {
+  const done = completed + failed + skipped;
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   progressFill.style.width = `${pct}%`;
-  statCompleted.textContent = String(state.completed);
-  statSkipped.textContent = String(state.skipped);
-  statFailed.textContent = String(state.failed);
-  statTotal.textContent = String(state.total);
-  progressMessage.textContent = state.message;
-  renderLog(state.recentEvents);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function driveJob(jobId: string): Promise<void> {
-  // Runs ticks sequentially so at most one write to the job's state is ever
-  // in flight, and drives progress purely by polling — there is no
-  // persistent connection to keep alive between requests.
-  while (true) {
-    const state = await postJSON<PublicJobState>(`/api/jobs/${jobId}/tick`);
-    currentJob = state;
-    renderProgress(state);
-
-    if (TERMINAL_STATUSES.includes(state.status)) {
-      finishJob(state);
-      return;
-    }
-    await sleep(TICK_DELAY_MS);
-  }
-}
-
-function finishJob(state: PublicJobState): void {
-  startBtn.disabled = false;
-  cancelBtn.disabled = true;
-  hide(cancelBtn);
-
-  if (state.status === "done") {
-    if (state.files.length > 0) {
-      show(downloadBtn);
-      downloadBtn.disabled = false;
-    } else {
-      progressMessage.textContent = state.message || "No files were downloaded.";
-    }
-  } else if (state.status === "error") {
-    progressMessage.textContent = state.message || "The download failed.";
-    if (state.error) {
-      const div = document.createElement("div");
-      div.className = "log-error";
-      div.textContent = `Error: ${state.error}`;
-      logOutput.appendChild(div);
-    }
-  } else {
-    progressMessage.textContent = "Cancelled.";
-  }
-}
-
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  hide(errorPanel);
-  hide(previewPanel);
-  const params = collectParams();
-  if (!params.domain) {
-    showError("Please enter a domain or URL first.");
-    return;
-  }
-
-  startBtn.disabled = true;
-  logOutput.innerHTML = "";
-  hide(downloadBtn);
-  hide(zipMessage);
-  show(cancelBtn);
-  cancelBtn.disabled = false;
-  progressFill.style.width = "0%";
-  statCompleted.textContent = "0";
-  statSkipped.textContent = "0";
-  statFailed.textContent = "0";
-  statTotal.textContent = "0";
-  progressMessage.textContent = "Looking up snapshots...";
-  show(progressPanel);
-
-  try {
-    const job = await postJSON<PublicJobState>("/api/jobs", params);
-    currentJob = job;
-    renderProgress(job);
-    if (TERMINAL_STATUSES.includes(job.status)) {
-      finishJob(job);
-      return;
-    }
-    await driveJob(job.id);
-  } catch (err) {
-    showError((err as Error).message);
-    startBtn.disabled = false;
-  }
-});
-
-cancelBtn.addEventListener("click", async () => {
-  if (!currentJob) return;
-  cancelBtn.disabled = true;
-  try {
-    await fetch(`/api/jobs/${currentJob.id}`, { method: "POST" });
-  } catch {
-    // The in-flight tick loop will pick up the cancellation on its next call regardless.
-  }
-});
-
-async function* zipEntries(files: FileEntry[]) {
-  // Kick off every fetch in parallel (fetch() resolves once headers arrive,
-  // not the full body, so this doesn't buffer file contents in memory),
-  // then hand each resolved Response to client-zip, which streams the
-  // body straight into the zip as it's generated.
-  const responses = await Promise.all(files.map((f) => fetch(f.url)));
-  for (let i = 0; i < files.length; i++) {
-    yield { name: files[i].name, input: responses[i] };
-  }
+  statCompleted.textContent = String(completed);
+  statFailed.textContent = String(failed);
+  statSkipped.textContent = String(skipped);
+  statTotal.textContent = String(total);
 }
 
 function safeFilename(domain: string): string {
@@ -295,19 +160,20 @@ function safeFilename(domain: string): string {
   return host.replace(/[^a-zA-Z0-9.-]/g, "_") || "site";
 }
 
-downloadBtn.addEventListener("click", async () => {
-  if (!currentJob || currentJob.files.length === 0) return;
-  downloadBtn.disabled = true;
+async function buildAndSaveZip(domain: string): Promise<void> {
+  if (collectedFiles.length === 0) return;
   show(zipMessage);
-  zipMessage.textContent = `Zipping ${currentJob.files.length} file(s) in your browser...`;
+  zipMessage.textContent = `Zipping ${collectedFiles.length} file(s)...`;
 
   try {
     const { downloadZip } = await import("client-zip");
-    const blob = await downloadZip(zipEntries(currentJob.files)).blob();
+    const blob = await downloadZip(
+      collectedFiles.map((f) => ({ name: f.name, input: f.blob, lastModified: new Date() })),
+    ).blob();
 
-    const filename = `${safeFilename($<HTMLInputElement>("domain").value)}.zip`;
-    const link = document.createElement("a");
+    const filename = `${safeFilename(domain)}.zip`;
     const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
     link.href = objectUrl;
     link.download = filename;
     document.body.appendChild(link);
@@ -315,10 +181,107 @@ downloadBtn.addEventListener("click", async () => {
     link.remove();
     URL.revokeObjectURL(objectUrl);
 
-    zipMessage.textContent = `Saved ${filename} (${(blob.size / 1024 / 1024).toFixed(1)} MB).`;
+    zipMessage.textContent = `Saved ${filename} (${(blob.size / 1024 / 1024).toFixed(1)} MB). If the save dialog didn't appear, use the button below.`;
   } catch (err) {
     zipMessage.textContent = `Could not build the zip: ${(err as Error).message}`;
-  } finally {
+  }
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hide(errorPanel);
+  hide(previewPanel);
+
+  let params: JobParams;
+  try {
+    params = parseParams(readFormPayload());
+  } catch (err) {
+    showError(err instanceof BadRequest ? err.message : (err as Error).message);
+    return;
+  }
+
+  startBtn.disabled = true;
+  cancelRequested = false;
+  collectedFiles = [];
+  logOutput.innerHTML = "";
+  logLines = 0;
+  hide(downloadBtn);
+  hide(zipMessage);
+  show(cancelBtn);
+  cancelBtn.disabled = false;
+  updateStats(0, 0, 0, 0);
+  progressMessage.textContent = "Looking up snapshots...";
+  show(progressPanel);
+
+  try {
+    const snapshots = await lookupSnapshots(params);
+    const truncated = snapshots.length > params.maxFiles;
+    const capped = truncated ? snapshots.slice(0, params.maxFiles) : snapshots;
+
+    if (capped.length === 0) {
+      progressMessage.textContent = "No matching snapshots were found.";
+      finish();
+      return;
+    }
+
+    progressMessage.textContent = `Downloading ${capped.length} file(s)${truncated ? ` (capped at ${params.maxFiles})` : ""}...`;
+    updateStats(0, 0, 0, capped.length);
+
+    const result = await downloadSnapshots(capped, {
+      allSnapshots: params.allSnapshots,
+      onEvent: (event, progress) => {
+        updateStats(progress.completed, progress.failed, progress.skipped, progress.total);
+        if (event.type === "error") {
+          appendLogLine(`${event.url} — Failed: ${event.message}`, "log-error");
+        } else if (event.type === "skip") {
+          appendLogLine(`${event.url} — Skipped (duplicate)`, "log-skip");
+        }
+      },
+      isCancelled: () => cancelRequested,
+    });
+
+    collectedFiles = result.files;
+
+    if (result.cancelled) {
+      progressMessage.textContent = "Cancelled.";
+      finish();
+      return;
+    }
+
+    progressMessage.textContent =
+      `Done! ${result.completed} file(s) downloaded` +
+      (result.skipped ? `, ${result.skipped} skipped` : "") +
+      (result.failed ? `, ${result.failed} failed` : "") +
+      ".";
+    finish();
+
+    if (result.completed > 0) {
+      await buildAndSaveZip(params.domain);
+    }
+  } catch (err) {
+    showError(friendlyNetworkError(err));
+    startBtn.disabled = false;
+    hide(cancelBtn);
+  }
+});
+
+function finish(): void {
+  startBtn.disabled = false;
+  cancelBtn.disabled = true;
+  hide(cancelBtn);
+  if (collectedFiles.length > 0) {
+    show(downloadBtn);
     downloadBtn.disabled = false;
   }
+}
+
+cancelBtn.addEventListener("click", () => {
+  cancelRequested = true;
+  cancelBtn.disabled = true;
+});
+
+downloadBtn.addEventListener("click", async () => {
+  downloadBtn.disabled = true;
+  await buildAndSaveZip($<HTMLInputElement>("domain").value);
+  downloadBtn.disabled = false;
 });

@@ -6,13 +6,6 @@
 const CDX_API_URL = 'https://web.archive.org/cdx/search/cdx';
 const FIELDS = ['timestamp', 'original', 'statuscode', 'digest', 'mimetype'];
 
-// Internet Archive's infrastructure is known to be more lenient toward
-// identified bots than anonymous default-fetch traffic (which is what
-// undici sends with no headers at all) — some cloud/datacenter IP ranges
-// see requests silently dropped without one.
-export const WAYBACK_USER_AGENT =
-    'wayback-downloader-web/1.0 (+https://github.com/farmadvisorar-ux/chatbot/tree/main/wayback-downloader)';
-
 export class CdxError extends Error {}
 
 export interface Snapshot {
@@ -82,7 +75,7 @@ async function fetchOnce(url: string, timeoutMs: number): Promise<Response> {
     try {
         return await fetch(url, {
             signal: controller.signal,
-            headers: { 'User-Agent': WAYBACK_USER_AGENT, Accept: 'application/json' },
+            headers: { Accept: 'application/json' },
         });
     } finally {
         clearTimeout(timer);
