@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeSegment, urlToFilepath } from "../api/_lib/urlmap.js";
+import { sanitizeSegment, urlToFilepath } from "../src/lib/urlmap.js";
 
 test("root path gets index.html", () => {
   assert.equal(urlToFilepath("http://example.com/"), "example.com/index.html");

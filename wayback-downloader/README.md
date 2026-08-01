@@ -1,9 +1,8 @@
 # Wayback Downloader (Web)
 
-A user-friendly **web app**, built to deploy on [Vercel](https://vercel.com), for
-downloading archived websites from the [Internet Archive Wayback
-Machine](https://web.archive.org). It's a from-scratch reimplementation of the
-idea behind
+A user-friendly **web app** for downloading archived websites from the
+[Internet Archive Wayback Machine](https://web.archive.org). It's a
+from-scratch reimplementation of the idea behind
 [hartator/wayback-machine-downloader](https://github.com/hartator/wayback-machine-downloader)
 (a Ruby CLI gem) — type a domain, watch it download, get a zip. No Ruby, no
 CLI flags, no server to keep running.
@@ -19,125 +18,104 @@ CLI flags, no server to keep running.
   URL vs. whole domain, latest-per-page vs. every archived version, only
   HTTP 200 captures, a file-type checklist, include/exclude regex, and a
   max-files safety cap.
-- **Zip built in your browser** — the server never assembles the archive,
-  so there's no server-side memory/time limit on that step.
+- **Everything runs in your browser** — the CDX lookup, every file download,
+  and the zip build all happen client-side. No server, no backend, nothing
+  to deploy but static files.
 - **Cancel anytime** mid-download.
 
-## Why this looks different from a typical Flask/Express app
+## Why this is a plain static app, not a backend service
 
-Vercel runs your `api/` folder as **stateless serverless functions** — each
-request gets its own short-lived invocation with no shared memory and no
-persistent local disk. A traditional downloader (background threads, an
-in-memory job queue, a live SSE connection, files written to local disk)
-doesn't fit that model at all. This app is built around Vercel's constraints
-instead of fighting them:
+Earlier versions of this app tried routing the Wayback Machine requests
+through Vercel serverless functions. That ran into a real, reproducible
+problem: `archive.org` responds fine and fast to ordinary requests, but
+requests to `web.archive.org` from serverless/datacenter IP ranges (Vercel's
+included) were silently dropped or reset — not fixed by adding a `User-Agent`
+header or retrying. This is very likely a form of anti-bot/anti-scraping
+protection that treats cloud infrastructure differently from an ordinary
+visitor's browser.
 
-1. **Job state lives in [Vercel Blob](https://vercel.com/docs/storage/vercel-blob)**,
-   as a small JSON document (`jobs/<id>/state.json`), not in server memory.
-2. **Progress is driven by polling, not a persistent connection.** The
-   browser calls `POST /api/jobs/<id>/tick` in a loop; each call downloads a
-   small batch (8 files, 4 at a time) from `web.archive.org`, uploads them to
-   Blob storage, updates the job's state, and returns. The loop keeps going
-   until the job is `done`, `error`, or `cancelled`. This keeps every
-   function invocation well under Vercel's execution time limit regardless
-   of plan.
-3. **The final zip is built client-side.** Once a job is done, the browser
-   has a manifest of `{name, blobUrl}` for every downloaded file. It fetches
-   them directly from Blob storage and streams them into a zip using
-   [`client-zip`](https://github.com/Touffy/client-zip) — entirely in the
-   browser tab, so there's no server-side step that has to hold the whole
-   site in memory or race a function timeout.
-4. **A daily cron** (`api/cron/cleanup.ts`) deletes Blob storage for jobs
-   older than `WMD_JOB_TTL_HOURS`.
+The fix: **don't route through a server at all.** Every request to
+`web.archive.org` — the CDX API lookup and every individual file download —
+is made directly from the browser, using the visitor's own network. This
+sidesteps the datacenter-IP problem entirely, and as a side effect makes the
+whole app dramatically simpler:
 
-The trade-off: **the browser tab needs to stay open** while a download runs,
-since it's the thing driving the tick loop. For a typical small-to-medium
-site (up to a few hundred files) this finishes in well under a minute.
+1. **CDX lookup** (`src/lib/cdx.ts`) queries `web.archive.org/cdx/search/cdx`
+   directly from `fetch()` in the browser.
+2. **Downloads** (`src/lib/downloader.ts`) fetch each snapshot's raw content
+   directly from `web.archive.org` with a small worker pool, streaming each
+   result into memory as a `Blob`.
+3. **The zip is built in-browser** with [`client-zip`](https://github.com/Touffy/client-zip)
+   from the `Blob`s already collected in step 2 — no re-fetching, no server
+   round-trip.
+
+There is no `api/` folder, no database, no Blob storage, nothing to
+configure beyond deploying the static build. The trade-off: **the browser
+tab needs to stay open** for the duration of a download, since that's where
+all the work happens. For a typical small-to-medium site (up to a few
+hundred files) this finishes in well under a minute.
+
+If `web.archive.org` ever also starts blocking ordinary browser traffic (as
+opposed to just cloud IPs), that would be a genuine outage on their end —
+not something a client-side or server-side fix here can work around.
 
 ## Project layout
 
 ```
 wayback-downloader/
 ├── index.html                  # single-page UI (no framework)
-├── src/{main.ts,style.css}     # client logic: form, polling loop, client-side zip
-├── api/
-│   ├── preview.ts               # POST: count + sample of matching snapshots
-│   ├── jobs/
-│   │   ├── index.ts             # POST: create a job (queries the CDX API)
-│   │   ├── [id].ts              # GET: status · POST: request cancellation
-│   │   └── [id]/tick.ts         # POST: download+upload one batch, advance the job
-│   ├── cron/cleanup.ts          # deletes Blob storage for old/abandoned jobs
-│   └── _lib/
+├── src/
+│   ├── main.ts                  # form handling, progress UI, drives the whole flow
+│   ├── style.css
+│   └── lib/
 │       ├── cdx.ts                # Wayback CDX API client + filtering
 │       ├── urlmap.ts             # archived URL -> file path (index.html per dir, etc.)
-│       ├── jobStore.ts           # job state persisted as JSON in Vercel Blob
-│       ├── params.ts             # request validation shared by preview/jobs
-│       └── http.ts               # small Vercel Node response helpers
-└── tests/                       # node:test suite for the pure logic (cdx/urlmap/params)
+│       ├── downloader.ts         # pooled downloader, collects Blobs + progress events
+│       └── params.ts             # form input validation
+└── tests/                       # node:test suite for the pure logic (cdx/urlmap/params/downloader)
 ```
 
-## Deploying to Vercel
+## Deploying
 
-1. Push this repo to GitHub (already done if you're reading this from the
-   repo) and import it into Vercel as a **new project**, with this directory
-   (`wayback-downloader/`) as the project root.
-2. In the Vercel dashboard: **Storage → Create Database → Blob**, and
-   connect it to this project. That's it — Vercel injects
-   `BLOB_READ_WRITE_TOKEN` automatically at build/runtime; no extra config.
-3. Deploy. Vercel auto-detects the Vite build (`npm run build`, output
-   `dist`) and the `api/` functions from `vercel.json`.
-4. The daily cleanup cron (`vercel.json` → `crons`) is picked up
-   automatically. If you want to call `/api/cron/cleanup` yourself outside
-   of Vercel Cron, set a `CRON_SECRET` env var and send it as
-   `Authorization: Bearer <secret>`.
+This is a static site — `npm run build` produces plain HTML/CSS/JS in
+`dist/`. Deploy it anywhere that serves static files: Vercel, Netlify,
+Cloudflare Pages, GitHub Pages, or your own web server. No environment
+variables, no database, no backend to provision.
+
+On Vercel specifically: import the repo with this directory
+(`wayback-downloader/`) as the project root — it auto-detects the Vite
+build. That's the entire setup.
 
 ### Local development
 
 ```bash
 npm install
-vercel dev   # requires the Vercel CLI: npm i -g vercel
+npm run dev       # Vite dev server at http://localhost:5173
 ```
 
-`vercel dev` links to your Vercel project and pulls `BLOB_READ_WRITE_TOKEN`
-automatically. Plain `npm run dev` (Vite only) serves the static frontend
-but can't exercise `/api/*`, since those are Vercel functions.
-
-### Environment variables
-
-| Variable                  | Default | Meaning                                                |
-|----------------------------|---------|----------------------------------------------------------|
-| `BLOB_READ_WRITE_TOKEN`    | —       | Auto-set by Vercel once a Blob store is connected         |
-| `WMD_MAX_FILES`            | `1000`  | Hard cap on files downloaded per job                       |
-| `WMD_JOB_TTL_HOURS`        | `24`    | How long job state/files are kept before the cleanup cron runs |
-| `CRON_SECRET`              | —       | Optional bearer secret for manually calling the cleanup cron |
-
-See `.env.example`.
+Since there's no backend, `npm run dev` is fully functional on its own —
+no need for `vercel dev` or any other proxy.
 
 ## Running the tests
 
 ```bash
 npm install
-npm test        # node:test over the pure logic (cdx, urlmap, params) — no network, no Vercel needed
+npm test          # node:test over the pure logic — no network needed
 npm run typecheck
+npm run build
 ```
-
-The API route handlers themselves (which call the CDX API, Vercel Blob, and
-`fetch` against `web.archive.org`) are exercised by deploying and running
-the app for real — the request-parsing, CDX-parsing, and URL-mapping logic
-they depend on is unit tested directly.
 
 ## Limitations & notes
 
-- **Downloaded files are public.** Vercel Blob's public access mode means
-  anyone with a file's URL can fetch it — but the job ID (and therefore
-  every file path under it) is an unguessable random token, and the daily
-  cron deletes jobs after `WMD_JOB_TTL_HOURS`. Don't use this for content
-  that needs real access control.
-- **`WMD_MAX_FILES` defaults to 1000** as a sane ceiling for a serverless,
-  pay-per-use environment — raise it if you need to, but a very large site
-  means a lot of tick round-trips (and a lot of Blob storage/bandwidth).
 - **The browser tab must stay open** for the duration of a download, since
-  it's what drives the polling loop that advances the job.
+  that's where the CDX lookup, every file fetch, and the zip build all
+  happen.
+- **Very large sites use a lot of browser memory**, since every downloaded
+  file is held in memory (as a `Blob`) until the zip is built. The max-files
+  slider (default cap 1000) exists to keep this reasonable.
+- **`web.archive.org` may still rate-limit an unusually large/fast run** even
+  from a browser — the downloader uses a modest concurrency (6 at a time) to
+  stay a good citizen of a free, shared service.
 
 ## Credits
 

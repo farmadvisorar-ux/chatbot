@@ -1,4 +1,6 @@
-export const MAX_FILES_DEFAULT = Number(process.env.WMD_MAX_FILES || 1000);
+// Everything runs in the browser now (no server to configure via env
+// vars), so this is just a sane hard ceiling on a single run.
+export const MAX_FILES_DEFAULT = 1000;
 
 export interface JobParams {
     domain: string;

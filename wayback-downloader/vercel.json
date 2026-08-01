@@ -1,14 +1,6 @@
 {
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
-    "functions": {
-        "api/jobs/[id]/tick.ts": { "maxDuration": 30 },
-        "api/preview.ts": { "maxDuration": 45 },
-        "api/jobs/index.ts": { "maxDuration": 45 }
-    },
-    "crons": [
-        { "path": "/api/cron/cleanup", "schedule": "0 4 * * *" }
-    ],
     "headers": [
         {
             "source": "/(.*)",
@@ -19,14 +11,8 @@
                 { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
                 {
                     "key": "Content-Security-Policy",
-                    "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://*.public.blob.vercel-storage.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+                    "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://web.archive.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
                 }
-            ]
-        },
-        {
-            "source": "/api/(.*)",
-            "headers": [
-                { "key": "Cache-Control", "value": "no-store" }
             ]
         }
     ]

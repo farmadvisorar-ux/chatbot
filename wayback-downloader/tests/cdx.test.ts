@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCdxParams, parseCdxJson, filterSnapshots, archiveUrl, type Snapshot } from "../api/_lib/cdx.js";
+import { buildCdxParams, parseCdxJson, filterSnapshots, archiveUrl, type Snapshot } from "../src/lib/cdx.js";
 
 test("parseCdxJson handles empty input", () => {
   assert.deepEqual(parseCdxJson([]), []);

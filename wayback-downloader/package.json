@@ -7,15 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p api/tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
-    "@vercel/blob": "^0.27.1",
     "client-zip": "^2.4.5"
   },
   "devDependencies": {
-    "@vercel/node": "^3.2.24",
     "tsx": "^4.19.2",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"

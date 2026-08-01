@@ -19,6 +19,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!wayback-downloader/src/lib/
 lib64/
 parts/
 sdist/

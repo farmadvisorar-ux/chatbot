@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseParams, BadRequest, MAX_FILES_DEFAULT } from "../api/_lib/params.js";
+import { parseParams, BadRequest, MAX_FILES_DEFAULT } from "../src/lib/params.js";
 
 test("requires a domain", () => {
   assert.throws(() => parseParams({}), BadRequest);
