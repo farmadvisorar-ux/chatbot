@@ -28,6 +28,18 @@ const STEPS = [
         body: 'We match the domain against a dataset of 100+ reference sales by extension, category and length — but a comp only gets real weight if its price is also in the same order of magnitude as this domain\'s own independent baseline estimate. Without that gate, a handful of famous multi-million-dollar headline sales (which is disproportionately what\'s publicly documented) would drag an ordinary domain\'s price toward them just because both happen to be, say, a 9-character .com. If the exact domain you searched has a recorded sale, that figure is used directly instead of the formula.',
     },
     {
+        title: '8. Phonetic clarity (the "radio test")',
+        body: 'Separately from pronounceability, we check how easily someone could spell the domain correctly after only hearing it read aloud — ambiguous letter clusters, mixed letters-and-digits, letters that visually misread as other letters, and a small non-exhaustive list of known problem meanings in other major languages.',
+    },
+    {
+        title: '9. Channel pricing',
+        body: 'The blended estimate is split into three price points instead of one: a wholesale price (quick sale to another domain investor), an inbound buy-it-now price (what a passive end-user pays on a landing page — this is the headline number), and an outbound target (the ceiling when proactively pitching a funded or established business), scaled up by how "hot" the domain\'s vertical currently is for well-capitalized buyers.',
+    },
+    {
+        title: '10. Trademark & legal friction',
+        body: 'If you configure a free USPTO API key, every report runs a live trademark search. Without one, a small built-in list of globally famous marks is checked instead, and the report clearly labels which kind of check actually ran — it never claims a domain is "clear" without a real check behind that claim.',
+    },
+    {
         title: '+ Registration age (when available)',
         body: 'A public RDAP lookup checks how long the domain has been registered. Older domains get a modest bonus, reflecting the SEO/trust value of an established registration. If the lookup fails or times out, this factor is simply omitted rather than guessed.',
     },
@@ -72,6 +84,18 @@ export default function HowItWorksPage() {
                         non-headline domains something realistic to be compared against.
                     </li>
                 </ul>
+            </div>
+
+            <div className="card p-6">
+                <h2 className="font-semibold">About the vertical &amp; buyer-targeting data</h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    The "outbound fit" score and vertical capital-heat tag (e.g. "AI/ML — high heat") are a
+                    hand-curated proxy for which industries currently draw well-funded buyers, reasoned from
+                    generally-known investment trends — not a live feed from Crunchbase, PitchBook, or any funding
+                    database. The go-to-market section describes the type of buyer and pitch angle to target; it
+                    never invents specific real company names, since this app has no company database to back that
+                    up truthfully.
+                </p>
             </div>
 
             <div className="card p-6">

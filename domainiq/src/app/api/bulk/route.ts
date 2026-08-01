@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
                 return { domain: raw, error: 'Invalid domain' };
             }
             try {
-                const result = await evaluateDomain(raw, { lookupAge: false });
+                const result = await evaluateDomain(raw, { lookupAge: false, checkTrademark: false });
                 await recordValuation(result);
                 return { domain: result.domain, result };
             } catch (err) {

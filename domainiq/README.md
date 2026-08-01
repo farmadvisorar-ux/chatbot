@@ -2,9 +2,11 @@
 
 A free, transparent domain-name valuation platform. Instant, fully explained
 estimates — multi-factor scoring across length, word composition,
-brandability, TLD authority, keyword commercial demand and real comparable
-sales — with accounts, watchlists, bulk/portfolio checking, and a
-compare tool. No email wall on the valuation itself.
+brandability, phonetic clarity, TLD authority, keyword commercial demand and
+real comparable sales — with multi-channel pricing (wholesale / inbound
+buy-it-now / outbound pitch), trademark-collision screening, buyer-targeting
+strategy, accounts, watchlists, bulk/portfolio checking, and a compare tool.
+No email wall on the valuation itself.
 
 **Deployable to Vercel** using Postgres (Vercel Postgres, the Neon
 integration, Supabase, or any Postgres host) — see [Deploying to
@@ -25,6 +27,24 @@ Vercel](#deploying-to-vercel) below.
   the network allows it, and degrades gracefully when it doesn't.
 - **No email-gated results.** Get the full report immediately. Sign up only
   if you want to save domains, track price history, or check in bulk.
+- **Multi-channel pricing, not one number.** Every report splits the
+  estimate into wholesale (quick investor-to-investor liquidation),
+  inbound buy-it-now (a passive end-user landing-page sale), and outbound
+  target (the ceiling when proactively pitching a funded/established
+  business) — a single number is close to meaningless without this
+  context.
+- **Trademark screening, honestly labeled.** A pluggable live USPTO check
+  runs if you configure `USPTO_API_KEY` (free, self-service at
+  [account.uspto.gov](https://account.uspto.gov/api-manager/)); without
+  one, a small famous-mark heuristic runs instead and the report says so
+  explicitly. It never fabricates a "no conflicts" result.
+- **Vertical capital-heat tagging.** Domains are tagged against a
+  hand-curated (not live-Crunchbase) table of which verticals currently
+  draw well-funded buyers (AI/ML, fintech, SaaS, healthtech, etc.),
+  driving the outbound-pricing multiplier and buyer-targeting strategy.
+- **Buyer targeting without fabricated prospects.** A go-to-market section
+  describes the ideal buyer profile and pitch angle — never invented real
+  company names, since this app has no company database to back that up.
 
 ## Stack
 
@@ -111,6 +131,7 @@ src/data/wordlist.txt  # ~63k-word English dictionary (from Debian's wamerican p
    - `NEXT_PUBLIC_BASE_URL` — your production URL, e.g. `https://domainiq.vercel.app`
    - `RESEND_API_KEY` / `EMAIL_FROM` — optional, for real email delivery
      (see below)
+   - `USPTO_API_KEY` — optional, enables live trademark search (see below)
 5. Run the schema migration once against that database:
    `DATABASE_URL=... npm run migrate` from your machine, or any environment
    with raw Postgres/TCP access. **From a sandboxed environment that only
@@ -138,6 +159,18 @@ src/data/wordlist.txt  # ~63k-word English dictionary (from Debian's wamerican p
 Without `RESEND_API_KEY` set, the app still works end-to-end — verification
 and password-reset links are logged to the server console and viewable at
 `/dev/emails` instead of emailed.
+
+### Setting up live trademark screening (optional)
+
+1. Register a free API key at
+   [account.uspto.gov/api-manager](https://account.uspto.gov/api-manager/)
+   for the USPTO Trademark Search API.
+2. Set it as `USPTO_API_KEY` in Vercel and redeploy.
+
+Without it, every report still shows a trademark section, but it runs a
+small built-in check against a short list of globally famous marks instead
+of a live USPTO search, and says so explicitly — it never reports a domain
+as trademark-clear without actually checking.
 
 ## Methodology & data honesty
 

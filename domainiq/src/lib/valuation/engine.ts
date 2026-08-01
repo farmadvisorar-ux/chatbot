@@ -3,9 +3,14 @@ import { getTldInfo } from './tld-table';
 import { bestKeywordMatch } from './keywords';
 import { segmentLabel, isDictionaryWord } from './dictionary';
 import { scoreBrandability, scoreLength } from './linguistics';
+import { scorePhoneticClarity, type PhoneticResult } from './phonetics';
 import { findComps, type MatchedComp } from './comps';
 import { lookupDomainAge, type RdapResult } from './rdap';
 import { baselineValueUsd } from './pricing-curve';
+import { getVerticalInfo, type VerticalInfo } from './verticals';
+import { computeChannelPricing, computeOutboundFitScore, type ChannelPricing } from './channel-pricing';
+import { checkTrademarkRisk, type TrademarkResult } from './trademark';
+import { generateGtmStrategy, type GtmStrategy } from './gtm';
 import { getPool } from '../db';
 
 export type Confidence = 'low' | 'medium' | 'high';
@@ -30,6 +35,7 @@ export interface ValuationResult {
     tld_multiplier: number;
     tld_label: string;
     keyword: { keyword: string; tier: string; multiplier: number; category: string } | null;
+    vertical: VerticalInfo;
     age: RdapResult | null;
     exactComp: MatchedComp | null;
     comps: MatchedComp[];
@@ -38,10 +44,17 @@ export interface ValuationResult {
     midUsd: number;
     highUsd: number;
     confidence: Confidence;
+    channelPricing: ChannelPricing;
+    outboundFitScore: number;
+    trademark: TrademarkResult;
+    gtm: GtmStrategy;
     generatedAt: string;
 }
 
-export async function evaluateDomain(input: string, opts: { lookupAge?: boolean } = {}): Promise<ValuationResult> {
+export async function evaluateDomain(
+    input: string,
+    opts: { lookupAge?: boolean; checkTrademark?: boolean } = {},
+): Promise<ValuationResult> {
     const domain = normalizeDomain(input);
     if (!isValidDomain(domain)) {
         throw new Error(`"${input}" is not a valid domain name`);
@@ -76,14 +89,17 @@ export async function evaluateDomain(input: string, opts: { lookupAge?: boolean 
     }
 
     const brandability = scoreBrandability(label);
+    const phonetic: PhoneticResult = scorePhoneticClarity(label);
     const lengthScoreInfo = scoreLength(charCount);
     const tldInfo = getTldInfo(tld);
     const keywordMatch = bestKeywordMatch(label);
+    const vertical = getVerticalInfo(keywordMatch?.category ?? null);
 
     const factors: FactorBreakdown[] = [
-        { key: 'length', label: 'Length', score: lengthScoreInfo.score, weight: 0.35, detail: `${charCount} characters. ${lengthScoreInfo.note}.` },
-        { key: 'composition', label: 'Word composition', score: compositionScore, weight: 0.4, detail: compositionDetail },
-        { key: 'brandability', label: 'Brandability', score: brandability.score, weight: 0.25, detail: brandability.notes.join(' ') || 'Pronounceable and reasonably memorable.' },
+        { key: 'length', label: 'Length', score: lengthScoreInfo.score, weight: 0.3, detail: `${charCount} characters. ${lengthScoreInfo.note}.` },
+        { key: 'composition', label: 'Word composition', score: compositionScore, weight: 0.35, detail: compositionDetail },
+        { key: 'brandability', label: 'Brandability', score: brandability.score, weight: 0.2, detail: brandability.notes.join(' ') || 'Pronounceable and reasonably memorable.' },
+        { key: 'phonetic', label: 'Phonetic clarity ("radio test")', score: phonetic.score, weight: 0.15, detail: phonetic.notes.join(' ') || 'Clean spelling — no obvious spoken-vs-written ambiguity or global-language flags.' },
     ];
 
     const linguisticScore = factors.reduce((sum, f) => sum + f.score * f.weight, 0);
@@ -135,6 +151,30 @@ export async function evaluateDomain(input: string, opts: { lookupAge?: boolean 
     };
     const [lowFactor, highFactor] = rangeFactors[confidence];
 
+    const lowUsd = Math.round(midUsd * lowFactor);
+    const highUsd = Math.round(midUsd * highFactor);
+
+    const channelPricing = computeChannelPricing({ lowUsd, midUsd: Math.round(midUsd), highUsd, vertical });
+    const outboundFitScore = computeOutboundFitScore({
+        vertical,
+        hasKeywordMatch: Boolean(keywordMatch),
+        compositionScore,
+        tldAuthority: tldInfo.authority,
+    });
+
+    const trademark = opts.checkTrademark === false
+        ? { checked: false, source: 'heuristic-only' as const, riskLevel: 'unknown' as const, matches: [], disclaimer: 'Trademark screening skipped for this request.' }
+        : await checkTrademarkRisk(label);
+
+    const compositionQuality: 'strong' | 'moderate' | 'weak' = compositionScore >= 80 ? 'strong' : compositionScore >= 50 ? 'moderate' : 'weak';
+    const gtm = generateGtmStrategy({
+        label,
+        tld,
+        vertical,
+        keywordTier: keywordMatch?.tier ?? null,
+        compositionQuality,
+    });
+
     return {
         domain,
         tld,
@@ -147,14 +187,19 @@ export async function evaluateDomain(input: string, opts: { lookupAge?: boolean 
         tld_multiplier: tldInfo.multiplier,
         tld_label: tldInfo.label,
         keyword: keywordMatch ? { keyword: keywordMatch.keyword, tier: keywordMatch.tier, multiplier: keywordMatch.multiplier, category: keywordMatch.category } : null,
+        vertical,
         age,
         exactComp,
         comps: compsResult.matches,
         compsWeight,
-        lowUsd: Math.round(midUsd * lowFactor),
+        lowUsd,
         midUsd: Math.round(midUsd),
-        highUsd: Math.round(midUsd * highFactor),
+        highUsd,
         confidence,
+        channelPricing,
+        outboundFitScore,
+        trademark,
+        gtm,
         generatedAt: new Date().toISOString(),
     };
 }

@@ -28,6 +28,18 @@ const CONFIDENCE_STYLE: Record<string, string> = {
     low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
 
+const HEAT_STYLE: Record<string, string> = {
+    high: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    medium: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+};
+
+const RISK_STYLE: Record<string, string> = {
+    elevated: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    unknown: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+};
+
 export default async function ValuationPage({ params }: Props) {
     const domain = decodeURIComponent(params.domain);
     const { result, error } = await performValuation(domain);
@@ -66,9 +78,14 @@ export default async function ValuationPage({ params }: Props) {
                 <p className="mt-2 text-slate-500">
                     Range: {formatUsd(result.lowUsd)} – {formatUsd(result.highUsd)}
                 </p>
-                <span className={`label-pill mt-3 ${CONFIDENCE_STYLE[result.confidence]}`}>
-                    {result.confidence.toUpperCase()} confidence
-                </span>
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                    <span className={`label-pill ${CONFIDENCE_STYLE[result.confidence]}`}>
+                        {result.confidence.toUpperCase()} confidence
+                    </span>
+                    <span className={`label-pill ${HEAT_STYLE[result.vertical.heat]}`}>
+                        {result.outboundFitScore}/10 outbound fit — {result.vertical.label}
+                    </span>
+                </div>
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                     <SaveToWatchlistButton domain={result.domain} signedIn={Boolean(session)} initiallySaved={alreadySaved} />
@@ -130,6 +147,81 @@ export default async function ValuationPage({ params }: Props) {
                             )}
                         </div>
                     )}
+                </div>
+            </section>
+
+            <section className="card p-8">
+                <h2 className="mb-1 text-xl font-semibold">Channel pricing</h2>
+                <p className="mb-6 text-sm text-slate-500">
+                    A domain isn&apos;t worth one number — it depends on how you sell it. Three realistic price points:
+                </p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Wholesale</p>
+                        <p className="mt-1 text-2xl font-bold">{formatUsd(result.channelPricing.wholesale.lowUsd)}–{formatUsd(result.channelPricing.wholesale.highUsd)}</p>
+                        <p className="mt-2 text-sm text-slate-500">Quick sale to another domain investor or liquidator. Speed over price.</p>
+                    </div>
+                    <div className="rounded-lg border-2 border-brand-500 p-4">
+                        <p className="text-xs uppercase tracking-wide text-brand-600">Inbound (Buy-It-Now)</p>
+                        <p className="mt-1 text-2xl font-bold text-brand-600">{formatUsd(result.channelPricing.inboundBin.lowUsd)}–{formatUsd(result.channelPricing.inboundBin.highUsd)}</p>
+                        <p className="mt-2 text-sm text-slate-500">A passive end-user buyer paying your listed price on a landing page. This is the headline estimate above.</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Outbound target</p>
+                        <p className="mt-1 text-2xl font-bold">{formatUsd(result.channelPricing.outboundTarget.lowUsd)}–{formatUsd(result.channelPricing.outboundTarget.highUsd)}</p>
+                        <p className="mt-2 text-sm text-slate-500">Maximum realistic value proactively pitching a funded or established business that needs this exact name.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section className="card p-8">
+                <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-xl font-semibold">Trademark &amp; legal friction</h2>
+                    <span className={`label-pill ${RISK_STYLE[result.trademark.riskLevel]}`}>
+                        {result.trademark.riskLevel === 'unknown' ? 'Not fully checked' : result.trademark.riskLevel === 'elevated' ? 'Elevated risk' : 'Low risk'}
+                    </span>
+                </div>
+                {result.trademark.matches.length > 0 ? (
+                    <ul className="space-y-2 text-sm">
+                        {result.trademark.matches.map((m) => (
+                            <li key={m.mark} className="rounded-lg bg-red-50 px-3 py-2 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                                <strong>{m.mark}</strong> — {m.note}
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-sm text-slate-500">
+                        {result.trademark.checked ? 'No matching marks found in the live USPTO search.' : 'Not flagged by the basic famous-mark check.'}
+                    </p>
+                )}
+                <p className="mt-3 text-xs text-slate-400">
+                    {result.trademark.checked ? 'Source: live USPTO search.' : 'Source: heuristic check only, no live database queried.'} {result.trademark.disclaimer}
+                </p>
+            </section>
+
+            <section className="card p-8">
+                <h2 className="mb-1 text-xl font-semibold">Go-to-market: who would actually buy this</h2>
+                <p className="mb-4 text-sm text-slate-500">
+                    Targeting criteria, not a fabricated prospect list — we don&apos;t have a company database to draw real
+                    names from, so here&apos;s what to look for instead.
+                </p>
+                <div className="space-y-4 text-sm">
+                    <div>
+                        <p className="font-semibold">Buyer profile</p>
+                        <p className="mt-1 text-slate-600 dark:text-slate-400">{result.gtm.buyerProfile}</p>
+                    </div>
+                    <div>
+                        <p className="font-semibold">Pitch angle</p>
+                        <p className="mt-1 text-slate-600 dark:text-slate-400">{result.gtm.pitchAngle}</p>
+                    </div>
+                    <div>
+                        <p className="font-semibold">What to look for when prospecting</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-600 dark:text-slate-400">
+                            {result.gtm.targetSignals.map((s) => (
+                                <li key={s}>{s}</li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
             </section>
 
