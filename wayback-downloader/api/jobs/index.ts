@@ -1,15 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomUUID } from 'node:crypto';
-import { json, error, requireMethod, bodyOf } from '../_lib/http.js';
+import { json, error, requireMethod, bodyOf, withErrorHandling } from '../_lib/http.js';
 import { parseParams, BadRequest } from '../_lib/params.js';
 import { fetchSnapshots, filterSnapshots, CdxError } from '../_lib/cdx.js';
 import { newJobState, saveJobState, toPublicJobState } from '../_lib/jobStore.js';
+
+// Leaves buffer under this function's maxDuration (see vercel.json) so a
+// slow CDX API is caught here as a clean error instead of the whole
+// invocation being killed by Vercel's hard timeout.
+const CDX_TIMEOUT_MS = 30000;
 
 function randomId(): string {
     return randomUUID().replace(/-/g, '').slice(0, 16);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
 
     let params;
@@ -27,13 +32,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const state = newJobState(id, params);
 
     try {
-        let snapshots = await fetchSnapshots(params.domain, {
-            fromTs: params.fromTs,
-            toTs: params.toTs,
-            exactUrl: params.exactUrl,
-            onlyStatus200: params.onlyStatus200,
-            allSnapshots: params.allSnapshots,
-        });
+        let snapshots = await fetchSnapshots(
+            params.domain,
+            {
+                fromTs: params.fromTs,
+                toTs: params.toTs,
+                exactUrl: params.exactUrl,
+                onlyStatus200: params.onlyStatus200,
+                allSnapshots: params.allSnapshots,
+            },
+            CDX_TIMEOUT_MS,
+        );
         snapshots = filterSnapshots(snapshots, {
             extensions: params.extensions.length ? params.extensions : null,
             onlyPattern: params.onlyPattern,
@@ -66,3 +75,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     await saveJobState(state);
     json(res, 201, toPublicJobState(state));
 }
+
+export default withErrorHandling(handler);

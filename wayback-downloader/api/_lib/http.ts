@@ -1,5 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+/** Wraps a handler so an uncaught exception (e.g. a missing Blob token)
+ * comes back as a readable JSON error instead of Vercel's raw
+ * FUNCTION_INVOCATION_FAILED crash page. */
+export function withErrorHandling(
+    handler: (req: VercelRequest, res: VercelResponse) => Promise<void>,
+): (req: VercelRequest, res: VercelResponse) => Promise<void> {
+    return async (req, res) => {
+        try {
+            await handler(req, res);
+        } catch (err) {
+            console.error(err);
+            if (!res.headersSent) {
+                error(res, 500, `Unexpected server error: ${(err as Error).message || String(err)}`);
+            }
+        }
+    };
+}
+
 export function json(res: VercelResponse, status: number, body: unknown): void {
     res.status(status).setHeader('Content-Type', 'application/json').send(JSON.stringify(body));
 }

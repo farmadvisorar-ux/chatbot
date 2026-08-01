@@ -3,7 +3,8 @@
     "outputDirectory": "dist",
     "functions": {
         "api/jobs/[id]/tick.ts": { "maxDuration": 30 },
-        "api/preview.ts": { "maxDuration": 20 }
+        "api/preview.ts": { "maxDuration": 45 },
+        "api/jobs/index.ts": { "maxDuration": 45 }
     },
     "crons": [
         { "path": "/api/cron/cleanup", "schedule": "0 4 * * *" }

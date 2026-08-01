@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { list } from '@vercel/blob';
-import { json, error, requireMethod } from '../_lib/http.js';
+import { json, error, requireMethod, withErrorHandling } from '../_lib/http.js';
 import { deleteJob, type JobState } from '../_lib/jobStore.js';
 
 const JOB_TTL_MS = Number(process.env.WMD_JOB_TTL_HOURS || 24) * 60 * 60 * 1000;
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
 
     // Vercel Cron calls this with a bearer token matching CRON_SECRET.
@@ -43,3 +43,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     json(res, 200, { ok: true, removed });
 }
+
+export default withErrorHandling(handler);

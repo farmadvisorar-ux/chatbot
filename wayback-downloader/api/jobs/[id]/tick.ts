@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
-import { json, error, requireMethod } from '../../_lib/http.js';
+import { json, error, requireMethod, withErrorHandling } from '../../_lib/http.js';
 import { archiveUrl, type Snapshot } from '../../_lib/cdx.js';
 import { urlToFilepath } from '../../_lib/urlmap.js';
 import {
@@ -100,7 +100,7 @@ async function advance(state: JobState): Promise<void> {
     }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
 
     const id = String(req.query.id ?? '');
@@ -128,3 +128,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     await saveJobState(state);
     json(res, 200, toPublicJobState(state));
 }
+
+export default withErrorHandling(handler);
