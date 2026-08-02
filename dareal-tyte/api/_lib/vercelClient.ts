@@ -41,6 +41,30 @@ export interface DeployResult {
     projectId: string;
     deploymentId: string;
     liveUrl: string;
+    public: boolean;
+}
+
+/**
+ * New projects on this Vercel team inherit an org-wide default
+ * (ssoProtection: "all_except_custom_domains") that walls every
+ * *.vercel.app URL behind a Vercel login — confirmed by reproducing it
+ * directly against the API. That defeats the entire point of a recovered
+ * site's preview link, so it's disabled immediately after the project is
+ * created. Best-effort: if this call fails, the deployment itself still
+ * succeeded, so that's reported via `public: false` rather than failing
+ * the whole launch over a settings tweak.
+ */
+async function disableDeploymentProtection(projectId: string): Promise<boolean> {
+    try {
+        await vercelRequest(`/v9/projects/${encodeURIComponent(projectId)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ ssoProtection: null }),
+        });
+        return true;
+    } catch (err) {
+        console.error('disableDeploymentProtection failed', err);
+        return false;
+    }
 }
 
 /** Deploys a single static HTML file as a new production Vercel deployment. */
@@ -57,10 +81,14 @@ export async function deployToVercel(html: string, domainName: string): Promise<
         }),
     });
 
+    const projectId = data.projectId ?? projectName;
+    const isPublic = await disableDeploymentProtection(projectId);
+
     return {
-        projectId: data.projectId ?? projectName,
+        projectId,
         deploymentId: data.id,
         liveUrl: `https://${data.url}`,
+        public: isPublic,
     };
 }
 

@@ -36,12 +36,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         json(res, 200, {
             success: true,
-            message: 'Website logic pulled, sanitized, and deployed successfully.',
+            message: deployment.public
+                ? 'Website logic pulled, sanitized, and deployed successfully.'
+                : 'Deployed, but could not confirm the preview link is public — it may prompt for a Vercel login. Check the project\'s Deployment Protection setting.',
             target_domain: domain,
             timestamp,
             projectId: deployment.projectId,
             preview_url: deployment.liveUrl,
             deployment_id: deployment.deploymentId,
+            public: deployment.public,
         });
     } catch (err) {
         if (err instanceof ArchiveFetchError) return error(res, 502, err.message);

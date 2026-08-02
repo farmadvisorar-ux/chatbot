@@ -107,8 +107,19 @@ Fetch + sanitize + deploy to Vercel as a new production deployment.
 { "domain": "oldhairwebsite.com", "timestamp": "20210101000000" }
 ```
 
-Response includes `projectId`, `deployment_id`, and `preview_url`
-(the `*.vercel.app` URL of the new deployment).
+Response includes `projectId`, `deployment_id`, `preview_url` (the
+`*.vercel.app` URL of the new deployment), and `public` (`true`/`false`).
+
+Every new project created this way inherits whatever org-wide Deployment
+Protection default your Vercel team has — on this team that's
+`ssoProtection: all_except_custom_domains`, meaning a brand-new
+`*.vercel.app` URL is walled behind a Vercel login by default and would
+otherwise send visitors straight to a Vercel sign-in page instead of the
+recovered site. `deployToVercel` explicitly disables that right after
+creating the project. `public: false` in the response means that call
+failed (network hiccup, permissions) even though the deployment itself
+succeeded — check the project's Deployment Protection setting manually if
+you see it.
 
 ### `POST /api/map-domain`
 

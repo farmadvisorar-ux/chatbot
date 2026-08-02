@@ -199,11 +199,12 @@ launchBtn.addEventListener('click', async () => {
     setStatus('Fetching, sanitizing, and deploying to Vercel…');
     setBusy(true);
     try {
-        const data = await callApi<{ preview_url: string; projectId: string }>(
+        const data = await callApi<{ preview_url: string; projectId: string; public: boolean }>(
             '/api/launch',
             { domain: domainInput.value.trim(), timestamp: effectiveTimestamp() },
         );
-        setStatus(`Deployed! ${data.preview_url}\nproject: ${data.projectId}`, 'ok');
+        const warning = data.public ? '' : '\nWarning: could not confirm the link is public — it may prompt for a Vercel login.';
+        setStatus(`Deployed! ${data.preview_url}\nproject: ${data.projectId}${warning}`, data.public ? 'ok' : 'error');
     } catch (err) {
         setStatus(err instanceof Error ? err.message : String(err), 'error');
     } finally {
