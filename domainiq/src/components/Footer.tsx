@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import NewsletterSignup from './NewsletterSignup';
 
 const MARKETPLACES = [
     { name: 'Sedo', href: 'https://sedo.com', blurb: 'List your domain on the largest domain marketplace' },
@@ -9,6 +10,15 @@ const MARKETPLACES = [
 export default function Footer() {
     return (
         <footer className="border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 mt-24">
+            <div className="mx-auto max-w-6xl px-4 pt-10">
+                <div className="card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 className="font-semibold">Get the newsletter</h3>
+                        <p className="text-sm text-slate-500">Occasional picks worth knowing about — new tools, notable domains, and more.</p>
+                    </div>
+                    <NewsletterSignup />
+                </div>
+            </div>
             <div className="mx-auto max-w-6xl px-4 py-10 grid gap-8 md:grid-cols-4">
                 <div>
                     <div className="flex items-center gap-2 font-bold text-lg mb-2">
