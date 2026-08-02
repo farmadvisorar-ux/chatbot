@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken, createClerkClient } from '@clerk/backend';
 import { error } from './http.js';
+import { isPaywallBypassed } from './paywall.js';
 
 export type AuthedUser = {
     userId: string;
@@ -60,6 +61,8 @@ export async function requireSignedIn(req: VercelRequest, res: VercelResponse): 
 export async function requirePaidUser(req: VercelRequest, res: VercelResponse): Promise<AuthedUser | null> {
     const user = await requireSignedIn(req, res);
     if (!user) return null;
+
+    if (isPaywallBypassed()) return user;
 
     if (!user.accessExpiresAt || user.accessExpiresAt < Date.now()) {
         error(res, 402, 'Your access has expired. Purchase access to continue.');

@@ -51,6 +51,16 @@ configured, and 401/402 if the caller isn't signed in or hasn't paid — no
 quota/money on the caller's behalf (Wayback fetches, Vercel deployments,
 domain attachments, Stripe transactions).
 
+### Testing without Stripe: `SKIP_PAYWALL`
+
+Set `SKIP_PAYWALL=true` on a deployment to let any signed-in user through
+`requirePaidUser` without an actual payment — useful for a separate staging
+project while Stripe isn't fully configured yet. Sign-in via Clerk is still
+required either way. **Never set this on the production project** — it's a
+per-deployment env var with no per-user or per-request override, so it can
+only be turned on by whoever controls that deployment's environment
+variables, not by anything a client sends.
+
 ### `POST /api/recover`
 
 Fetch + sanitize a snapshot without deploying it. Useful for previewing.
