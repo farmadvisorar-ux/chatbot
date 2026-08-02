@@ -22,7 +22,7 @@ const CODE_HOSTS = /^(www\.)?(github\.com|gitlab\.com|codeberg\.org|git\.sr\.ht|
 // product's own site. Reading contacts off them returns the aggregator's
 // address — an early run captured hello@producthunt.com for all 44 Product
 // Hunt entries, which would have meant mailing Product Hunt 44 times.
-const AGGREGATOR_HOSTS = /^(www\.)?(producthunt\.com|news\.ycombinator\.com|lobste\.rs|dev\.to|reddit\.com|indiehackers\.com|betalist\.com)$/i;
+const AGGREGATOR_HOSTS = /^(www\.)?(producthunt\.com|news\.ycombinator\.com|lobste\.rs|dev\.to|reddit\.com|indiehackers\.com|betalist\.com|addons\.mozilla\.org|marketplace\.visualstudio\.com)$/i;
 
 /**
  * Reads the contact address a product publishes on its own site.
@@ -342,12 +342,246 @@ async function fromLobsters(): Promise<DirectoryCandidate[]> {
     return candidates;
 }
 
+
+/**
+ * Reddit's maker communities. Each post that links somewhere other than
+ * reddit.com is treated as a launch; pure discussion threads are skipped.
+ *
+ * Reddit rate-limits hard — hitting several subreddits back to back returns
+ * 429 — so the subs are fetched one at a time with a pause between, and a
+ * failed sub is skipped rather than failing the whole source.
+ */
+const REDDIT_SUBS = ['SideProject', 'alphaandbetausers', 'InternetIsBeautiful', 'SaaS'];
+
+async function fromReddit(): Promise<DirectoryCandidate[]> {
+    const candidates: DirectoryCandidate[] = [];
+
+    for (const sub of REDDIT_SUBS) {
+        let xml = '';
+        try {
+            xml = await fetchText(`https://www.reddit.com/r/${sub}/new/.rss?limit=50`);
+        } catch {
+            continue; // 429 or transient — try the next sub.
+        }
+
+        for (const chunk of xml.split('<entry>').slice(1)) {
+            const entry = chunk.split('</entry>')[0];
+            const title = stripTags(entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? '').slice(0, 110);
+            const postUrl = entry.match(/<link[^>]*href="([^"]+)"/)?.[1] ?? '';
+            const content = decodeEntities(entry.match(/<content[^>]*>([\s\S]*?)<\/content>/)?.[1] ?? '');
+            if (!title || !postUrl) continue;
+
+            // The product link is inside the post body. Anything pointing back
+            // at Reddit is a discussion thread, not a launch.
+            const links = [...content.matchAll(/href="(https?:\/\/[^"]+)"/g)].map(match => match[1]);
+            const productUrl = links.find(link =>
+                !/reddit\.com|redd\.it|redditstatic|redditmedia|preview\.redd/i.test(link));
+            if (!productUrl) continue;
+
+            const tagline = stripTags(content).replace(/submitted by.*$/i, '').trim().slice(0, 200);
+            if (tagline.length < 20) continue;
+
+            candidates.push({
+                name: title.replace(/^\[[^\]]*\]\s*/, '').slice(0, 80),
+                tagline,
+                description: `${tagline}. Shared by its maker on r/${sub}.`,
+                url: productUrl,
+                category: categorise(`${title} ${tagline}`),
+                tags: [categorise(`${title} ${tagline}`), 'Reddit', 'New launch'],
+                source: `Reddit r/${sub}`,
+                sourceUrl: postUrl,
+                score: 0,
+            });
+        }
+
+        // Deliberate pause: Reddit rate-limits by IP and returns 429 when these
+        // are fired off together. A skipped sub is picked up next hour.
+        await new Promise(resolve => setTimeout(resolve, 2500));
+    }
+    return candidates;
+}
+
+/**
+ * Newly published Firefox browser extensions, via Mozilla's public add-ons
+ * API sorted by creation date.
+ *
+ * Note on Chrome: the Chrome Web Store publishes no API or feed of new
+ * extensions, and scraping it would breach its terms, so browser-extension
+ * coverage comes from Mozilla and the VS Code marketplace instead.
+ */
+async function fromFirefoxAddons(): Promise<DirectoryCandidate[]> {
+    const body = await fetchText(
+        'https://addons.mozilla.org/api/v5/addons/search/?sort=created&type=extension&app=firefox&page_size=40',
+    );
+    const data = JSON.parse(body) as {
+        results?: Array<{
+            name?: Record<string, string>; summary?: Record<string, string> | null;
+            url?: string; slug?: string; average_daily_users?: number;
+        }>;
+    };
+    const pick = (value?: Record<string, string> | null): string =>
+        value ? (value['en-US'] ?? Object.values(value)[0] ?? '') : '';
+
+    const candidates: DirectoryCandidate[] = [];
+    for (const addon of data.results ?? []) {
+        const name = stripTags(pick(addon.name)).slice(0, 80);
+        const tagline = stripTags(pick(addon.summary)).slice(0, 200);
+        if (!name || tagline.length < 12 || !addon.url) continue;
+
+        candidates.push({
+            name,
+            tagline,
+            description: `${tagline}. A newly published Firefox browser extension.`,
+            url: addon.url,
+            category: 'Browser Extension',
+            tags: ['Browser Extension', 'Firefox', 'New launch'],
+            source: 'Firefox Add-ons',
+            sourceUrl: addon.url,
+            score: 0,
+        });
+    }
+    return candidates;
+}
+
+/** Newly published VS Code extensions, via the public marketplace gallery API. */
+async function fromVsCodeMarketplace(): Promise<DirectoryCandidate[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let body: string;
+    try {
+        const response = await fetch('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
+            method: 'POST',
+            headers: {
+                'User-Agent': USER_AGENT,
+                'Content-Type': 'application/json',
+                Accept: 'application/json;api-version=7.2-preview.1',
+            },
+            signal: controller.signal,
+            // sortBy 10 = publish date, sortOrder 2 = descending.
+            body: JSON.stringify({
+                filters: [{ criteria: [{ filterType: 8, value: 'Microsoft.VisualStudio.Code' }], sortBy: 10, sortOrder: 2, pageSize: 40 }],
+                flags: 914,
+            }),
+        });
+        if (!response.ok) throw new Error(`VS Code marketplace returned ${response.status}`);
+        body = await response.text();
+    } finally {
+        clearTimeout(timer);
+    }
+
+    const data = JSON.parse(body) as {
+        results?: Array<{ extensions?: Array<{ displayName?: string; shortDescription?: string; extensionName?: string; publisher?: { publisherName?: string } }> }>;
+    };
+    const candidates: DirectoryCandidate[] = [];
+
+    for (const extension of data.results?.[0]?.extensions ?? []) {
+        const name = stripTags(extension.displayName ?? '').slice(0, 80);
+        const tagline = stripTags(extension.shortDescription ?? '').slice(0, 200);
+        const publisher = extension.publisher?.publisherName;
+        if (!name || tagline.length < 12 || !publisher || !extension.extensionName) continue;
+
+        const url = `https://marketplace.visualstudio.com/items?itemName=${publisher}.${extension.extensionName}`;
+        candidates.push({
+            name,
+            tagline,
+            description: `${tagline}. A newly published VS Code extension.`,
+            url,
+            category: 'Developer Tools',
+            tags: ['Editor Extension', 'VS Code', 'New launch'],
+            source: 'VS Code Marketplace',
+            sourceUrl: url,
+            score: 0,
+        });
+    }
+    return candidates;
+}
+
+/**
+ * Product Hunt's per-topic feeds. The main feed only carries the day's top
+ * items, so topic feeds reach launches that never make the front page.
+ */
+const PH_TOPICS = ['artificial-intelligence', 'saas', 'developer-tools', 'productivity', 'design-tools', 'marketing'];
+
+async function fromProductHuntTopics(): Promise<DirectoryCandidate[]> {
+    const candidates: DirectoryCandidate[] = [];
+
+    for (const topic of PH_TOPICS) {
+        let xml = '';
+        try {
+            xml = await fetchText(`https://www.producthunt.com/feed?category=${topic}`);
+        } catch {
+            continue;
+        }
+        for (const chunk of xml.split('<entry>').slice(1)) {
+            const entry = chunk.split('</entry>')[0];
+            const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.trim();
+            const link = entry.match(/<link[^>]*href="([^"]+)"/)?.[1];
+            const content = entry.match(/<content[^>]*>([\s\S]*?)<\/content>/)?.[1] ?? '';
+            if (!title || !link) continue;
+
+            const tagline = stripTags(decodeEntities(content).match(/<p>([\s\S]*?)<\/p>/)?.[1] ?? '').slice(0, 200);
+            if (tagline.length < 8) continue;
+
+            const name = stripTags(title).slice(0, 80);
+            candidates.push({
+                name,
+                tagline,
+                description: `${tagline}. Featured on Product Hunt.`,
+                url: link,
+                category: categorise(`${name} ${tagline} ${topic}`),
+                tags: [categorise(`${name} ${tagline} ${topic}`), 'Product Hunt', 'New launch'],
+                source: 'Product Hunt',
+                sourceUrl: link,
+                score: 0,
+            });
+        }
+    }
+    return candidates;
+}
+
+/** "Launch HN" — the channel YC companies use, distinct from Show HN. */
+async function fromLaunchHN(): Promise<DirectoryCandidate[]> {
+    const body = await fetchText(
+        'https://hn.algolia.com/api/v1/search_by_date?tags=story&query=%22Launch%20HN%22&hitsPerPage=50',
+    );
+    const data = JSON.parse(body) as { hits?: Array<{ objectID: string; title?: string; url?: string; story_text?: string }> };
+    const candidates: DirectoryCandidate[] = [];
+
+    for (const hit of data.hits ?? []) {
+        if (!hit.title || !/^launch hn/i.test(hit.title)) continue;
+        const cleaned = hit.title.replace(/^launch hn:\s*/i, '').trim();
+        const [namePart, ...rest] = cleaned.split(/\s+[—–-]\s+/);
+        const name = stripTags(namePart).slice(0, 80);
+        const tagline = stripTags(rest.join(' — ') || stripTags(hit.story_text ?? '')).slice(0, 200);
+        const url = hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`;
+        if (!name || tagline.length < 12) continue;
+
+        candidates.push({
+            name,
+            tagline,
+            description: `${tagline}. Launched on Hacker News.`,
+            url,
+            category: categorise(`${name} ${tagline}`),
+            tags: [categorise(`${name} ${tagline}`), 'Launch HN', 'New launch'],
+            source: 'Launch HN',
+            sourceUrl: `https://news.ycombinator.com/item?id=${hit.objectID}`,
+            score: 0,
+        });
+    }
+    return candidates;
+}
+
 const SOURCES: Array<[string, () => Promise<DirectoryCandidate[]>]> = [
     ['Hacker News', fromHackerNews],
     ['Product Hunt', fromProductHunt],
     ['GitHub', fromGitHub],
     ['DEV', fromDevTo],
     ['Lobsters', fromLobsters],
+    ['Launch HN', fromLaunchHN],
+    ['Product Hunt topics', fromProductHuntTopics],
+    ['Reddit', fromReddit],
+    ['Firefox Add-ons', fromFirefoxAddons],
+    ['VS Code Marketplace', fromVsCodeMarketplace],
 ];
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -383,14 +617,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     // Each source is isolated: a source being down or changing shape must not
     // stop the others from ingesting.
-    for (const [name, load] of SOURCES) {
+    // Sources are fetched concurrently and inserted sequentially. Run one after
+    // another, eleven sources at up to 12s each would exceed the caller's
+    // timeout; the inserts stay serial so two sources returning the same
+    // product cannot race past the duplicate check.
+    const fetched = await Promise.all(SOURCES.map(async ([name, load]) => {
         try {
-            const candidates = await load();
-            const added = await insertCandidates(pool, candidates);
-            report[name] = { found: candidates.length, added };
+            return { name, candidates: await load() };
+        } catch (err) {
+            return { name, error: err instanceof Error ? err.message : String(err) };
+        }
+    }));
+
+    for (const result of fetched) {
+        if ('error' in result) {
+            report[result.name] = { failed: result.error as string };
+            continue;
+        }
+        try {
+            const added = await insertCandidates(pool, result.candidates);
+            report[result.name] = { found: result.candidates.length, added };
             totalAdded += added;
         } catch (err) {
-            report[name] = { failed: err instanceof Error ? err.message : String(err) };
+            report[result.name] = { failed: err instanceof Error ? err.message : String(err) };
         }
     }
 
