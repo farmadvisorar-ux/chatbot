@@ -6,6 +6,8 @@ import { getPool } from '@/lib/db';
 import { formatUsd, formatUsdExact } from '@/lib/format';
 import ScoreBar from '@/components/ScoreBar';
 import SaveToWatchlistButton from '@/components/SaveToWatchlistButton';
+import AlternativeNames from '@/components/AlternativeNames';
+import EmbedBadge from '@/components/EmbedBadge';
 import AdSlot from '@/components/AdSlot';
 
 export const dynamic = 'force-dynamic';
@@ -258,6 +260,10 @@ export default async function ValuationPage({ params }: Props) {
                     </div>
                 </section>
             )}
+
+            <AlternativeNames seed={result.rootLabel} />
+
+            <EmbedBadge domain={result.domain} />
 
             <AdSlot />
 

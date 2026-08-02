@@ -16,6 +16,7 @@ export default async function NavBar() {
                     <Link href="/" className="hover:text-brand-600">Valuate</Link>
                     <Link href="/compare" className="hover:text-brand-600">Compare</Link>
                     <Link href="/bulk" className="hover:text-brand-600">Bulk Check</Link>
+                    <Link href="/suggest" className="hover:text-brand-600">Name Ideas</Link>
                     <Link href="/how-it-works" className="hover:text-brand-600">Methodology</Link>
                     <Link href="/pricing" className="hover:text-brand-600">Pricing</Link>
                     {session && <Link href="/dashboard" className="hover:text-brand-600">Dashboard</Link>}

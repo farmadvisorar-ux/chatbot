@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import WatchlistPanel from '@/components/WatchlistPanel';
+import PortfolioAnalytics from '@/components/PortfolioAnalytics';
 import ResendVerificationBanner from '@/components/ResendVerificationBanner';
 
 export default async function DashboardPage() {
@@ -14,6 +15,7 @@ export default async function DashboardPage() {
                 <p className="mt-1 text-slate-500">Signed in as {session.email}</p>
             </div>
             {!session.emailVerified && <ResendVerificationBanner />}
+            <PortfolioAnalytics />
             <WatchlistPanel />
         </div>
     );
