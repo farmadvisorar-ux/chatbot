@@ -61,6 +61,16 @@ per-deployment env var with no per-user or per-request override, so it can
 only be turned on by whoever controls that deployment's environment
 variables, not by anything a client sends.
 
+### Operator access without paying: `ADMIN_EMAILS`
+
+Unlike `SKIP_PAYWALL` (which exempts everyone), `ADMIN_EMAILS` is safe to set
+on production: a comma-separated allowlist of email addresses that skip
+`requirePaidUser`'s expiry check, matched case-insensitively. Everyone not on
+the list still has to pay. This doesn't touch Stripe or Clerk metadata at
+all — it's checked fresh on every request against the caller's verified
+Clerk email, so adding or removing an address takes effect immediately on
+redeploy with no per-user state to clean up.
+
 ### `POST /api/recover`
 
 Fetch + sanitize a snapshot without deploying it. Useful for previewing.

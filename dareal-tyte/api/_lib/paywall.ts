@@ -8,3 +8,17 @@
 export function isPaywallBypassed(): boolean {
     return process.env.SKIP_PAYWALL === 'true';
 }
+
+/**
+ * Operator allowlist for production: specific emails (comma-separated in
+ * ADMIN_EMAILS) skip payment entirely, without touching Stripe or Clerk
+ * metadata. Unlike SKIP_PAYWALL this is safe to set on the production
+ * project — it only exempts the listed addresses, everyone else still pays.
+ */
+export function isAdminEmail(email: string): boolean {
+    const admins = (process.env.ADMIN_EMAILS ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+    return admins.includes(email.trim().toLowerCase());
+}

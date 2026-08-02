@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, requireMethod } from './_lib/http.js';
 import { requireSignedIn } from './_lib/auth.js';
-import { isPaywallBypassed } from './_lib/paywall.js';
+import { isPaywallBypassed, isAdminEmail } from './_lib/paywall.js';
 
 /**
  * GET /api/account-status
@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const user = await requireSignedIn(req, res);
     if (!user) return;
 
-    const paid = isPaywallBypassed() || Boolean(user.accessExpiresAt && user.accessExpiresAt > Date.now());
+    const paid = isPaywallBypassed() || isAdminEmail(user.email) || Boolean(user.accessExpiresAt && user.accessExpiresAt > Date.now());
     json(res, 200, {
         email: user.email,
         paid,
