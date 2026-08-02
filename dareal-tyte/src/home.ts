@@ -2,7 +2,7 @@ const menuToggle = document.getElementById('menuToggle');
 const navLinks = document.getElementById('navLinks');
 
 menuToggle?.addEventListener('click', () => {
-    const open = navLinks.classList.toggle('open');
+    const open = navLinks?.classList.toggle('open') ?? false;
     menuToggle.setAttribute('aria-expanded', String(open));
 });
 

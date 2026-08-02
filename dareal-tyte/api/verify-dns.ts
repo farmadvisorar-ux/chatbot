@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, error, requireMethod } from './_lib/http.js';
-import { requireApiKey } from './_lib/auth.js';
+import { requirePaidUser } from './_lib/auth.js';
 import { normalizeDomain, normalizeProjectId, ValidationError } from './_lib/domain.js';
 import { verifyDomainStatus, VercelApiError } from './_lib/vercelClient.js';
 
@@ -11,7 +11,7 @@ import { verifyDomainStatus, VercelApiError } from './_lib/vercelClient.js';
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
-    if (!requireApiKey(req, res)) return;
+    if (!(await requirePaidUser(req, res))) return;
 
     let projectId: string;
     let customDomain: string;

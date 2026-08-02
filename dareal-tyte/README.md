@@ -34,13 +34,22 @@ move the Wayback fetch itself to the browser (like `wayback-downloader`
 does) and have the client submit the already-fetched HTML to `/api/launch`
 for sanitization + deployment instead of having the server fetch it.
 
-## Endpoints
+## Auth model
 
-All routes require a shared secret, either as `Authorization: Bearer <key>`
-or `x-api-key: <key>`, matching `DAREAL_API_KEY`. Every route fails closed
-(HTTP 501) if `DAREAL_API_KEY` isn't set — there's no "open by accident"
-state. This exists because every route here spends real quota/money on the
-caller's behalf (Wayback fetches, Vercel deployments, domain attachments).
+Access is a real account, not a shared secret: sign-in is handled by
+[Clerk](https://clerk.com), and `/api/recover`, `/api/launch`,
+`/api/map-domain`, and `/api/verify-dns` all require a valid Clerk session
+**and** unexpired paid access (`/api/account-status` and `/api/checkout`
+only require the session — that's how you get access in the first place).
+
+Paid access is a one-time $18 Stripe payment (`/api/checkout` →
+`/api/webhooks/stripe`) that grants 6 months of access, stamped onto the
+user's Clerk `privateMetadata.accessExpiresAt` — there's no subscription and
+no auto-renewal. Every route fails closed (HTTP 501) if Clerk/Stripe aren't
+configured, and 401/402 if the caller isn't signed in or hasn't paid — no
+"open by accident" state. This matters because every route here spends real
+quota/money on the caller's behalf (Wayback fetches, Vercel deployments,
+domain attachments, Stripe transactions).
 
 ### `POST /api/recover`
 
@@ -80,6 +89,24 @@ Poll Vercel to check whether a mapped domain's DNS is correctly configured.
 { "projectId": "dareal-oldhairwebsite-com", "customDomain": "mybrandnewdomain.com" }
 ```
 
+### `GET /api/account-status`
+
+Returns `{ email, paid, accessExpiresAt }` for the signed-in caller. Requires
+a session but not paid access — the console uses this to decide whether to
+show the paywall.
+
+### `POST /api/checkout`
+
+Creates a Stripe Checkout session for the $18 one-time payment and returns
+`{ url }` to redirect the browser to. Requires a session but not paid access.
+
+### `POST /api/webhooks/stripe`
+
+Stripe webhook target. On `checkout.session.completed` with
+`payment_status: "paid"`, stamps the paying user's Clerk account with 6
+months of access. Not meant to be called directly — point Stripe's webhook
+settings at this URL.
+
 ## What the sanitizer actually does — and doesn't
 
 `api/_lib/sanitize.ts` is a **best-effort cleanup pass, not a security
@@ -105,16 +132,30 @@ domain at it.
 
 ```bash
 npm install
-cp .env.example .env   # fill in VERCEL_TOKEN and DAREAL_API_KEY
+cp .env.example .env   # fill in the values below
 ```
 
 Required environment variables (see `.env.example`):
 
 - `VERCEL_TOKEN` — a [Vercel access token](https://vercel.com/account/tokens)
-  with permission to create deployments and manage domains.
-- `VERCEL_TEAM_ID` — optional, only if deploying under a Vercel team.
-- `DAREAL_API_KEY` — shared secret required on every request. Generate one
-  with `openssl rand -hex 32`.
+  with permission to create deployments and manage domains. Used by
+  `/api/launch` etc. to deploy *recovered* sites — unrelated to whatever
+  account this project itself is deployed under.
+- `VERCEL_TEAM_ID` — optional, only if deploying recovered sites under a
+  Vercel team.
+- `VITE_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` — from a
+  [Clerk application](https://dashboard.clerk.com). The publishable key is
+  baked into the frontend build (`VITE_` prefix, so it's not secret); the
+  secret key is backend-only.
+- `STRIPE_SECRET_KEY` — from [Stripe](https://dashboard.stripe.com/apikeys).
+  Use a `sk_test_...` key until the full checkout flow has been verified
+  with a test card.
+- `STRIPE_PRICE_ID` — a one-time (not recurring) $18 Price in that Stripe
+  account.
+- `STRIPE_WEBHOOK_SECRET` — the signing secret for a webhook endpoint
+  pointed at `/api/webhooks/stripe`, listening for `checkout.session.completed`.
+- `PUBLIC_SITE_URL` — optional, defaults to `https://darealtyte.com`. Used
+  to build the Stripe Checkout success/cancel redirect URLs.
 
 ## Running the tests
 
@@ -125,6 +166,8 @@ npm run typecheck
 
 ## Deploying
 
-This is a set of Vercel serverless functions under `api/`. Import this
-directory (`dareal-tyte/`) as the project root in Vercel — no build step or
-frontend is required for the API itself.
+This project has both a Vite-built frontend (`index.html`, `admin.html`,
+`src/`) and Vercel serverless functions under `api/`. `vercel.json` sets
+`buildCommand`/`outputDirectory` for the frontend; the `api/` functions
+build separately and automatically. Import this directory (`dareal-tyte/`)
+as the project root in Vercel.

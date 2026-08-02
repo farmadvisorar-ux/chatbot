@@ -7,125 +7,175 @@
 <meta name="robots" content="noindex, nofollow">
 <style>
     :root {
-        color-scheme: light dark;
-        --bg: #0b0d12;
-        --panel: #12151c;
-        --border: #262b36;
-        --text: #e8eaf0;
-        --muted: #9aa2b1;
-        --accent: #5b8cff;
+        color-scheme: dark;
+        --bg: #050609;
+        --surface: #10121a;
+        --surface-2: #151824;
+        --border: #22252f;
+        --border-strong: #313644;
+        --text: #f6f7fb;
+        --muted: #8d93a6;
+        --muted-2: #5f6579;
+        --accent: #6c7bff;
+        --accent-2: #9b6cff;
         --danger: #ff6b6b;
-        --ok: #35d399;
-    }
-    @media (prefers-color-scheme: light) {
-        :root {
-            --bg: #f5f6f8;
-            --panel: #ffffff;
-            --border: #dde1e8;
-            --text: #14161c;
-            --muted: #5b6270;
-        }
+        --ok: #2fd191;
     }
     * { box-sizing: border-box; }
     body {
         margin: 0;
-        font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: var(--bg);
         color: var(--text);
+        -webkit-font-smoothing: antialiased;
     }
-    main { max-width: 880px; margin: 0 auto; padding: 40px 20px 80px; }
-    .breadcrumb { font-size: 0.85rem; margin-bottom: 20px; }
-    .breadcrumb a { color: var(--muted); }
-    h1 { font-size: 1.6rem; margin: 0 0 4px; }
-    .tagline { color: var(--muted); margin: 0 0 32px; }
+    main { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+    .breadcrumb { font-size: 0.85rem; margin-bottom: 24px; }
+    .breadcrumb a { color: var(--muted); text-decoration: none; }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+    .tagline { color: var(--muted); margin: 0 0 28px; }
     .panel {
-        background: var(--panel);
+        background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px;
+        border-radius: 16px;
+        padding: 28px;
         margin-bottom: 20px;
     }
-    label { display: block; font-size: 0.85rem; color: var(--muted); margin: 12px 0 4px; }
+    .center { text-align: center; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin: 14px 0 5px; }
     label:first-child { margin-top: 0; }
     input {
         width: 100%;
-        padding: 9px 11px;
+        padding: 10px 12px;
         border-radius: 8px;
         border: 1px solid var(--border);
-        background: transparent;
+        background: var(--bg);
         color: var(--text);
         font: inherit;
     }
     .row { display: flex; gap: 12px; }
     .row > div { flex: 1; }
-    .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-    button {
+    .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+    button, a.btn {
         appearance: none;
-        border: 1px solid var(--border);
-        background: var(--accent);
-        color: white;
+        border: 1px solid var(--border-strong);
+        background: transparent;
+        color: var(--text);
         font: inherit;
         font-weight: 600;
-        padding: 10px 16px;
-        border-radius: 8px;
+        padding: 10px 18px;
+        border-radius: 10px;
         cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
     }
-    button.secondary { background: transparent; color: var(--text); }
+    button.primary, a.btn.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        border: none;
+        color: white;
+    }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .status { margin-top: 14px; font-size: 0.9rem; white-space: pre-wrap; }
+    .status { margin-top: 16px; font-size: 0.9rem; white-space: pre-wrap; }
     .status.error { color: var(--danger); }
     .status.ok { color: var(--ok); }
     iframe {
         width: 100%;
         height: 480px;
         border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-top: 16px;
+        border-radius: 10px;
+        margin-top: 18px;
         background: white;
     }
-    .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+    .hint { color: var(--muted-2); font-size: 0.8rem; margin-top: 8px; }
     a { color: var(--accent); }
-    code { background: rgba(127,127,127,0.15); padding: 1px 5px; border-radius: 4px; }
+    .account-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 24px; font-size: 0.85rem; color: var(--muted);
+    }
+    .account-bar .sign-out { color: var(--muted); background: none; border: none; padding: 0; font-weight: 500; cursor: pointer; text-decoration: underline; }
+    .plan-price { font-size: 2.4rem; font-weight: 800; margin: 10px 0 4px; }
+    .plan-note { color: var(--muted); font-size: 0.9rem; margin: 0 0 24px; }
+    section[hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
     <p class="breadcrumb"><a href="/">← DAREALTYTE</a></p>
-    <h1>Operator Console</h1>
-    <p class="tagline">Recover a snapshot, preview it, or launch it live to Vercel.</p>
 
-    <div class="panel">
-        <label for="apiKey">Admin key</label>
-        <input id="apiKey" type="password" autocomplete="off" placeholder="DAREAL_API_KEY">
-        <p class="hint">Kept only in this browser's local storage — never sent anywhere but this site's own API.</p>
-    </div>
+    <section id="state-loading" class="center panel">
+        <p>Loading…</p>
+    </section>
 
-    <div class="panel">
-        <div class="row">
-            <div>
-                <label for="domain">Domain</label>
-                <input id="domain" placeholder="oldhairwebsite.com">
-            </div>
-            <div>
-                <label for="timestamp">Timestamp (optional)</label>
-                <input id="timestamp" placeholder="20210101000000">
+    <section id="state-signed-out" hidden>
+        <h1>Operator Console</h1>
+        <p class="tagline">Sign in to recover and deploy a domain.</p>
+        <div class="panel center">
+            <p style="color: var(--muted); margin-bottom: 20px;">You'll need an account to run a recovery or deployment.</p>
+            <div class="actions" style="justify-content: center;">
+                <button id="signInBtn" class="primary">Sign in</button>
+                <button id="signUpBtn">Create account</button>
             </div>
         </div>
-        <div class="actions">
-            <button id="recoverBtn">Preview recovery</button>
-            <button id="launchBtn" class="secondary">Launch &amp; deploy to Vercel</button>
-        </div>
-        <div id="status" class="status"></div>
-        <iframe id="preview" sandbox="allow-scripts" hidden></iframe>
-    </div>
+    </section>
 
-    <p class="hint">
-        This console and the API it calls are unauthenticated to anyone
-        without the admin key above. See the project README for what the
-        sanitizer does and doesn't guarantee, and a known risk around
-        server-side Wayback Machine fetches from datacenter IPs.
-    </p>
+    <section id="state-not-configured" hidden>
+        <h1>Operator Console</h1>
+        <div class="panel">
+            <p>Sign-in isn't configured on this deployment yet.</p>
+        </div>
+    </section>
+
+    <section id="state-paywall" hidden>
+        <div class="account-bar">
+            <span id="accountEmail"></span>
+            <button class="sign-out" id="signOutBtn">Sign out</button>
+        </div>
+        <h1>Get access</h1>
+        <p class="tagline">One-time payment, no subscription.</p>
+        <div class="panel center">
+            <p class="plan-price">$18</p>
+            <p class="plan-note">One-time payment · 6 months of access · no auto-renewal</p>
+            <button id="buyBtn" class="primary">Buy access</button>
+            <div id="buyStatus" class="status"></div>
+        </div>
+    </section>
+
+    <section id="state-console" hidden>
+        <div class="account-bar">
+            <span id="accountEmailConsole"></span>
+            <button class="sign-out" id="signOutBtn2">Sign out</button>
+        </div>
+        <h1>Operator Console</h1>
+        <p class="tagline" id="accessNote">Recover a snapshot, preview it, or launch it live to Vercel.</p>
+
+        <div class="panel">
+            <div class="row">
+                <div>
+                    <label for="domain">Domain</label>
+                    <input id="domain" placeholder="oldhairwebsite.com">
+                </div>
+                <div>
+                    <label for="timestamp">Timestamp (optional)</label>
+                    <input id="timestamp" placeholder="20210101000000">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="recoverBtn">Preview recovery</button>
+                <button id="launchBtn" class="primary">Launch &amp; deploy to Vercel</button>
+            </div>
+            <div id="status" class="status"></div>
+            <iframe id="preview" sandbox="allow-scripts" hidden></iframe>
+        </div>
+
+        <p class="hint">
+            See the project README for what the sanitizer does and doesn't
+            guarantee, and a known risk around server-side Wayback Machine
+            fetches from datacenter IPs.
+        </p>
+    </section>
 </main>
-<script src="/app.js"></script>
+<script type="module" src="./src/admin.ts"></script>
 </body>
 </html>
