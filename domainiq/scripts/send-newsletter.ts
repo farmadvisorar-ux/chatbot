@@ -10,7 +10,7 @@
 // per-recipient unsubscribe link automatically appended.
 import { readFileSync } from 'node:fs';
 import { Resend } from 'resend';
-import { getPool } from '../src/lib/db';
+import { neon } from '@neondatabase/serverless';
 
 function parseArgs(argv: string[]) {
     const args: Record<string, string | boolean> = {};
@@ -64,14 +64,19 @@ async function main() {
         process.exit(1);
     }
 
+    if (!process.env.DATABASE_URL) {
+        console.error('DATABASE_URL is not set.');
+        process.exit(1);
+    }
+
     const bodyHtml = readFileSync(file, 'utf-8');
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const from = process.env.EMAIL_FROM || 'DomainIQ <onboarding@resend.dev>';
 
-    const pool = getPool();
-    const { rows: subscribers } = await pool.query<{ email: string; unsubscribe_token: string }>(
+    const sql = neon(process.env.DATABASE_URL);
+    const subscribers = await sql(
         'SELECT email, unsubscribe_token FROM newsletter_subscribers WHERE unsubscribed_at IS NULL',
-    );
+    ) as { email: string; unsubscribe_token: string }[];
 
     console.log(`Subject: ${subject}`);
     console.log(`Recipients: ${subscribers.length}`);
@@ -81,13 +86,11 @@ async function main() {
         console.log('\nPreview of the rendered email (first recipient, or a placeholder if none):');
         const sampleToken = subscribers[0]?.unsubscribe_token ?? 'PREVIEW_TOKEN';
         console.log(renderIssue(subject, bodyHtml, `${baseUrl}/api/newsletter/unsubscribe?token=${sampleToken}`));
-        await pool.end();
         return;
     }
 
     if (subscribers.length === 0) {
         console.log('No active subscribers — nothing to send.');
-        await pool.end();
         return;
     }
 
@@ -124,7 +127,6 @@ async function main() {
     }
 
     console.log(`\nDone. Sent: ${sent}, Failed: ${failed}`);
-    await pool.end();
 }
 
 main().catch((err) => {
