@@ -20,25 +20,53 @@ export interface Snapshot {
     statuscode: string;
 }
 
-export function buildCdxParams(domain: string): URLSearchParams {
-    return new URLSearchParams({
-        url: domain,
-        output: 'json',
-        fl: 'timestamp,statuscode',
-        matchType: 'exact',
-        filter: 'statuscode:200',
-        collapse: 'timestamp:8', // at most one capture per day
-        limit: '500',
-    });
+function escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * matchType: 'exact' against a bare domain (no scheme, no www, no trailing
+ * slash) only matches captures recorded in that exact form — which misses
+ * almost everything, since most crawls record "https://www.example.com/" or
+ * similar. 'domain' matches the host broadly (any scheme, www or not, any
+ * path), and the `original` regex filter narrows that back down to just the
+ * homepage — any scheme/www/trailing-slash variant of it — server-side, so
+ * we're not paying to fetch every subpage just to discard it client-side.
+ */
+export function buildCdxParams(domain: string): URLSearchParams {
+    const rootPattern = `^https?://(www\\.)?${escapeRegex(domain)}/?$`;
+    const params = new URLSearchParams({
+        url: domain,
+        matchType: 'domain',
+        output: 'json',
+        fl: 'timestamp,statuscode',
+        limit: '2000',
+    });
+    params.append('filter', 'statuscode:200');
+    params.append('filter', `original:${rootPattern}`);
+    return params;
+}
+
+/**
+ * Collapses to one capture per calendar day and sorts newest-first
+ * ourselves, rather than trusting the CDX API's `collapse` param + row
+ * order: with matchType=domain, results can be grouped by URL variant
+ * (www vs non-www) rather than merged into one chronological timeline, so
+ * relying on API-side collapsing/ordering across variants isn't reliable.
+ */
 export function parseCdxJson(data: unknown): Snapshot[] {
     if (!Array.isArray(data) || data.length < 2) return [];
     const [, ...rows] = data as [string[], ...unknown[][]];
-    return rows
+    const snapshots = rows
         .map((row) => ({ timestamp: String(row[0] ?? ''), statuscode: String(row[1] ?? '') }))
-        .filter((s) => s.timestamp)
-        .reverse(); // newest first
+        .filter((s) => s.timestamp);
+
+    const byDay = new Map<string, Snapshot>();
+    for (const snapshot of snapshots) {
+        const day = snapshot.timestamp.slice(0, 8);
+        if (!byDay.has(day)) byDay.set(day, snapshot);
+    }
+    return [...byDay.values()].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 }
 
 export async function fetchSnapshots(domain: string, timeoutMs = 15000): Promise<Snapshot[]> {
