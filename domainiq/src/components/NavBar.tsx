@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import LogoutButton from './LogoutButton';
+import MobileNavMenu from './MobileNavMenu';
 
 export default async function NavBar() {
     const session = await getSession();
 
     return (
-        <header className="border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80 sticky top-0 z-40">
+        <header className="relative border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80 sticky top-0 z-40">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
                 <Link href="/" className="flex items-center gap-2 font-bold text-lg">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">IQ</span>
@@ -33,6 +34,7 @@ export default async function NavBar() {
                             <Link href="/signup" className="btn-primary !px-3 !py-1.5 text-sm">Sign up free</Link>
                         </>
                     )}
+                    <MobileNavMenu showDashboard={Boolean(session)} />
                 </div>
             </div>
         </header>
