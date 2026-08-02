@@ -29,7 +29,17 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
     }
 
     const resend = new Resend(apiKey);
-    await resend.emails.send({ from, to, subject, html });
+    // The Resend SDK returns { data, error } rather than throwing on API
+    // errors (e.g. the sandbox restriction that blocks sending to anyone
+    // but your own account email without a verified domain) — checking
+    // `error` explicitly is required, or failures are completely silent.
+    const { error } = await resend.emails.send({ from, to, subject, html });
+    if (error) {
+        console.error(`[mailer] Resend rejected "${subject}" to ${to}: ${error.name} — ${error.message}`);
+        devOutbox.unshift({ to, subject, html, sentAt: new Date().toISOString(), delivered: false });
+        if (devOutbox.length > 50) devOutbox.length = 50;
+        return;
+    }
     devOutbox.unshift({ to, subject, html, sentAt: new Date().toISOString(), delivered: true });
     if (devOutbox.length > 50) devOutbox.length = 50;
 }
