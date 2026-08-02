@@ -20,47 +20,37 @@ export interface Snapshot {
     statuscode: string;
 }
 
-function escapeRegex(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
- * matchType: 'exact' against a bare domain (no scheme, no www, no trailing
- * slash) only matches captures recorded in that exact form — which misses
- * almost everything, since most crawls record "https://www.example.com/" or
- * similar. 'domain' matches the host broadly (any scheme, www or not, any
- * path), and the `original` regex filter narrows that back down to just the
- * homepage — any scheme/www/trailing-slash variant of it — server-side, so
- * we're not paying to fetch every subpage just to discard it client-side.
+ * Exact-match lookups are fast, indexed-by-SURT-key operations regardless of
+ * how large the overall site is. A domain-wide match (matchType: 'domain')
+ * plus a server-side regex filter was tried first, but for a site the size
+ * of walmart.com that forces the CDX server to scan the site's entire page
+ * history before it can apply the filter, and reliably times out. Two exact
+ * queries (bare host + www-prefixed) stay fast at any site size, at the cost
+ * of only covering those two variants — root pages archived under some other
+ * subdomain won't show up, which is an acceptable trade-off for speed here.
  */
-export function buildCdxParams(domain: string): URLSearchParams {
-    const rootPattern = `^https?://(www\\.)?${escapeRegex(domain)}/?$`;
-    const params = new URLSearchParams({
-        url: domain,
-        matchType: 'domain',
+function buildCdxParams(url: string): URLSearchParams {
+    return new URLSearchParams({
+        url,
+        matchType: 'exact',
         output: 'json',
         fl: 'timestamp,statuscode',
-        limit: '2000',
+        filter: 'statuscode:200',
+        limit: '1000',
     });
-    params.append('filter', 'statuscode:200');
-    params.append('filter', `original:${rootPattern}`);
-    return params;
 }
 
-/**
- * Collapses to one capture per calendar day and sorts newest-first
- * ourselves, rather than trusting the CDX API's `collapse` param + row
- * order: with matchType=domain, results can be grouped by URL variant
- * (www vs non-www) rather than merged into one chronological timeline, so
- * relying on API-side collapsing/ordering across variants isn't reliable.
- */
 export function parseCdxJson(data: unknown): Snapshot[] {
     if (!Array.isArray(data) || data.length < 2) return [];
     const [, ...rows] = data as [string[], ...unknown[][]];
-    const snapshots = rows
+    return rows
         .map((row) => ({ timestamp: String(row[0] ?? ''), statuscode: String(row[1] ?? '') }))
         .filter((s) => s.timestamp);
+}
 
+/** Collapses to one capture per calendar day and sorts newest-first. */
+export function collapseToDaily(snapshots: Snapshot[]): Snapshot[] {
     const byDay = new Map<string, Snapshot>();
     for (const snapshot of snapshots) {
         const day = snapshot.timestamp.slice(0, 8);
@@ -69,32 +59,48 @@ export function parseCdxJson(data: unknown): Snapshot[] {
     return [...byDay.values()].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 }
 
-export async function fetchSnapshots(domain: string, timeoutMs = 15000): Promise<Snapshot[]> {
-    if (!domain.trim()) throw new CdxError('Please provide a domain to look up.');
-
-    const url = `${CDX_API_URL}?${buildCdxParams(domain).toString()}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-        response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
-    } catch (err) {
-        throw new CdxError(`Could not reach the Wayback Machine CDX API: ${(err as Error).message}`);
-    } finally {
-        clearTimeout(timer);
-    }
-
+async function fetchOne(url: string, signal: AbortSignal): Promise<Snapshot[]> {
+    const apiUrl = `${CDX_API_URL}?${buildCdxParams(url).toString()}`;
+    const response = await fetch(apiUrl, { signal, headers: { Accept: 'application/json' } });
     if (!response.ok) throw new CdxError(`The CDX API returned HTTP ${response.status}.`);
+
+    // The CDX API returns a genuinely empty body (not "[]") when nothing matches.
+    const text = await response.text();
+    if (!text.trim()) return [];
 
     let data: unknown;
     try {
-        data = await response.json();
+        data = JSON.parse(text);
     } catch {
         throw new CdxError('The CDX API returned an unexpected response.');
     }
-
     return parseCdxJson(data);
+}
+
+export async function fetchSnapshots(domain: string, timeoutMs = 20000): Promise<Snapshot[]> {
+    const trimmed = domain.trim();
+    if (!trimmed) throw new CdxError('Please provide a domain to look up.');
+
+    const bare = trimmed.replace(/^www\./i, '');
+    const variants = [bare, `www.${bare}`];
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const results = await Promise.allSettled(variants.map((v) => fetchOne(v, controller.signal)));
+        const fulfilled = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<Snapshot[]>[];
+        if (!fulfilled.length) {
+            const firstError = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+            const reason = firstError?.reason;
+            throw reason instanceof CdxError
+                ? reason
+                : new CdxError(`Could not reach the Wayback Machine CDX API: ${(reason as Error)?.message ?? 'unknown error'}`);
+        }
+        return collapseToDaily(fulfilled.flatMap((r) => r.value));
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 const FULL_TIMESTAMP_RE = /^\d{14}$/;
