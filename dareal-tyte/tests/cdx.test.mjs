@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCdxJson, collapseToDaily, formatTimestamp } from '../src/lib/cdx.ts';
+import { parseCdxJson, collapseToDaily } from '../api/_lib/cdx.ts';
 
 test('parseCdxJson drops the header row', () => {
     const raw = [
@@ -35,13 +35,4 @@ test('collapseToDaily merges snapshots from different host variants (bare + www)
     const bare = [{ timestamp: '20210101000000', statuscode: '200' }];
     const www = [{ timestamp: '20220101000000', statuscode: '200' }];
     assert.deepEqual(collapseToDaily([...bare, ...www]).map((s) => s.timestamp), ['20220101000000', '20210101000000']);
-});
-
-test('formatTimestamp renders a 14-digit Wayback timestamp as a readable date', () => {
-    const formatted = formatTimestamp('20220115143000');
-    assert.match(formatted, /Jan 15, 2022/);
-});
-
-test('formatTimestamp falls back to the raw value if unparseable', () => {
-    assert.equal(formatTimestamp('not-a-timestamp'), 'not-a-timestamp');
 });

@@ -1,14 +1,16 @@
 /**
- * Client for the Wayback Machine CDX Server API, run from the browser.
+ * Server-side client for the Wayback Machine CDX Server API.
  *
- * This deliberately mirrors wayback-downloader/src/lib/cdx.ts's approach in
- * this same repo: that project found requests to web.archive.org from
- * serverless/datacenter IPs get silently dropped or reset, and fixed it by
- * making every Wayback request directly from the visitor's browser instead
- * of a server. Listing snapshots is exactly that kind of request, so it
- * belongs here (src/), not in api/ — see api/_lib/archive.ts for the one
- * request this project still makes server-side (the actual snapshot fetch
- * for sanitizing + deploying), which is a separate, documented risk.
+ * This started as a browser-side module (see git history), following the
+ * same reasoning wayback-downloader/ in this repo uses for its own Wayback
+ * fetches: avoid server-side requests since archive.org has been observed
+ * silently dropping/resetting them from datacenter IPs. In practice here it
+ * failed differently: browsers (confirmed in real-world testing, not just
+ * this sandbox) got "Load failed" from a direct cross-origin fetch to this
+ * endpoint, while api/_lib/archive.ts's server-side fetches to
+ * web.archive.org from this same Vercel project have worked reliably in
+ * production (/api/recover and /api/launch both succeeded end-to-end,
+ * including with a large site). Moved server-side on that evidence.
  */
 
 const CDX_API_URL = 'https://web.archive.org/cdx/search/cdx';
@@ -23,8 +25,8 @@ export interface Snapshot {
 /**
  * Exact-match lookups are fast, indexed-by-SURT-key operations regardless of
  * how large the overall site is. A domain-wide match (matchType: 'domain')
- * plus a server-side regex filter was tried first, but for a site the size
- * of walmart.com that forces the CDX server to scan the site's entire page
+ * plus a regex filter was tried first, but for a site the size of
+ * walmart.com that forces the CDX server to scan the site's entire page
  * history before it can apply the filter, and reliably times out. Two exact
  * queries (bare host + www-prefixed) stay fast at any site size, at the cost
  * of only covering those two variants — root pages archived under some other
@@ -101,19 +103,4 @@ export async function fetchSnapshots(domain: string, timeoutMs = 20000): Promise
     } finally {
         clearTimeout(timer);
     }
-}
-
-const FULL_TIMESTAMP_RE = /^\d{14}$/;
-
-export function formatTimestamp(timestamp: string): string {
-    if (!FULL_TIMESTAMP_RE.test(timestamp)) return timestamp;
-
-    const y = timestamp.slice(0, 4);
-    const m = timestamp.slice(4, 6);
-    const d = timestamp.slice(6, 8);
-    const hh = timestamp.slice(8, 10) || '00';
-    const mm = timestamp.slice(10, 12) || '00';
-    const date = new Date(`${y}-${m}-${d}T${hh}:${mm}:00Z`);
-    if (Number.isNaN(date.getTime())) return timestamp;
-    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
 }

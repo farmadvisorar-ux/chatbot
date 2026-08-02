@@ -9,30 +9,31 @@ link patterns, rewrites archived asset URLs back to their original form, and
 optionally deploys the result live as a Vercel production deployment —
 useful for reclaiming the content of an expired domain you now own.
 
-## ⚠️ Read this before relying on `/api/recover` or `/api/launch`
+## A note on where Wayback requests happen
 
-This repo's other project, `wayback-downloader/`, already built a very
-similar tool and documented a hard-won finding in its README:
+This repo's other project, `wayback-downloader/`, documented a hard-won
+finding in its README: requests to `web.archive.org` from serverless/
+datacenter IP ranges (Vercel's included) were silently dropped or reset in
+their testing, likely anti-bot protection treating cloud infrastructure
+differently from an ordinary visitor's browser. That's why this project's
+`/api/snapshots` (CDX lookup) was originally built to run client-side, in
+the browser, the same way.
 
-> requests to `web.archive.org` from serverless/datacenter IP ranges
-> (Vercel's included) were silently dropped or reset — not fixed by adding
-> a `User-Agent` header or retrying. This is very likely a form of
-> anti-bot/anti-scraping protection that treats cloud infrastructure
-> differently from an ordinary visitor's browser.
+In practice here it failed the other direction: real-world testing hit a
+generic "Load failed" error from the browser doing a direct cross-origin
+fetch to the CDX endpoint (Safari/iOS), while this project's own server-side
+fetches to `web.archive.org` — `api/recover.ts`, `api/launch.ts`, and now
+`api/snapshots.ts` too — have worked reliably in production, including
+against a large site. `api/_lib/cdx.ts` and `api/_lib/archive.ts` were kept server-side on that
+real-world evidence, rather than avoided pre-emptively on the theoretical
+risk alone.
 
-`api/recover.ts` and `api/launch.ts` in this project make exactly that kind
-of request — a server-side `fetch()` to `web.archive.org` — which is the
-one thing `wayback-downloader` deliberately avoids by doing all Wayback
-fetches client-side in the visitor's browser instead.
-
-**Before depending on this in production**, deploy it and test a real
-`/api/recover` call against your actual host (Vercel serverless functions
-and most VPS/PaaS providers all sit on datacenter IP ranges). If archive.org
-starts silently dropping or resetting those requests the way it did for
-`wayback-downloader`, the fix is architectural, not a header tweak:
-move the Wayback fetch itself to the browser (like `wayback-downloader`
-does) and have the client submit the already-fetched HTML to `/api/launch`
-for sanitization + deployment instead of having the server fetch it.
+**If you fork this or deploy it fresh**, don't assume either direction works
+by default — test both a `/api/recover` call and the "Find snapshots" button
+against your actual deployment before relying on it. If server-side Wayback
+requests start failing the way `wayback-downloader` describes, the fix is
+architectural: move the fetch back to the browser and have the client submit
+already-fetched data to the API instead of having the server fetch it.
 
 ## Auth model
 
@@ -70,6 +71,22 @@ the list still has to pay. This doesn't touch Stripe or Clerk metadata at
 all — it's checked fresh on every request against the caller's verified
 Clerk email, so adding or removing an address takes effect immediately on
 redeploy with no per-user state to clean up.
+
+### `POST /api/snapshots`
+
+Lists available Wayback Machine snapshots for a domain (one per calendar
+day, newest first), so the console can offer a picker instead of guessing a
+single timestamp.
+
+```json
+{ "domain": "oldhairwebsite.com" }
+```
+
+Only checks the bare host and its `www.` variant via fast exact-match CDX
+queries — a broader domain-wide query was tried first but timed out on
+large sites, since the CDX server has to scan the site's entire history
+before it can filter. A root page archived only under some other subdomain
+won't show up.
 
 ### `POST /api/recover`
 

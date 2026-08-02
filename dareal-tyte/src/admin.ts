@@ -1,5 +1,7 @@
 import { isConfigured, loadClerk, isSignedIn, getAuthToken, openSignIn, openSignUp, signOut, onAuthChange } from './auth';
-import { fetchSnapshots, formatTimestamp, CdxError } from './lib/cdx';
+import { formatTimestamp } from './lib/format';
+
+type Snapshot = { timestamp: string; statuscode: string };
 
 const $ = <T extends HTMLElement>(sel: string): T => document.querySelector<T>(sel)!;
 
@@ -125,38 +127,6 @@ function effectiveTimestamp(): string | undefined {
     return undefined;
 }
 
-findBtn.addEventListener('click', async () => {
-    const domain = domainInput.value.trim();
-    if (!domain) {
-        setFindStatus('Enter a domain first.', 'error');
-        return;
-    }
-    findBtn.disabled = true;
-    snapshotRow.hidden = true;
-    setFindStatus('Looking up available snapshots…');
-    try {
-        const snapshots = await fetchSnapshots(domain);
-        if (!snapshots.length) {
-            setFindStatus('No snapshots found for that domain.', 'error');
-            return;
-        }
-        snapshotSelect.replaceChildren(
-            ...snapshots.map((s) => {
-                const option = document.createElement('option');
-                option.value = s.timestamp;
-                option.textContent = formatTimestamp(s.timestamp);
-                return option;
-            }),
-        );
-        snapshotRow.hidden = false;
-        setFindStatus(`${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'} found — newest first.`, 'ok');
-    } catch (err) {
-        setFindStatus(err instanceof CdxError ? err.message : 'Could not look up snapshots.', 'error');
-    } finally {
-        findBtn.disabled = false;
-    }
-});
-
 async function callApi<T>(path: string, body: unknown): Promise<T> {
     const token = await getAuthToken();
     const response = await fetch(path, {
@@ -168,6 +138,38 @@ async function callApi<T>(path: string, body: unknown): Promise<T> {
     if (!response.ok) throw new Error(data.error || `Request failed (HTTP ${response.status})`);
     return data;
 }
+
+findBtn.addEventListener('click', async () => {
+    const domain = domainInput.value.trim();
+    if (!domain) {
+        setFindStatus('Enter a domain first.', 'error');
+        return;
+    }
+    findBtn.disabled = true;
+    snapshotRow.hidden = true;
+    setFindStatus('Looking up available snapshots…');
+    try {
+        const data = await callApi<{ snapshots: Snapshot[] }>('/api/snapshots', { domain });
+        if (!data.snapshots.length) {
+            setFindStatus('No snapshots found for that domain.', 'error');
+            return;
+        }
+        snapshotSelect.replaceChildren(
+            ...data.snapshots.map((s) => {
+                const option = document.createElement('option');
+                option.value = s.timestamp;
+                option.textContent = formatTimestamp(s.timestamp);
+                return option;
+            }),
+        );
+        snapshotRow.hidden = false;
+        setFindStatus(`${data.snapshots.length} snapshot${data.snapshots.length === 1 ? '' : 's'} found — newest first.`, 'ok');
+    } catch (err) {
+        setFindStatus(err instanceof Error ? err.message : 'Could not look up snapshots.', 'error');
+    } finally {
+        findBtn.disabled = false;
+    }
+});
 
 recoverBtn.addEventListener('click', async () => {
     preview.hidden = true;
