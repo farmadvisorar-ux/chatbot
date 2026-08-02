@@ -98,6 +98,20 @@
     .plan-price { font-size: 2.4rem; font-weight: 800; margin: 10px 0 4px; }
     .plan-note { color: var(--muted); font-size: 0.9rem; margin: 0 0 24px; }
     section[hidden] { display: none !important; }
+    select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font: inherit;
+    }
+    .find-row { display: flex; gap: 10px; align-items: flex-end; }
+    .find-row > div:first-child { flex: 1; }
+    .find-row button { flex-shrink: 0; margin-top: 0; }
+    details.advanced { margin-top: 14px; }
+    details.advanced summary { color: var(--muted); font-size: 0.82rem; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -151,16 +165,26 @@
         <p class="tagline" id="accessNote">Recover a snapshot, preview it, or launch it live to Vercel.</p>
 
         <div class="panel">
-            <div class="row">
+            <div class="find-row">
                 <div>
                     <label for="domain">Domain</label>
                     <input id="domain" placeholder="oldhairwebsite.com">
                 </div>
-                <div>
-                    <label for="timestamp">Timestamp (optional)</label>
-                    <input id="timestamp" placeholder="20210101000000">
-                </div>
+                <button id="findSnapshotsBtn">Find snapshots</button>
             </div>
+            <div id="findStatus" class="status"></div>
+
+            <div id="snapshotRow" hidden>
+                <label for="snapshotSelect">Snapshot</label>
+                <select id="snapshotSelect"></select>
+            </div>
+
+            <details class="advanced">
+                <summary>Advanced: enter an exact timestamp instead</summary>
+                <label for="timestamp">Timestamp</label>
+                <input id="timestamp" placeholder="20210101000000">
+            </details>
+
             <div class="actions">
                 <button id="recoverBtn">Preview recovery</button>
                 <button id="launchBtn" class="primary">Launch &amp; deploy to Vercel</button>

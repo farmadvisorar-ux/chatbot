@@ -1,4 +1,5 @@
 import { isConfigured, loadClerk, isSignedIn, getAuthToken, openSignIn, openSignUp, signOut, onAuthChange } from './auth';
+import { fetchSnapshots, formatTimestamp, CdxError } from './lib/cdx';
 
 const $ = <T extends HTMLElement>(sel: string): T => document.querySelector<T>(sel)!;
 
@@ -96,16 +97,65 @@ const recoverBtn = $<HTMLButtonElement>('#recoverBtn');
 const launchBtn = $<HTMLButtonElement>('#launchBtn');
 const statusEl = $('#status');
 const preview = $<HTMLIFrameElement>('#preview');
+const findBtn = $<HTMLButtonElement>('#findSnapshotsBtn');
+const findStatusEl = $('#findStatus');
+const snapshotRow = $('#snapshotRow');
+const snapshotSelect = $<HTMLSelectElement>('#snapshotSelect');
 
 function setStatus(message: string, kind?: 'ok' | 'error'): void {
     statusEl.textContent = message;
     statusEl.className = `status ${kind ?? ''}`.trim();
 }
 
+function setFindStatus(message: string, kind?: 'ok' | 'error'): void {
+    findStatusEl.textContent = message;
+    findStatusEl.className = `status ${kind ?? ''}`.trim();
+}
+
 function setBusy(busy: boolean): void {
     recoverBtn.disabled = busy;
     launchBtn.disabled = busy;
 }
+
+/** The manual "advanced" field wins if filled in; otherwise use whatever snapshot is picked from the list. */
+function effectiveTimestamp(): string | undefined {
+    const manual = timestampInput.value.trim();
+    if (manual) return manual;
+    if (!snapshotRow.hidden && snapshotSelect.value) return snapshotSelect.value;
+    return undefined;
+}
+
+findBtn.addEventListener('click', async () => {
+    const domain = domainInput.value.trim();
+    if (!domain) {
+        setFindStatus('Enter a domain first.', 'error');
+        return;
+    }
+    findBtn.disabled = true;
+    snapshotRow.hidden = true;
+    setFindStatus('Looking up available snapshots…');
+    try {
+        const snapshots = await fetchSnapshots(domain);
+        if (!snapshots.length) {
+            setFindStatus('No snapshots found for that domain.', 'error');
+            return;
+        }
+        snapshotSelect.replaceChildren(
+            ...snapshots.map((s) => {
+                const option = document.createElement('option');
+                option.value = s.timestamp;
+                option.textContent = formatTimestamp(s.timestamp);
+                return option;
+            }),
+        );
+        snapshotRow.hidden = false;
+        setFindStatus(`${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'} found — newest first.`, 'ok');
+    } catch (err) {
+        setFindStatus(err instanceof CdxError ? err.message : 'Could not look up snapshots.', 'error');
+    } finally {
+        findBtn.disabled = false;
+    }
+});
 
 async function callApi<T>(path: string, body: unknown): Promise<T> {
     const token = await getAuthToken();
@@ -126,7 +176,7 @@ recoverBtn.addEventListener('click', async () => {
     try {
         const data = await callApi<{ domain: string; timestamp: string; strippedLinks: number; rewrittenAssets: number; data: string }>(
             '/api/recover',
-            { domain: domainInput.value.trim(), timestamp: timestampInput.value.trim() || undefined },
+            { domain: domainInput.value.trim(), timestamp: effectiveTimestamp() },
         );
         // Rendered in a sandboxed iframe (no allow-same-origin) so any script
         // in the recovered page can't reach this admin page's storage or DOM.
@@ -149,7 +199,7 @@ launchBtn.addEventListener('click', async () => {
     try {
         const data = await callApi<{ preview_url: string; projectId: string }>(
             '/api/launch',
-            { domain: domainInput.value.trim(), timestamp: timestampInput.value.trim() || undefined },
+            { domain: domainInput.value.trim(), timestamp: effectiveTimestamp() },
         );
         setStatus(`Deployed! ${data.preview_url}\nproject: ${data.projectId}`, 'ok');
     } catch (err) {
