@@ -6,6 +6,7 @@ import { getPool } from '@/lib/db';
 import { formatUsd, formatUsdExact } from '@/lib/format';
 import ScoreBar from '@/components/ScoreBar';
 import SaveToWatchlistButton from '@/components/SaveToWatchlistButton';
+import ShareButton from '@/components/ShareButton';
 import AlternativeNames from '@/components/AlternativeNames';
 import EmbedBadge from '@/components/EmbedBadge';
 import AdSlot from '@/components/AdSlot';
@@ -91,6 +92,7 @@ export default async function ValuationPage({ params }: Props) {
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                     <SaveToWatchlistButton domain={result.domain} signedIn={Boolean(session)} initiallySaved={alreadySaved} />
+                    <ShareButton domain={result.domain} priceLabel={`${formatUsd(result.lowUsd)}–${formatUsd(result.highUsd)}`} />
                     <Link href={`/compare?a=${encodeURIComponent(result.domain)}`} className="btn-secondary">Compare</Link>
                     <a
                         href={`https://dan.com/buy-domain/${encodeURIComponent(result.domain)}`}
