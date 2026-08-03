@@ -215,6 +215,22 @@
         .browser-frame.live .thumb, .pipeline-arrow .icon { animation: none !important; }
     }
 
+    /* Explainer video */
+    .video-section { padding: 72px 0 20px; }
+    .video-frame {
+        max-width: 860px; margin: 0 auto;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 20px;
+        padding: 12px;
+    }
+    .video-frame video {
+        display: block;
+        width: 100%;
+        border-radius: 12px;
+        background: #000;
+    }
+
     /* Sections */
     section { padding: 96px 0; border-top: 1px solid var(--border); }
     .section-head { max-width: 640px; margin: 0 auto 52px; text-align: center; }
@@ -343,6 +359,7 @@
     <div class="wrap bar">
         <div class="logo"><span class="mark">D</span>DAREALTYTE</div>
         <div class="nav-links" id="navLinks">
+            <a href="#demo">Demo</a>
             <a href="#engine">The engine</a>
             <a href="#how">How it works</a>
             <a href="#pricing">Pricing</a>
@@ -395,6 +412,22 @@
         </div>
     </div>
 </div>
+
+<section class="video-section" id="demo">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Watch it work</p>
+            <h2>See DAREALTYTE in action</h2>
+            <p>A quick walkthrough of pulling a domain out of the archive and shipping it live.</p>
+        </div>
+        <div class="video-frame">
+            <video controls preload="metadata" playsinline>
+                <source src="/explainer.mp4" type="video/mp4">
+                Your browser doesn't support embedded video. <a href="/explainer.mp4">Download the explainer</a> instead.
+            </video>
+        </div>
+    </div>
+</section>
 
 <section class="pipeline">
     <div class="wrap">
