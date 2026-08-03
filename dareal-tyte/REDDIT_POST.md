@@ -10,7 +10,16 @@
 
 ## Body
 
-Just shipped **DAREALTYTE** — you point it at an expired domain, it pulls the old site out of the Internet Archive, cleans it up, and redeploys it live in one click. Built for people who buy expired domains and want the original site back without rebuilding it by hand.
+Just shipped **DAREALTYTE**. Yes, it's a forced acronym. It's two systems bolted together:
+
+- **D.A.R.E.A.L.** — *Digital Archive Retrieval Engineering And Launcher.* The retrieval half. Queries the Internet Archive's CDX index for every capture a domain has, and pulls down the snapshot you pick.
+- **T.Y.T.E.** — *Transmission Yield Tracking Engine.* The deploy half. Cleans the snapshot up and ships it live.
+
+**What it actually does, concretely:** you type in an expired domain. It shows you every month that domain was archived — for something like `walmart.com` that's ~295 snapshots spanning 1996 to today. You pick one. It fetches that capture, strips the toolbar the Wayback Machine injects into every archived page, rewrites the archived asset URLs (`web.archive.org/web/2019.../logo.png`) back to their real paths so the page doesn't depend on archive.org staying up, neutralizes leftover spam links from whoever squatted the domain, and deploys the cleaned result to a live URL. Then you can point your own domain at it.
+
+**Who it's for:** people who buy expired domains for the existing SEO history and backlinks, and want the original site back up — without hand-scraping it or rebuilding from screenshots.
+
+**What it explicitly is not:** a security tool. The cleanup is a best-effort pass against known patterns, not a guarantee that decade-old third-party JavaScript is safe. That's stated on the site too, not just here.
 
 Two decisions/lessons worth more than the launch itself:
 
