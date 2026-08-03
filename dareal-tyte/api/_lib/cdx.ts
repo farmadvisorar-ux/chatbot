@@ -39,13 +39,19 @@ function buildCdxParams(url: string): URLSearchParams {
         output: 'json',
         fl: 'timestamp,statuscode',
         filter: 'statuscode:200',
-        // NEGATIVE limit = the most recent N captures. CDX returns results
-        // oldest-first, so a positive limit truncates from the wrong end:
-        // walmart.com returned only 1996-2006 and nothing newer, because the
-        // first 1000 rows were all from its first decade. Recovering an
-        // expired domain almost always means wanting a recent capture, so
-        // take the newest N instead.
-        limit: '-1000',
+        // One capture per month, server-side. Without this, a heavily
+        // archived domain burns the whole row budget on a narrow slice of
+        // its history: walmart.com with a plain limit returned only
+        // 1996-2006 (oldest-first truncation), and flipping to a negative
+        // limit swung it to only the last ~5 months. Collapsing monthly
+        // first means the budget spans the domain's entire archived
+        // lifetime, which is the point of a snapshot picker — someone
+        // restoring an expired domain usually wants a capture from before
+        // it went dark, which may be years back.
+        collapse: 'timestamp:6',
+        // Negative = most recent N. CDX returns oldest-first, so this keeps
+        // the newest months if a domain somehow exceeds the budget.
+        limit: '-600',
     });
 }
 
@@ -57,14 +63,21 @@ export function parseCdxJson(data: unknown): Snapshot[] {
         .filter((s) => s.timestamp);
 }
 
-/** Collapses to one capture per calendar day and sorts newest-first. */
-export function collapseToDaily(snapshots: Snapshot[]): Snapshot[] {
-    const byDay = new Map<string, Snapshot>();
+/**
+ * Collapses to one capture per calendar month and sorts newest-first.
+ * Matches the server-side monthly collapse; this pass exists to merge the
+ * two host variants (bare + www) into a single timeline rather than
+ * showing near-duplicate entries for the same month.
+ */
+export function collapseToMonthly(snapshots: Snapshot[]): Snapshot[] {
+    const byMonth = new Map<string, Snapshot>();
     for (const snapshot of snapshots) {
-        const day = snapshot.timestamp.slice(0, 8);
-        if (!byDay.has(day)) byDay.set(day, snapshot);
+        const month = snapshot.timestamp.slice(0, 6);
+        const existing = byMonth.get(month);
+        // Keep the newest capture within each month for a stable pick.
+        if (!existing || snapshot.timestamp > existing.timestamp) byMonth.set(month, snapshot);
     }
-    return [...byDay.values()].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    return [...byMonth.values()].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 }
 
 async function fetchOne(url: string, signal: AbortSignal): Promise<Snapshot[]> {
@@ -105,7 +118,7 @@ export async function fetchSnapshots(domain: string, timeoutMs = 20000): Promise
                 ? reason
                 : new CdxError(`Could not reach the Wayback Machine CDX API: ${(reason as Error)?.message ?? 'unknown error'}`);
         }
-        return collapseToDaily(fulfilled.flatMap((r) => r.value));
+        return collapseToMonthly(fulfilled.flatMap((r) => r.value));
     } finally {
         clearTimeout(timer);
     }
