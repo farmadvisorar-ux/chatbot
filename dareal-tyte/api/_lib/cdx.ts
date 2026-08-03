@@ -39,7 +39,13 @@ function buildCdxParams(url: string): URLSearchParams {
         output: 'json',
         fl: 'timestamp,statuscode',
         filter: 'statuscode:200',
-        limit: '1000',
+        // NEGATIVE limit = the most recent N captures. CDX returns results
+        // oldest-first, so a positive limit truncates from the wrong end:
+        // walmart.com returned only 1996-2006 and nothing newer, because the
+        // first 1000 rows were all from its first decade. Recovering an
+        // expired domain almost always means wanting a recent capture, so
+        // take the newest N instead.
+        limit: '-1000',
     });
 }
 
