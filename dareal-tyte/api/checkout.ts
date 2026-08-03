@@ -33,6 +33,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             metadata: { clerkUserId: user.userId },
             success_url: `${origin}/admin.html?purchase=success`,
             cancel_url: `${origin}/admin.html?purchase=cancelled`,
+            // This Stripe account has Managed Payments (automatic tax) on by
+            // default, which requires every product to carry a tax code —
+            // otherwise session creation fails outright. Opting out here
+            // rather than guessing a tax classification; the installed SDK
+            // version predates this param's types, hence the cast. Revisit
+            // if the business wants Stripe to handle sales tax collection.
+            ...({ managed_payments: { enabled: false } } as object),
         });
 
         if (!session.url) {
