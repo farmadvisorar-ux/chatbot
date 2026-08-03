@@ -157,24 +157,47 @@
         border-radius: 6px; padding: 4px 10px; text-align: center;
     }
     .browser-body { padding: 18px; }
-    .skeleton { height: 10px; border-radius: 4px; margin-bottom: 9px; }
+    .skeleton { height: 10px; border-radius: 4px; margin-bottom: 9px; position: relative; overflow: hidden; }
     .browser-frame.dead .skeleton { background: var(--surface-2); }
-    .browser-frame.dead { filter: grayscale(1); opacity: 0.55; }
+    .browser-frame.dead { filter: grayscale(1); opacity: 0.55; animation: dead-pulse 3.6s ease-in-out infinite; }
     .browser-frame.dead .browser-body { position: relative; }
     .browser-frame.dead::after {
         content: "404 · DOMAIN EXPIRED";
         position: absolute; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
         color: var(--muted-2); top: 46px; left: 50%; transform: translateX(-50%);
+        animation: dead-flicker 5s ease-in-out infinite;
     }
     .browser-frame.live .skeleton:nth-child(1) { background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 60%; height: 14px; }
     .browser-frame.live .skeleton:nth-child(2) { background: var(--surface-2); width: 90%; }
     .browser-frame.live .skeleton:nth-child(3) { background: var(--surface-2); width: 80%; }
+    .browser-frame.live .skeleton::after {
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+        background-size: 60% 100%; background-repeat: no-repeat;
+        animation: shimmer 2.4s ease-in-out infinite;
+    }
     .browser-frame.live .thumb-row { display: flex; gap: 8px; margin-top: 12px; }
-    .browser-frame.live .thumb { flex: 1; height: 38px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); }
+    .browser-frame.live .thumb {
+        flex: 1; height: 38px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border);
+        transform-origin: bottom; animation: thumb-pop 2.6s ease-in-out infinite;
+    }
+    .browser-frame.live .thumb:nth-child(2) { animation-delay: 0.2s; }
+    .browser-frame.live .thumb:nth-child(3) { animation-delay: 0.4s; }
     .pipeline-arrow { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); }
-    .pipeline-arrow .icon { width: 26px; height: 26px; color: var(--accent); }
+    .pipeline-arrow .icon { width: 26px; height: 26px; color: var(--accent); animation: arrow-nudge 1.6s ease-in-out infinite; }
     .pipeline-arrow span { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
     .frame-label { text-align: center; font-size: 0.78rem; color: var(--muted-2); margin-top: 10px; font-weight: 500; }
+
+    @keyframes dead-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.32; } }
+    @keyframes dead-flicker { 0%, 90%, 100% { opacity: 1; } 93% { opacity: 0.3; } 96% { opacity: 1; } }
+    @keyframes shimmer { 0% { background-position: -60% 0; } 100% { background-position: 160% 0; } }
+    @keyframes thumb-pop { 0%, 100% { opacity: 0.45; transform: scaleY(0.72); } 50% { opacity: 1; transform: scaleY(1); } }
+    @keyframes arrow-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+
+    @media (prefers-reduced-motion: reduce) {
+        .browser-frame.dead, .browser-frame.dead::after, .browser-frame.live .skeleton::after,
+        .browser-frame.live .thumb, .pipeline-arrow .icon { animation: none !important; }
+    }
 
     /* Sections */
     section { padding: 96px 0; border-top: 1px solid var(--border); }
@@ -347,7 +370,7 @@
             Sourced from the Internet Archive Wayback Machine
         </div>
         <div class="trust-item">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-1 4-2 5l-3 3-3-3c-1-1-2-3-2-5 0-4 2-8 5-10z"/><circle cx="12" cy="10" r="2"/></svg>
+            <svg class="icon" viewBox="0 0 76 65" fill="#fff" aria-label="Vercel logomark"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
             Deployed on Vercel's production infrastructure
         </div>
         <div class="trust-item">
@@ -579,6 +602,9 @@
             <span class="muted">© 2026 DAREALTYTE. Not affiliated with Vercel Inc. or the Internet Archive.</span>
             <a href="/admin.html" class="muted">Operator console →</a>
         </div>
+        <p class="muted" style="font-size: 0.72rem; margin-top: 14px; max-width: 640px;">
+            Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc.
+        </p>
     </div>
 </footer>
 
