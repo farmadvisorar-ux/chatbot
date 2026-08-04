@@ -27,6 +27,20 @@ header.site-header {
     padding: 10px 16px; font-weight: 700; cursor: pointer; font-size: 14px;
 }
 
+.notice-slot { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+.notice {
+    display: flex; align-items: flex-start; gap: 12px;
+    margin-top: 16px; padding: 14px 18px; border-radius: 14px; font-size: 14px;
+}
+.notice p { margin: 0; flex: 1; }
+.notice-success { background: rgba(47, 125, 79, .09); border: 1px solid rgba(47, 125, 79, .28); color: #2c6b45; }
+.notice-neutral { background: rgba(22, 19, 31, .05); border: 1px solid var(--line); color: var(--muted); }
+.notice-close {
+    background: none; border: 0; color: inherit; font-size: 20px; line-height: 1;
+    cursor: pointer; padding: 0 2px; opacity: .55;
+}
+.notice-close:hover { opacity: 1; }
+
 .hero { padding: 64px 0 48px; text-align: center; }
 .hero h1 {
     font-size: clamp(34px, 5vw, 54px); letter-spacing: -.04em; margin: 0 0 16px; line-height: 1.05;

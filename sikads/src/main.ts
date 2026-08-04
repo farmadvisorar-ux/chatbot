@@ -32,6 +32,47 @@ async function loadSponsoredSlot(): Promise<void> {
     }
 }
 
+/**
+ * Stripe sends the advertiser back to /?ad=success or /?ad=cancelled. Without
+ * this they'd land on the plain homepage with no sign their payment landed,
+ * which reads like the money vanished.
+ */
+const NOTICES: Record<'success' | 'cancelled', { tone: 'success' | 'neutral'; title: string; body: string }> = {
+    success: {
+        tone: 'success',
+        title: 'Payment received.',
+        body: 'Your campaign is in the review queue — it starts rotating in the Sponsored slot as soon as it is approved.',
+    },
+    cancelled: {
+        tone: 'neutral',
+        title: 'Checkout cancelled.',
+        body: 'You were not charged and nothing went live. The form below is still here if you want another go.',
+    },
+};
+
+function showNotice(): void {
+    const container = document.querySelector<HTMLElement>('#notice');
+    if (!container) return;
+
+    // Matched against the two known keys rather than indexing straight into
+    // NOTICES, so a hand-edited ?ad=anything can't render a half-empty banner.
+    const key = new URLSearchParams(window.location.search).get('ad');
+    if (key !== 'success' && key !== 'cancelled') return;
+    const notice = NOTICES[key];
+
+    container.innerHTML = `<div class="notice notice-${notice.tone}">
+        <p><strong>${notice.title}</strong> ${notice.body}</p>
+        <button type="button" class="notice-close" aria-label="Dismiss">&times;</button>
+    </div>`;
+    container.querySelector('.notice-close')?.addEventListener('click', () => { container.innerHTML = ''; });
+
+    // Drop the query param so a refresh — or a link someone pastes to a friend
+    // — doesn't replay "payment received" for a person who never bought a thing.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('ad');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+
 function updateEstimate(): void {
     if (!estimate || !cpmInput || !budgetInput) return;
     const cpm = Number(cpmInput.value);
@@ -84,5 +125,6 @@ form?.addEventListener('submit', async event => {
     }
 });
 
+showNotice();
 updateEstimate();
 loadSponsoredSlot();
