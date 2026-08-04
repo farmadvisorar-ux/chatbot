@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Sikads Admin</title>
+    <link rel="stylesheet" href="./src/admin.css">
+</head>
+<body>
+    <main id="admin-root">
+        <section id="admin-login" class="card">
+            <h1>Sikads Admin</h1>
+            <p class="muted">Enter your admin key to review paid ad campaigns.</p>
+            <form id="login-form">
+                <label>Admin key
+                    <input id="admin-key" type="password" autocomplete="current-password" required placeholder="Paste your ADMIN_SECRET">
+                </label>
+                <label class="checkbox"><input id="remember" type="checkbox" checked> Stay signed in on this device</label>
+                <button type="submit">Sign in</button>
+                <p id="login-status" class="status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section id="admin-app" hidden>
+            <header class="topbar">
+                <h1>Sikads Admin</h1>
+                <div>
+                    <a class="ghost linkbtn" href="/" target="_blank" rel="noopener">View site</a>
+                    <button id="refresh" type="button" class="ghost">Refresh</button>
+                    <button id="signout" type="button" class="ghost">Sign out</button>
+                </div>
+            </header>
+
+            <div id="stats" class="stats"></div>
+
+            <p class="muted">Paid campaigns land here pending review — approve to start rotating them in the Sponsored slot, or reject to keep them off the site. A live campaign stops rotating on its own once its purchased views run out.</p>
+            <div id="ads-list" class="list"></div>
+        </section>
+    </main>
+    <script type="module" src="./src/admin.ts"></script>
+</body>
+</html>

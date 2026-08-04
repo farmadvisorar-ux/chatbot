@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sikads — Advertise here. Name your price.</title>
+    <meta name="description" content="Buy a spot in the Sponsored slot. Set your own price per 1,000 views, submit your pitch, and go live once reviewed.">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <a class="logo" href="/">Sik<span>ads</span></a>
+        <button id="header-cta" class="nav-cta" type="button">Advertise here</button>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="wrap">
+                <h1>Put your link in front<br>of this audience. <em>Name your price.</em></h1>
+                <p>Set your own price per 1,000 views, write a one-line pitch, and pay through Stripe. Once approved, your ad rotates in the Sponsored slot until your views run out.</p>
+                <div class="hero-actions">
+                    <button id="hero-cta" class="btn-primary" type="button">Advertise on Sikads</button>
+                    <a class="btn-secondary" href="#sponsored">See what's live</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="sponsored" class="sponsored-rail">
+            <div class="wrap">
+                <span class="sponsored-label">Sponsored</span>
+                <div id="sponsored-slot"><p class="sponsored-empty">This spot is open — be the first sponsor.</p></div>
+            </div>
+        </section>
+
+        <section id="advertise" class="advertise">
+            <div class="wrap">
+                <h2>Advertise on Sikads</h2>
+                <p>Every campaign is reviewed before it goes live, and stops rotating automatically once its purchased views run out. Higher rates rotate more often.</p>
+                <form id="ad-form" class="ad-form">
+                    <label>One-line pitch
+                        <input name="headline" type="text" required maxlength="140" placeholder="The tool that does X for Y">
+                    </label>
+                    <label>Link
+                        <input name="url" type="url" required placeholder="https://">
+                    </label>
+                    <label>Your email
+                        <input name="email" type="email" required placeholder="you@company.com">
+                    </label>
+                    <div class="price-row">
+                        <label class="price-input">Your price / 1,000 views
+                            <span class="prefix">$</span>
+                            <input id="cpm-input" name="cpmDollars" type="number" required min="1" max="100" step="0.10" value="5.00">
+                        </label>
+                        <label class="price-input">Total budget
+                            <span class="prefix">$</span>
+                            <input id="budget-input" name="budgetDollars" type="number" required min="5" max="5000" step="1" value="25">
+                        </label>
+                    </div>
+                    <p id="views-estimate" class="estimate">≈ 5,000 views</p>
+                    <p class="ad-note">Prices from $1.00 to $100.00 per 1,000 views. Minimum budget $5.</p>
+                    <button type="submit">Continue to payment →</button>
+                    <p id="ad-status" class="form-status" role="status" aria-live="polite"></p>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>Sikads — self-serve advertising. Every dollar goes to keeping the lights on.</p>
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
