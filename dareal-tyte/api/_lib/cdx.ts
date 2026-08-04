@@ -81,22 +81,23 @@ export function collapseToMonthly(snapshots: Snapshot[]): Snapshot[] {
 }
 
 /**
- * Single-year query. `from`/`to` bound the index range the CDX server has to
- * touch, which is what makes this cheap on domains where the unbounded
- * full-history query times out — the collapse still happens, but over one
- * year's captures instead of thirty.
+ * Query bounded to a span of years. `from`/`to` limit the index range the
+ * CDX server has to touch, which is what makes this complete on domains
+ * where the unbounded query times out — the collapse still happens, but
+ * over a few years' captures instead of thirty.
  */
-function buildYearParams(url: string, year: number): URLSearchParams {
+function buildWindowParams(url: string, fromYear: number, toYear: number): URLSearchParams {
+    const months = (toYear - fromYear + 1) * 12;
     return new URLSearchParams({
         url,
         matchType: 'exact',
         output: 'json',
         fl: 'timestamp,statuscode',
         filter: 'statuscode:200',
-        from: String(year),
-        to: String(year),
+        from: String(fromYear),
+        to: String(toYear),
         collapse: 'timestamp:6',
-        limit: '-12',
+        limit: String(-months),
     });
 }
 
@@ -145,29 +146,36 @@ export async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number
  * which is the difference between a full timeline and nothing at all on
  * domains like amazon.com.
  */
-async function fetchByYearSweep(
+/** Years per bounded query. Six windows cover 1996-today. */
+const WINDOW_YEARS = 5;
+
+async function fetchByWindowSweep(
     variant: string,
     perRequestTimeoutMs: number,
-): Promise<{ snapshots: Snapshot[]; yearsQueried: number; yearsSucceeded: number }> {
+): Promise<{ snapshots: Snapshot[]; windowsQueried: number; windowsSucceeded: number }> {
     const currentYear = new Date().getUTCFullYear();
-    const years: number[] = [];
-    for (let y = currentYear; y >= ARCHIVE_FIRST_YEAR; y--) years.push(y);
+    const windows: [number, number][] = [];
+    for (let end = currentYear; end >= ARCHIVE_FIRST_YEAR; end -= WINDOW_YEARS) {
+        windows.push([Math.max(ARCHIVE_FIRST_YEAR, end - WINDOW_YEARS + 1), end]);
+    }
 
-    // Concurrency 3, not 6. At 6 the sweep's burst was enough to get
-    // subsequent requests refused outright by archive.org ("fetch failed"
-    // within a second, rather than a timeout) — a self-inflicted rate limit
-    // that made the next domain lookup fail even though it would otherwise
-    // have succeeded. This is a free, shared service; the sweep already
-    // costs ~30 requests, so it should trickle rather than burst.
+    // Five-year windows, concurrency 2: ~6 requests per sweep instead of the
+    // ~30 a per-year sweep cost. That burst was enough to get archive.org to
+    // start refusing us outright ("fetch failed" in under a second), which
+    // then broke the *next* domain lookup too. The archive is a free, shared
+    // service — a bounded query is the thing that makes this complete, and
+    // there's no need to slice it finer than necessary to achieve that.
     const results = await pooled(
-        years.map((y) => () => fetchOneWithRetry(buildYearParams(variant, y), perRequestTimeoutMs, 2)),
-        3,
+        windows.map(([from, to]) => () =>
+            fetchOneWithRetry(buildWindowParams(variant, from, to), perRequestTimeoutMs, 2),
+        ),
+        2,
     );
     const ok = results.filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled');
     return {
         snapshots: ok.flatMap((r) => r.value),
-        yearsQueried: years.length,
-        yearsSucceeded: ok.length,
+        windowsQueried: windows.length,
+        windowsSucceeded: ok.length,
     };
 }
 
@@ -242,6 +250,17 @@ export interface SnapshotResult {
     complete: boolean;
 }
 
+/**
+ * Short-lived cache of successful lookups. Serverless instances are
+ * ephemeral so this is opportunistic, not a real cache tier — but a domain's
+ * archive history barely changes minute to minute, and users retry (both by
+ * hand and because a partial result invites it). Every hit here is a burst of
+ * requests archive.org doesn't receive, which is what keeps us from getting
+ * rate-limited in the first place.
+ */
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const cache = new Map<string, { at: number; result: SnapshotResult }>();
+
 export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise<SnapshotResult> {
     const trimmed = domain.trim();
     if (!trimmed) throw new CdxError('Please provide a domain to look up.');
@@ -249,27 +268,38 @@ export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise
     const bare = trimmed.replace(/^www\./i, '');
     const variants = [bare, `www.${bare}`];
 
+    const cached = cache.get(bare);
+    // Only serve complete results from cache: a partial one should get
+    // another shot at the archive rather than being pinned for 10 minutes.
+    if (cached && cached.result.complete && Date.now() - cached.at < CACHE_TTL_MS) {
+        return cached.result;
+    }
+
+    const finish = (snapshots: Snapshot[], complete: boolean): SnapshotResult => {
+        const result = { snapshots: collapseToMonthly(snapshots), complete };
+        cache.set(bare, { at: Date.now(), result });
+        return result;
+    };
+
     // Tier 1: one unbounded full-history query. Fast for the overwhelming
     // majority of domains (walmart.com returns in ~5s), and a single round
     // trip, so it's worth trying first.
     const full = await runVariants(variants, buildCdxParams, timeoutMs);
-    if (full.snapshots.length) {
-        return { snapshots: collapseToMonthly(full.snapshots), complete: true };
-    }
+    if (full.snapshots.length) return finish(full.snapshots, true);
 
-    // Tier 2: year-by-year sweep. Only reached for domains archived so
+    // Tier 2: sweep in bounded windows. Only reached for domains archived so
     // heavily that the unbounded query can't finish (amazon.com, ebay.com).
-    // Many more requests, but each is bounded and completes — and it still
-    // yields the domain's full timeline, so this is not a degraded result.
+    // More requests, but each is bounded and completes — and it still yields
+    // the domain's full timeline, so this is not inherently degraded.
     for (const variant of variants) {
-        const swept = await fetchByYearSweep(variant, 8000);
+        const swept = await fetchByWindowSweep(variant, 12000);
         if (swept.snapshots.length) {
-            // Individual year queries can still get shed under load. Only
-            // claim a complete history if most of them actually came back —
-            // otherwise the list has silent holes and the UI should say so
-            // rather than presenting a partial timeline as the whole thing.
-            const coverage = swept.yearsSucceeded / swept.yearsQueried;
-            return { snapshots: collapseToMonthly(swept.snapshots), complete: coverage >= 0.8 };
+            // Individual windows can still get shed under load. Only claim a
+            // complete history if most of them actually came back — otherwise
+            // the list has silent holes and the UI should say so rather than
+            // presenting a partial timeline as the whole thing.
+            const coverage = swept.windowsSucceeded / swept.windowsQueried;
+            return finish(swept.snapshots, coverage >= 0.8);
         }
     }
 
@@ -277,9 +307,7 @@ export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise
     // "could not reach the Wayback Machine" error, and recent captures are
     // usually what someone restoring a domain wants anyway.
     const recent = await runVariants(variants, buildRecentOnlyParams, Math.min(timeoutMs, 10000));
-    if (recent.snapshots.length) {
-        return { snapshots: collapseToMonthly(recent.snapshots), complete: false };
-    }
+    if (recent.snapshots.length) return finish(recent.snapshots, false);
 
     // Genuinely nothing: either the domain has no captures, or the archive is
     // unreachable. Surface the underlying reason rather than a generic message.
