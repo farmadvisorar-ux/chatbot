@@ -152,7 +152,12 @@ const WINDOW_YEARS = 5;
 async function fetchByWindowSweep(
     variant: string,
     perRequestTimeoutMs: number,
-): Promise<{ snapshots: Snapshot[]; windowsQueried: number; windowsSucceeded: number }> {
+): Promise<{
+    snapshots: Snapshot[];
+    windowsQueried: number;
+    windowsSucceeded: number;
+    newestWindowSucceeded: boolean;
+}> {
     const currentYear = new Date().getUTCFullYear();
     const windows: [number, number][] = [];
     for (let end = currentYear; end >= ARCHIVE_FIRST_YEAR; end -= WINDOW_YEARS) {
@@ -176,6 +181,13 @@ async function fetchByWindowSweep(
         snapshots: ok.flatMap((r) => r.value),
         windowsQueried: windows.length,
         windowsSucceeded: ok.length,
+        // windows[0] is the newest span. Tracked separately because losing it
+        // is not equivalent to losing an old one: amazon.com came back
+        // "complete" with 216 snapshots ending in 2021, since 6-of-7 windows
+        // cleared the ratio bar while the one covering 2022-today had
+        // silently failed. For restoring a domain the recent end is the
+        // point, so its absence has to count for more than a ratio.
+        newestWindowSucceeded: results[0]?.status === 'fulfilled',
     };
 }
 
@@ -295,11 +307,11 @@ export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise
         const swept = await fetchByWindowSweep(variant, 12000);
         if (swept.snapshots.length) {
             // Individual windows can still get shed under load. Only claim a
-            // complete history if most of them actually came back — otherwise
-            // the list has silent holes and the UI should say so rather than
-            // presenting a partial timeline as the whole thing.
+            // complete history if most of them came back AND the newest one
+            // did — a list that stops years short is misleading no matter how
+            // many older windows succeeded.
             const coverage = swept.windowsSucceeded / swept.windowsQueried;
-            return finish(swept.snapshots, coverage >= 0.8);
+            return finish(swept.snapshots, coverage >= 0.8 && swept.newestWindowSucceeded);
         }
     }
 
