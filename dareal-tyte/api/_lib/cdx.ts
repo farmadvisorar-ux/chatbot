@@ -150,9 +150,15 @@ async function fetchByYearSweep(variant: string, perRequestTimeoutMs: number): P
     const years: number[] = [];
     for (let y = currentYear; y >= ARCHIVE_FIRST_YEAR; y--) years.push(y);
 
+    // Concurrency 3, not 6. At 6 the sweep's burst was enough to get
+    // subsequent requests refused outright by archive.org ("fetch failed"
+    // within a second, rather than a timeout) — a self-inflicted rate limit
+    // that made the next domain lookup fail even though it would otherwise
+    // have succeeded. This is a free, shared service; the sweep already
+    // costs ~30 requests, so it should trickle rather than burst.
     const results = await pooled(
         years.map((y) => () => fetchOne(buildYearParams(variant, y), perRequestTimeoutMs)),
-        6,
+        3,
     );
     return results
         .filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled')
@@ -186,13 +192,37 @@ async function fetchOne(params: URLSearchParams, timeoutMs: number): Promise<Sna
     }
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Retries transport-level failures with backoff. An aborted request means we
+ * ran out of time and retrying would just burn more of it, but a refused
+ * connection ("fetch failed") is usually archive.org shedding load and often
+ * succeeds a moment later — the difference between a transient blip and a
+ * hard error shown to the user.
+ */
+async function fetchOneWithRetry(params: URLSearchParams, timeoutMs: number, attempts = 3): Promise<Snapshot[]> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        if (attempt > 0) await sleep(500 * 2 ** (attempt - 1));
+        try {
+            return await fetchOne(params, timeoutMs);
+        } catch (err) {
+            lastError = err;
+            const aborted = (err as Error)?.name === 'AbortError' || /abort/i.test(String((err as Error)?.message));
+            if (aborted) throw err;
+        }
+    }
+    throw lastError;
+}
+
 /** Runs both host variants, tolerating one failing without sinking the other. */
 async function runVariants(
     variants: string[],
     build: (url: string) => URLSearchParams,
     timeoutMs: number,
 ): Promise<{ snapshots: Snapshot[]; lastError: unknown }> {
-    const results = await Promise.allSettled(variants.map((v) => fetchOne(build(v), timeoutMs)));
+    const results = await Promise.allSettled(variants.map((v) => fetchOneWithRetry(build(v), timeoutMs)));
     const snapshots = results
         .filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled')
         .flatMap((r) => r.value);
