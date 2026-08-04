@@ -145,6 +145,12 @@ async function handleCheckout(req: VercelRequest, res: VercelResponse): Promise<
         // adCampaignId travels with the session so the webhook can match the
         // payment back to our row without trusting anything from the browser.
         metadata: { adCampaignId: adId },
+        // Without this the charge inherits the Stripe account's own descriptor,
+        // so an advertiser who bought a Sikads ad sees an unrelated business
+        // name on their card statement — the classic trigger for a "I don't
+        // recognise this charge" dispute. The suffix appends to the account
+        // prefix, giving e.g. "ADJUSTER* SIKADS".
+        payment_intent_data: { statement_descriptor_suffix: 'SIKADS' },
         success_url: `${siteOrigin()}/?ad=success`,
         cancel_url: `${siteOrigin()}/?ad=cancelled`,
     });
