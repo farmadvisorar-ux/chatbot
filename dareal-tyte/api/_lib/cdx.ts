@@ -81,11 +81,30 @@ export function collapseToMonthly(snapshots: Snapshot[]): Snapshot[] {
 }
 
 /**
- * Cheap fallback query. Skipping `collapse` is the whole point: collapsing
- * forces the CDX server to walk a domain's entire capture index, which is
- * what times out on heavily-archived sites. Without it the server can seek
- * straight to the tail of the index, so this returns in a fraction of the
- * time — at the cost of only covering the domain's most recent captures.
+ * Single-year query. `from`/`to` bound the index range the CDX server has to
+ * touch, which is what makes this cheap on domains where the unbounded
+ * full-history query times out — the collapse still happens, but over one
+ * year's captures instead of thirty.
+ */
+function buildYearParams(url: string, year: number): URLSearchParams {
+    return new URLSearchParams({
+        url,
+        matchType: 'exact',
+        output: 'json',
+        fl: 'timestamp,statuscode',
+        filter: 'statuscode:200',
+        from: String(year),
+        to: String(year),
+        collapse: 'timestamp:6',
+        limit: '-12',
+    });
+}
+
+/**
+ * Last-resort query. Skipping `collapse` entirely lets the server seek
+ * straight to the tail of the index, so it returns even when everything
+ * else has timed out — but on a domain crawled hundreds of times a day,
+ * 400 captures can span only a couple of days.
  */
 function buildRecentOnlyParams(url: string): URLSearchParams {
     return new URLSearchParams({
@@ -96,6 +115,48 @@ function buildRecentOnlyParams(url: string): URLSearchParams {
         filter: 'statuscode:200',
         limit: '-400',
     });
+}
+
+/** The Wayback Machine's own coverage starts here; querying earlier years is wasted requests. */
+const ARCHIVE_FIRST_YEAR = 1996;
+
+/** Runs tasks with bounded concurrency so a 30-year sweep doesn't fire 30 simultaneous requests at archive.org. */
+export async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<PromiseSettledResult<T>[]> {
+    const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+    let next = 0;
+    const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+        while (true) {
+            const i = next++;
+            if (i >= tasks.length) return;
+            try {
+                results[i] = { status: 'fulfilled', value: await tasks[i]() };
+            } catch (reason) {
+                results[i] = { status: 'rejected', reason };
+            }
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
+
+/**
+ * Walks the archive year by year. Slower in wall-clock terms than one big
+ * query, but each request is bounded and therefore actually completes —
+ * which is the difference between a full timeline and nothing at all on
+ * domains like amazon.com.
+ */
+async function fetchByYearSweep(variant: string, perRequestTimeoutMs: number): Promise<Snapshot[]> {
+    const currentYear = new Date().getUTCFullYear();
+    const years: number[] = [];
+    for (let y = currentYear; y >= ARCHIVE_FIRST_YEAR; y--) years.push(y);
+
+    const results = await pooled(
+        years.map((y) => () => fetchOne(buildYearParams(variant, y), perRequestTimeoutMs)),
+        6,
+    );
+    return results
+        .filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled')
+        .flatMap((r) => r.value);
 }
 
 async function fetchOne(params: URLSearchParams, timeoutMs: number): Promise<Snapshot[]> {
@@ -152,18 +213,28 @@ export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise
     const bare = trimmed.replace(/^www\./i, '');
     const variants = [bare, `www.${bare}`];
 
-    // Tier 1: full archived history. Times out on the most heavily archived
-    // domains (amazon.com, ebay.com), which is exactly the case this
-    // two-tier approach exists for.
+    // Tier 1: one unbounded full-history query. Fast for the overwhelming
+    // majority of domains (walmart.com returns in ~5s), and a single round
+    // trip, so it's worth trying first.
     const full = await runVariants(variants, buildCdxParams, timeoutMs);
     if (full.snapshots.length) {
         return { snapshots: collapseToMonthly(full.snapshots), complete: true };
     }
 
-    // Tier 2: recent captures only, but fast. A shorter list beats the hard
-    // "could not reach the Wayback Machine" error users were getting, since
-    // recent captures are usually what someone restoring a domain wants
-    // anyway.
+    // Tier 2: year-by-year sweep. Only reached for domains archived so
+    // heavily that the unbounded query can't finish (amazon.com, ebay.com).
+    // Many more requests, but each is bounded and completes — and it still
+    // yields the domain's full timeline, so this is not a degraded result.
+    for (const variant of variants) {
+        const swept = await fetchByYearSweep(variant, 8000);
+        if (swept.length) {
+            return { snapshots: collapseToMonthly(swept), complete: true };
+        }
+    }
+
+    // Tier 3: recent captures only. A short list still beats the hard
+    // "could not reach the Wayback Machine" error, and recent captures are
+    // usually what someone restoring a domain wants anyway.
     const recent = await runVariants(variants, buildRecentOnlyParams, Math.min(timeoutMs, 10000));
     if (recent.snapshots.length) {
         return { snapshots: collapseToMonthly(recent.snapshots), complete: false };
