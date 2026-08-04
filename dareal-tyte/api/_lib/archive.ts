@@ -55,3 +55,47 @@ export async function fetchSnapshotHtml(archiveUrl: string, timeoutMs = 15000): 
     }
     return html;
 }
+
+/**
+ * The archive keys captures by the exact URL the crawler visited, so a site
+ * recorded only as `http://www.example.com/` won't be found under
+ * `https://example.com` at a given timestamp — the capture exists, the
+ * lookup just misses it. Trying each scheme/www form turns that silent
+ * "no historical snapshot found" into a successful recovery.
+ *
+ * Ordered most-likely-first, and returns on the first hit, so the common
+ * case still costs a single request.
+ */
+export function archiveUrlVariants(domain: string, timestamp: string): string[] {
+    const bare = domain.replace(/^www\./i, '');
+    return [
+        `https://${bare}`,
+        `https://www.${bare}`,
+        `http://${bare}`,
+        `http://www.${bare}`,
+    ].map((origin) => `https://web.archive.org/web/${timestamp}id_/${origin}`);
+}
+
+export async function fetchSnapshotHtmlForDomain(
+    domain: string,
+    timestamp: string,
+    timeoutMs = 15000,
+): Promise<string> {
+    let lastError: unknown;
+    for (const url of archiveUrlVariants(domain, timestamp)) {
+        try {
+            return await fetchSnapshotHtml(url, timeoutMs);
+        } catch (err) {
+            lastError = err;
+            // A transport failure means the archive is struggling, not that
+            // this particular URL form is wrong — trying three more variants
+            // would just pile on. Only keep going when the snapshot itself
+            // wasn't found.
+            const notFound = err instanceof ArchiveFetchError && /no historical snapshot/i.test(err.message);
+            if (!notFound) throw err;
+        }
+    }
+    throw lastError instanceof Error
+        ? lastError
+        : new ArchiveFetchError('No historical snapshot found for that domain/timestamp.');
+}

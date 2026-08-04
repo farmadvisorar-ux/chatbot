@@ -121,6 +121,39 @@ function buildRecentOnlyParams(url: string): URLSearchParams {
 /** The Wayback Machine's own coverage starts here; querying earlier years is wasted requests. */
 const ARCHIVE_FIRST_YEAR = 1996;
 
+const AVAILABILITY_API_URL = 'https://archive.org/wayback/available';
+
+/**
+ * Absolute last resort, and deliberately on a different host: this repo's
+ * wayback-downloader/README.md records that plain `archive.org` kept
+ * answering while `web.archive.org` was dropping requests. The availability
+ * endpoint also does far less work than any CDX query — it returns the
+ * single closest capture, nothing more.
+ *
+ * One snapshot is a thin result, but it's the difference between a user
+ * being able to recover something and being told the archive is unreachable
+ * while it demonstrably isn't.
+ */
+async function fetchClosestSnapshot(domain: string, timeoutMs: number): Promise<Snapshot[]> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const url = `${AVAILABILITY_API_URL}?url=${encodeURIComponent(domain)}`;
+        const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        if (!response.ok) return [];
+        const data = (await response.json()) as {
+            archived_snapshots?: { closest?: { available?: boolean; timestamp?: string; status?: string } };
+        };
+        const closest = data?.archived_snapshots?.closest;
+        if (!closest?.available || !closest.timestamp) return [];
+        return [{ timestamp: closest.timestamp, statuscode: closest.status ?? '200' }];
+    } catch {
+        return [];
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /** Runs tasks with bounded concurrency so a 30-year sweep doesn't fire 30 simultaneous requests at archive.org. */
 export async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<PromiseSettledResult<T>[]> {
     const results: PromiseSettledResult<T>[] = new Array(tasks.length);
@@ -320,6 +353,15 @@ export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise
     // usually what someone restoring a domain wants anyway.
     const recent = await runVariants(variants, buildRecentOnlyParams, Math.min(timeoutMs, 10000));
     if (recent.snapshots.length) return finish(recent.snapshots, false);
+
+    // Tier 4: the availability endpoint on a different host. Returns at most
+    // one capture, but every CDX tier having failed usually means the CDX
+    // service is struggling rather than the domain being unarchived — and
+    // one usable snapshot still lets someone recover a site.
+    for (const variant of variants) {
+        const closest = await fetchClosestSnapshot(variant, 8000);
+        if (closest.length) return finish(closest, false);
+    }
 
     // Genuinely nothing: either the domain has no captures, or the archive is
     // unreachable. Surface the underlying reason rather than a generic message.

@@ -9,7 +9,6 @@ import {
     normalizeTimestamp,
     normalizeProjectId,
     slugifyProjectName,
-    archiveSnapshotUrl,
     ValidationError,
 } from '../api/_lib/domain.ts';
 
@@ -48,9 +47,3 @@ test('slugifyProjectName produces a valid Vercel project name', () => {
     assert.equal(slugifyProjectName('example.com'), 'dareal-example-com');
 });
 
-test('archiveSnapshotUrl builds the expected id_ passthrough URL', () => {
-    assert.equal(
-        archiveSnapshotUrl('example.com', '20210101000000'),
-        'https://web.archive.org/web/20210101000000id_/https://example.com',
-    );
-});

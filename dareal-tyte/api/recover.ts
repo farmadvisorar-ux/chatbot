@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, error, requireMethod } from './_lib/http.js';
 import { requirePaidUser } from './_lib/auth.js';
-import { normalizeDomain, normalizeTimestamp, archiveSnapshotUrl, ValidationError } from './_lib/domain.js';
-import { fetchSnapshotHtml, ArchiveFetchError } from './_lib/archive.js';
+import { normalizeDomain, normalizeTimestamp, ValidationError } from './_lib/domain.js';
+import { fetchSnapshotHtmlForDomain, ArchiveFetchError } from './_lib/archive.js';
 import { sanitizeSnapshotHtml } from './_lib/sanitize.js';
 
 /** Archive fetch + sanitize (+ deploy) can exceed Vercel's default budget on large pages. */
@@ -30,8 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     try {
-        const archiveUrl = archiveSnapshotUrl(domain, timestamp);
-        const rawHtml = await fetchSnapshotHtml(archiveUrl);
+        const rawHtml = await fetchSnapshotHtmlForDomain(domain, timestamp);
         const { html, strippedLinks, rewrittenAssets } = sanitizeSnapshotHtml(rawHtml);
 
         json(res, 200, {

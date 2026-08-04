@@ -57,6 +57,3 @@ export function slugifyProjectName(domain: string, prefix = 'dareal'): string {
     return name.slice(0, 100).replace(/-+$/g, '');
 }
 
-export function archiveSnapshotUrl(domain: string, timestamp: string): string {
-    return `https://web.archive.org/web/${timestamp}id_/https://${domain}`;
-}
