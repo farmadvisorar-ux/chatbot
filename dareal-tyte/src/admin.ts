@@ -167,7 +167,7 @@ findBtn.addEventListener('click', async () => {
         setFindStatus(
             data.complete
                 ? count
-                : `${count} This domain is archived too heavily to list its full history quickly, so these are its recent captures. For an older one, use the exact-timestamp field below.`,
+                : `${count} This is a partial list — the archive was slow or busy, so some of this domain's history is missing. Try again for the full list, or use the exact-timestamp field below.`,
             'ok',
         );
     } catch (err) {

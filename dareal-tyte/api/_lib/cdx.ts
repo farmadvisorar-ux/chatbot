@@ -145,7 +145,10 @@ export async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number
  * which is the difference between a full timeline and nothing at all on
  * domains like amazon.com.
  */
-async function fetchByYearSweep(variant: string, perRequestTimeoutMs: number): Promise<Snapshot[]> {
+async function fetchByYearSweep(
+    variant: string,
+    perRequestTimeoutMs: number,
+): Promise<{ snapshots: Snapshot[]; yearsQueried: number; yearsSucceeded: number }> {
     const currentYear = new Date().getUTCFullYear();
     const years: number[] = [];
     for (let y = currentYear; y >= ARCHIVE_FIRST_YEAR; y--) years.push(y);
@@ -157,12 +160,15 @@ async function fetchByYearSweep(variant: string, perRequestTimeoutMs: number): P
     // have succeeded. This is a free, shared service; the sweep already
     // costs ~30 requests, so it should trickle rather than burst.
     const results = await pooled(
-        years.map((y) => () => fetchOne(buildYearParams(variant, y), perRequestTimeoutMs)),
+        years.map((y) => () => fetchOneWithRetry(buildYearParams(variant, y), perRequestTimeoutMs, 2)),
         3,
     );
-    return results
-        .filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled')
-        .flatMap((r) => r.value);
+    const ok = results.filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled');
+    return {
+        snapshots: ok.flatMap((r) => r.value),
+        yearsQueried: years.length,
+        yearsSucceeded: ok.length,
+    };
 }
 
 async function fetchOne(params: URLSearchParams, timeoutMs: number): Promise<Snapshot[]> {
@@ -257,8 +263,13 @@ export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise
     // yields the domain's full timeline, so this is not a degraded result.
     for (const variant of variants) {
         const swept = await fetchByYearSweep(variant, 8000);
-        if (swept.length) {
-            return { snapshots: collapseToMonthly(swept), complete: true };
+        if (swept.snapshots.length) {
+            // Individual year queries can still get shed under load. Only
+            // claim a complete history if most of them actually came back —
+            // otherwise the list has silent holes and the UI should say so
+            // rather than presenting a partial timeline as the whole thing.
+            const coverage = swept.yearsSucceeded / swept.yearsQueried;
+            return { snapshots: collapseToMonthly(swept.snapshots), complete: coverage >= 0.8 };
         }
     }
 
