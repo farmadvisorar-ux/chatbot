@@ -159,6 +159,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (view === 'ads') {
+            // Paid ads (pending_review) need a look before anything else, so
+            // they sort first; everything else follows by recency.
+            const { rows } = await pool.query(
+                `SELECT id, advertiser_email AS "advertiserEmail", headline, url,
+                        views_purchased AS "viewsPurchased", views_remaining AS "viewsRemaining",
+                        price_cents AS "priceCents", status, paid_at AS "paidAt", created_at AS "createdAt"
+                 FROM ad_campaigns WHERE status <> 'awaiting_payment'
+                 ORDER BY CASE status WHEN 'pending_review' THEN 0 ELSE 1 END, created_at DESC
+                 LIMIT 200`,
+            );
+            json(res, 200, { ads: rows });
+            return;
+        }
+
         if (view === 'insights') {
             const { rows } = await pool.query(
                 `SELECT slug, title, keyword, category, links, published, updated_at AS "updatedAt"
@@ -245,6 +260,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
         json(res, 200, { ok: true, name: updated.rows[0].name, status: updated.rows[0].status });
+        return;
+    }
+
+    if (action === 'ad-approve' || action === 'ad-reject') {
+        const adId = clean(body.id, 64);
+        if (!adId) {
+            error(res, 400, 'Provide the ad id');
+            return;
+        }
+        const nextStatus = action === 'ad-approve' ? 'live' : 'rejected';
+        const updated = await pool.query(
+            `UPDATE ad_campaigns SET status = $2 WHERE id = $1 RETURNING headline, status`,
+            [adId, nextStatus],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Ad not found');
+            return;
+        }
+        json(res, 200, { ok: true, headline: updated.rows[0].headline, status: updated.rows[0].status });
         return;
     }
 

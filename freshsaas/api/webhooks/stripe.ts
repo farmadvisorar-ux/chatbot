@@ -45,6 +45,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderId = session.metadata?.orderId;
+        const adCampaignId = session.metadata?.adCampaignId;
+        const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+
         if (orderId && session.payment_status === 'paid') {
             // Guarded on payment_state so a redelivered event can't double-apply.
             await getPool().query(
@@ -54,7 +57,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                      stripe_payment_intent_id = $2,
                      paid_at = now()
                  WHERE id = $1 AND payment_state = 'awaiting_payment'`,
-                [orderId, typeof session.payment_intent === 'string' ? session.payment_intent : null],
+                [orderId, paymentIntentId],
+            );
+        }
+
+        if (adCampaignId && session.payment_status === 'paid') {
+            // Paid ads still land in pending_review, not live: a scam or NSFW
+            // link must not be able to buy its way onto the site unreviewed.
+            // Guarded on status so a redelivered event can't double-apply.
+            await getPool().query(
+                `UPDATE ad_campaigns
+                 SET status = 'pending_review', stripe_payment_intent_id = $2, paid_at = now()
+                 WHERE id = $1 AND status = 'awaiting_payment'`,
+                [adCampaignId, paymentIntentId],
             );
         }
     }

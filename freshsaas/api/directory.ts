@@ -1,6 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool } from './_lib/db.js';
-import { json, requireMethod } from './_lib/http.js';
+import { json, requireMethod, clientKey } from './_lib/http.js';
+import { clean, validEmail, validUrl } from './_lib/validate.js';
+import { checkRateLimit } from './_lib/rateLimit.js';
+import { getStripe, siteOrigin } from './_lib/stripe.js';
+import { AD_PACKAGES } from './_lib/ads.js';
 
 const ACCENTS = ['#c9ff57', '#7ac7ff', '#ff7d66', '#ffd36a', '#90e0c1', '#c9b7ff', '#ffb7a7', '#bde58d'];
 
@@ -18,7 +22,7 @@ function launchedLabel(discoveredAt: string): string {
     return new Date(discoveredAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
-const EVENT_TYPES = new Set(['pageview', 'listing_click', 'search', 'outbound', 'signup_open', 'submit_open', 'marketplace_view']);
+const EVENT_TYPES = new Set(['pageview', 'listing_click', 'search', 'outbound', 'signup_open', 'submit_open', 'marketplace_view', 'ad_click']);
 
 /**
  * Records one analytics event. Lives on this endpoint rather than its own
@@ -113,6 +117,132 @@ async function handleVote(req: VercelRequest, res: VercelResponse): Promise<void
 }
 
 /**
+ * Starts a self-serve ad purchase: an advertiser buys a package of views for
+ * a one-line pitch that links out to their own site. Lives here rather than
+ * its own function for the same 12-function-cap reason as the rest of this
+ * file. The Stripe Checkout Session, not the request body, is what a client
+ * could otherwise try to under-pay through — price always comes from
+ * AD_PACKAGES, keyed by a package code the client sends.
+ */
+async function handleAdCheckout(req: VercelRequest, res: VercelResponse): Promise<void> {
+    const pool = getPool();
+
+    if (!(await checkRateLimit(pool, 'ad-checkout', clientKey(req), 5, 60))) {
+        json(res, 429, { error: 'Too many ad submissions from this network. Try again later.' });
+        return;
+    }
+
+    const stripe = getStripe();
+    if (!stripe) {
+        json(res, 501, { error: 'Ad purchases are not open yet. Join the launch list and we will let you know the moment they are.' });
+        return;
+    }
+
+    const body = (req.body || {}) as { headline?: string; url?: string; email?: string; pack?: string };
+    const headline = clean(body.headline, 140);
+    const url = clean(body.url, 2048);
+    const email = clean(body.email, 254).toLowerCase();
+    const pack = AD_PACKAGES[clean(body.pack, 20)];
+
+    if (!headline || !url || !email) {
+        json(res, 400, { error: 'A one-line pitch, a link, and your email are required' });
+        return;
+    }
+    if (!validEmail(email)) {
+        json(res, 400, { error: 'Enter a valid email' });
+        return;
+    }
+    if (!validUrl(url)) {
+        json(res, 400, { error: 'Enter a valid URL, starting with http:// or https://' });
+        return;
+    }
+    if (!pack) {
+        json(res, 400, { error: 'Choose a view package' });
+        return;
+    }
+
+    const inserted = await pool.query(
+        `INSERT INTO ad_campaigns (advertiser_email, headline, url, views_purchased, views_remaining, price_cents, status)
+         VALUES ($1, $2, $3, $4, $4, $5, 'awaiting_payment') RETURNING id`,
+        [email, headline, url, pack.views, pack.priceCents],
+    );
+    const adId = inserted.rows[0]?.id;
+    if (!adId) {
+        json(res, 500, { error: 'Could not save the ad' });
+        return;
+    }
+
+    const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        customer_email: email,
+        line_items: [{
+            quantity: 1,
+            price_data: {
+                currency: 'usd',
+                unit_amount: pack.priceCents,
+                product_data: { name: `FreshSAAS ad — ${pack.label}`, description: headline },
+            },
+        }],
+        // adCampaignId travels with the session so the webhook can match the
+        // payment back to our row without trusting anything from the browser.
+        metadata: { adCampaignId: adId },
+        success_url: `${siteOrigin()}/?ad=success`,
+        cancel_url: `${siteOrigin()}/?ad=cancelled`,
+    });
+
+    await pool.query('UPDATE ad_campaigns SET stripe_session_id = $2 WHERE id = $1', [adId, session.id]);
+
+    json(res, 200, { ok: true, adId, checkoutUrl: session.url });
+}
+
+/**
+ * Records one ad impression and decrements the campaign's remaining view
+ * balance. The UPDATE's WHERE clause (status='live' AND views_remaining>0)
+ * is what makes this atomic and self-limiting: a campaign flips to
+ * 'exhausted' the moment it hits zero and no later request can push it
+ * negative, even under concurrent traffic.
+ *
+ * Best-effort like the rest of this app's anonymous tracking: nothing here
+ * stops a bad actor from replaying requests to burn through someone else's
+ * purchased views, beyond the per-IP rate limit below. Worth a CAPTCHA or a
+ * signed per-pageview token if that becomes a real problem at scale.
+ */
+async function handleAdImpression(req: VercelRequest, res: VercelResponse): Promise<void> {
+    const pool = getPool();
+
+    if (!(await checkRateLimit(pool, 'ad-impression', clientKey(req), 120, 1))) {
+        json(res, 429, { error: 'Too many impressions from this network' });
+        return;
+    }
+
+    const adId = clean((req.body as { adId?: string } | undefined)?.adId, 64);
+    if (!/^[0-9a-f-]{36}$/i.test(adId)) {
+        json(res, 400, { error: 'Invalid ad id' });
+        return;
+    }
+
+    const { rows } = await pool.query(
+        `UPDATE ad_campaigns
+         SET views_remaining = views_remaining - 1,
+             status = CASE WHEN views_remaining - 1 <= 0 THEN 'exhausted' ELSE status END
+         WHERE id = $1 AND status = 'live' AND views_remaining > 0
+         RETURNING views_remaining`,
+        [adId],
+    );
+    json(res, 200, { ok: true, viewsRemaining: rows[0]?.views_remaining ?? 0 });
+}
+
+/** Live ads with views left to serve, for the sponsored slot on the site. */
+async function sendAds(res: VercelResponse): Promise<void> {
+    const { rows } = await getPool().query(
+        `SELECT id, headline, url FROM ad_campaigns
+         WHERE status = 'live' AND views_remaining > 0
+         ORDER BY random() LIMIT 20`,
+    );
+    json(res, 200, { ads: rows });
+}
+
+/**
  * Published Insights articles.
  *
  * Also served from this endpoint for the 12-function reason above. Each link
@@ -159,6 +289,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             await handleVote(req, res);
             return;
         }
+        if (req.query.action === 'ad-checkout') {
+            await handleAdCheckout(req, res);
+            return;
+        }
+        if (req.query.action === 'ad-impression') {
+            await handleAdImpression(req, res);
+            return;
+        }
         await recordEvent(req, res);
         return;
     }
@@ -166,6 +304,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     if (req.query.view === 'insights') {
         await sendInsights(req, res);
+        return;
+    }
+    if (req.query.view === 'ads') {
+        await sendAds(res);
         return;
     }
 

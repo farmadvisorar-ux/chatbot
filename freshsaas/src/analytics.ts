@@ -7,7 +7,7 @@
  * territory while still answering what visitors actually do.
  */
 
-type EventType = 'pageview' | 'listing_click' | 'search' | 'outbound' | 'signup_open' | 'submit_open' | 'marketplace_view';
+type EventType = 'pageview' | 'listing_click' | 'search' | 'outbound' | 'signup_open' | 'submit_open' | 'marketplace_view' | 'ad_click';
 
 const SESSION_KEY = 'freshsaas_sid';
 
