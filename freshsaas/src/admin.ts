@@ -140,6 +140,11 @@ type MarketListing = {
     sellerEmail: string; status: string; createdAt: string; payoutsEnabled: boolean | null;
     hasStripe: boolean | null; orders: number;
 };
+type Ad = {
+    id: string; advertiserEmail: string; headline: string; url: string;
+    viewsPurchased: number; viewsRemaining: number; priceCents: number;
+    status: string; paidAt: string | null; createdAt: string;
+};
 type Person = { id: string; email: string; name: string | null; createdAt: string; payoutsEnabled: boolean; listings: number; purchases: number };
 type WaitlistRow = { email: string; source: string; createdAt: string };
 
@@ -169,6 +174,36 @@ function renderMarketplace(items: MarketListing[]): void {
             : '<button type="button" class="ghost" data-action="listing-reject">Take down</button>'}
         </div>
       </article>`).join('') : '<div class="empty">No marketplace listings yet.</div>';
+}
+
+const AD_STATUS_LABELS: Record<string, string> = {
+    pending_review: 'Pending review', live: 'Live', rejected: 'Rejected', exhausted: 'Views used up',
+};
+
+function renderAds(items: Ad[]): void {
+    const pending = items.filter(item => item.status === 'pending_review').length;
+    $('#count-ads').textContent = String(pending);
+    $('#ads-list').innerHTML = items.length ? items.map(item => `
+      <article class="item${item.status === 'pending_review' ? ' is-pending' : ''}" data-id="${escapeHtml(item.id)}">
+        <div class="item-head">
+          <h3>${escapeHtml(item.headline)}</h3>
+          <span class="badge ${item.status === 'live' ? 'ok' : item.status === 'pending_review' ? 'warn-badge' : ''}">${escapeHtml(AD_STATUS_LABELS[item.status] ?? item.status)}</span>
+        </div>
+        <p class="meta">
+          <strong>${escapeHtml(money(item.priceCents))}</strong>
+          &nbsp;·&nbsp; ${escapeHtml(String(item.viewsRemaining))} / ${escapeHtml(String(item.viewsPurchased))} views left
+          &nbsp;·&nbsp; <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a>
+          &nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.advertiserEmail)}">${escapeHtml(item.advertiserEmail)}</a>
+          &nbsp;·&nbsp; paid ${escapeHtml(item.paidAt ? day(item.paidAt) : '—')}
+        </p>
+        <div class="row">
+          ${item.status === 'pending_review'
+            ? '<button type="button" data-action="ad-approve">Approve</button><button type="button" class="ghost" data-action="ad-reject">Reject</button>'
+            : item.status === 'live'
+                ? '<button type="button" class="ghost" data-action="ad-reject">Take down</button>'
+                : ''}
+        </div>
+      </article>`).join('') : '<div class="empty">No paid ads yet.</div>';
 }
 
 function renderPeople(users: Person[], waitlist: WaitlistRow[]): void {
@@ -301,11 +336,12 @@ async function loadAll(): Promise<void> {
         source: filterSource.value,
     });
     const days = $<HTMLSelectElement>('#analytics-days').value || '30';
-    const [overview, live, rels, market, people, analytics, guides] = await Promise.all([
+    const [overview, live, rels, market, ads, people, analytics, guides] = await Promise.all([
         callAdmin<Overview>('/api/admin?view=overview'),
         callAdmin<{ listings: Listing[] }>(`/api/admin?${params}`),
         callAdmin<{ awaitingRelease: Release[] }>('/api/admin?view=releases'),
         callAdmin<{ marketplace: MarketListing[] }>('/api/admin?view=marketplace'),
+        callAdmin<{ ads: Ad[] }>('/api/admin?view=ads'),
         callAdmin<{ users: Person[]; waitlist: WaitlistRow[] }>('/api/admin?view=people'),
         callAdmin<Analytics>(`/api/admin?view=analytics&days=${days}`),
         callAdmin<{ insights: Insight[] }>('/api/admin?view=insights'),
@@ -317,6 +353,7 @@ async function loadAll(): Promise<void> {
     renderListings(live.listings ?? []);
     renderPayouts(rels.awaitingRelease ?? []);
     renderMarketplace(market.marketplace ?? []);
+    renderAds(ads.ads ?? []);
     renderPeople(people.users ?? [], people.waitlist ?? []);
 }
 
@@ -422,6 +459,23 @@ $('#marketplace-list').addEventListener('click', async event => {
     if (!button || !id) return;
     const action = button.dataset.action!;
     if (action === 'listing-reject' && !confirm('Take this listing down? It will no longer be purchasable.')) return;
+
+    button.disabled = true;
+    try {
+        await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ id, action }) });
+        await loadAll();
+    } catch (err) {
+        alert(err instanceof Error ? err.message : 'Action failed');
+        button.disabled = false;
+    }
+});
+
+$('#ads-list').addEventListener('click', async event => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
+    const id = button?.closest<HTMLElement>('.item')?.dataset.id;
+    if (!button || !id) return;
+    const action = button.dataset.action!;
+    if (action === 'ad-reject' && !confirm('Take this ad down? It will stop appearing on the site.')) return;
 
     button.disabled = true;
     try {
