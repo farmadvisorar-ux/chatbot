@@ -28,6 +28,32 @@ CREATE TABLE IF NOT EXISTS ad_campaigns (
 );
 CREATE INDEX IF NOT EXISTS ad_campaigns_live ON ad_campaigns (status) WHERE status IN ('live', 'pending_review');
 
+-- Publishers place the Sikads ad unit on their own site and earn a share of
+-- what advertisers pay for every view served there. This is what makes Sikads
+-- two-sided: ad_campaigns is the money coming in, publishers is the money
+-- going back out.
+--
+-- Earnings accrue in microcents (1 cent = 1,000 microcents) because a single
+-- view is worth a fraction of a cent — at a $5.00 CPM a view earns the
+-- publisher 0.2 cents, which integer cents cannot represent without losing
+-- every impression to rounding.
+CREATE TABLE IF NOT EXISTS publishers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL UNIQUE,
+    site_url TEXT NOT NULL,
+    -- Pasted into the embed snippet to identify who served a view. Public by
+    -- design: it ships inside client-side markup, so it authorises nothing on
+    -- its own and is safe to expose.
+    slot_key TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'pending_review'
+        CHECK (status IN ('pending_review', 'active', 'rejected')),
+    views_served BIGINT NOT NULL DEFAULT 0,
+    earnings_microcents BIGINT NOT NULL DEFAULT 0,
+    paid_microcents BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS publishers_active ON publishers (slot_key) WHERE status = 'active';
+
 CREATE TABLE IF NOT EXISTS rate_limit_events (
     id BIGSERIAL PRIMARY KEY,
     bucket TEXT NOT NULL,

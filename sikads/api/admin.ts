@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const pool = getPool();
 
     if (req.method === 'GET') {
-        const [queue, revenue] = await Promise.all([
+        const [queue, revenue, publishers] = await Promise.all([
             pool.query(
                 `SELECT id, advertiser_email AS "advertiserEmail", headline, url,
                         cpm_cents AS "cpmCents", budget_cents AS "budgetCents",
@@ -36,26 +36,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                  ORDER BY CASE status WHEN 'pending_review' THEN 0 ELSE 1 END, created_at DESC
                  LIMIT 200`,
             ),
+            // Gross is what advertisers paid; owed is what publishers have
+            // earned and not yet been paid. Net is what the business actually
+            // keeps, and is the only one of the three worth looking at alone.
             pool.query(
-                `SELECT COALESCE(sum(budget_cents), 0)::int AS "totalCents",
-                        count(*)::int AS campaigns
-                 FROM ad_campaigns WHERE status IN ('pending_review', 'live', 'exhausted')`,
+                `SELECT
+                     (SELECT COALESCE(sum(budget_cents), 0)::bigint FROM ad_campaigns
+                      WHERE status IN ('pending_review', 'live', 'exhausted')) AS "grossCents",
+                     (SELECT count(*)::int FROM ad_campaigns
+                      WHERE status IN ('pending_review', 'live', 'exhausted')) AS "campaigns",
+                     (SELECT COALESCE(sum(earnings_microcents - paid_microcents), 0)::bigint
+                      FROM publishers) AS "owedMicrocents"`,
+            ),
+            pool.query(
+                `SELECT id, email, site_url AS "siteUrl", slot_key AS "slotKey", status,
+                        views_served AS "viewsServed",
+                        (earnings_microcents - paid_microcents)::bigint AS "owedMicrocents",
+                        earnings_microcents::bigint AS "earnedMicrocents", created_at AS "createdAt"
+                 FROM publishers
+                 ORDER BY CASE status WHEN 'pending_review' THEN 0 ELSE 1 END, created_at DESC
+                 LIMIT 200`,
             ),
         ]);
-        json(res, 200, { queue: queue.rows, revenue: revenue.rows[0] });
+        json(res, 200, {
+            queue: queue.rows,
+            revenue: revenue.rows[0],
+            publishers: publishers.rows,
+        });
         return;
     }
 
     const body = (req.body || {}) as { action?: string; id?: string };
-    const action = clean(body.action, 20);
+    const action = clean(body.action, 24);
     const id = clean(body.id, 64);
 
-    if (action !== 'approve' && action !== 'reject') {
-        error(res, 400, "Provide an action of 'approve' or 'reject'");
+    if (!id) {
+        error(res, 400, 'Provide the id');
         return;
     }
-    if (!id) {
-        error(res, 400, 'Provide the campaign id');
+
+    if (action === 'publisher-approve' || action === 'publisher-reject') {
+        const updated = await pool.query(
+            `UPDATE publishers SET status = $2 WHERE id = $1 AND status = 'pending_review'
+             RETURNING email, status`,
+            [id, action === 'publisher-approve' ? 'active' : 'rejected'],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Publisher not found, or not awaiting review');
+            return;
+        }
+        json(res, 200, { ok: true, email: updated.rows[0].email, status: updated.rows[0].status });
+        return;
+    }
+
+    if (action === 'publisher-settle') {
+        // Marks everything currently owed as paid, for after the money has
+        // actually been sent. Recorded as a running total rather than zeroing
+        // earnings, so lifetime earnings stay auditable after a payout.
+        const updated = await pool.query(
+            `UPDATE publishers SET paid_microcents = earnings_microcents
+             WHERE id = $1 RETURNING email, earnings_microcents::bigint AS "earnedMicrocents"`,
+            [id],
+        );
+        if (!updated.rows[0]) {
+            error(res, 404, 'Publisher not found');
+            return;
+        }
+        json(res, 200, { ok: true, email: updated.rows[0].email, settled: true });
+        return;
+    }
+
+    if (action !== 'approve' && action !== 'reject') {
+        error(res, 400, "Provide an action of 'approve', 'reject', 'publisher-approve', 'publisher-reject' or 'publisher-settle'");
         return;
     }
 

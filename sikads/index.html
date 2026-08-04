@@ -3,42 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sikads — Advertise here. Name your price.</title>
-    <meta name="description" content="Buy a spot in the Sponsored slot. Set your own price per 1,000 views, submit your pitch, and go live once reviewed.">
+    <title>Sikads — name your rate. Keep 40% of it.</title>
+    <meta name="description" content="An ad exchange with the rates in the open. Advertisers set their own price per 1,000 views. Publishers who place the unit keep 40% of every view they serve.">
     <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
-    <header class="site-header">
-        <a class="logo" href="/">Sik<span>ads</span></a>
-        <button id="header-cta" class="nav-cta" type="button">Advertise here</button>
-    </header>
+    <div class="wrap">
+        <header class="site-header">
+            <a class="logo" href="/">Sik<b>ads</b></a>
+            <nav class="header-nav">
+                <a href="#mechanic">How it works</a>
+                <a class="lane-earn" href="#earn">Earn 40%</a>
+                <a class="lane-spend" href="#spend">Advertise</a>
+            </nav>
+        </header>
+    </div>
 
     <main>
-        <div id="notice" class="notice-slot" role="status" aria-live="polite"></div>
+        <div class="wrap">
+            <div id="notice" class="notice-slot" role="status" aria-live="polite"></div>
+        </div>
 
-        <section class="hero">
-            <div class="wrap">
-                <h1>Put your link in front<br>of this audience. <em>Name your price.</em></h1>
-                <p>Set your own price per 1,000 views, write a one-line pitch, and pay through Stripe. Once approved, your ad rotates in the Sponsored slot until your views run out.</p>
+        <section class="wrap hero">
+            <div class="hero-thesis">
+                <p class="eyebrow">Self-serve ad exchange</p>
+                <h1>Advertisers <span class="spend">name the rate</span>. Publishers <span class="earn">keep 40%</span> of it.</h1>
+                <p class="hero-sub">
+                    No fixed packages and no hidden margin. An advertiser sets their own price per
+                    1,000 views; whoever's site serves the view takes 40% of that exact number —
+                    and can see it on the board, live, to check the arithmetic.
+                </p>
                 <div class="hero-actions">
-                    <button id="hero-cta" class="btn-primary" type="button">Advertise on Sikads</button>
-                    <a class="btn-secondary" href="#sponsored">See what's live</a>
+                    <a class="btn btn-spend" href="#spend">Buy views →</a>
+                    <a class="btn btn-earn" href="#earn">Place the unit →</a>
+                </div>
+                <div class="hero-proof">
+                    <div class="proof-item is-earn"><b class="num">40%</b><span>to the publisher, every view</span></div>
+                    <div class="proof-item"><b class="num" id="proof-rate">—</b><span>rate on the board now</span></div>
+                    <div class="proof-item"><b class="num" id="proof-live">0</b><span>campaigns rotating</span></div>
+                </div>
+            </div>
+
+            <aside class="board" aria-label="Live rates">
+                <div class="board-head">
+                    <p class="board-live"><span class="board-dot"></span> Live rates</p>
+                    <p class="eyebrow">Updated each serve</p>
+                </div>
+                <div class="board-cols"><span>Campaign</span><span>Pays / 1,000</span><span>You keep</span></div>
+                <div class="board-rows" id="board-rows">
+                    <p class="board-empty">Loading the board…</p>
+                </div>
+                <p class="board-foot">
+                    Every figure here is what an advertiser actually paid. Most networks never
+                    show a publisher that number.
+                </p>
+            </aside>
+        </section>
+
+        <section class="split">
+            <div class="wrap">
+                <div class="split-head">
+                    <p class="eyebrow">The split</p>
+                    <h2>One dollar, cut where you can see it.</h2>
+                    <p>
+                        Networks in this category pay 40–50% and mostly won't tell you what the
+                        advertiser paid, so the percentage is unverifiable. Ours is 40% of a number
+                        printed on the board above.
+                    </p>
+                </div>
+
+                <div class="dollar" role="img" aria-label="Of every dollar an advertiser spends, 40 cents goes to the publisher and 60 cents to Sikads">
+                    <div class="dollar-part dollar-earn"><span class="num">40¢ &nbsp;publisher</span></div>
+                    <div class="dollar-part dollar-keep"><span class="num">60¢ &nbsp;Sikads</span></div>
+                </div>
+                <div class="dollar-legend">
+                    <span>Per $1.00 an advertiser spends.</span>
+                    <span>At a $5.00 rate, 1,000 views pays you <b class="num">$2.00</b>.</span>
+                </div>
+
+                <div class="split-notes">
+                    <div class="note">
+                        <h3>The rate is the advertiser's call</h3>
+                        <p>They pick anything from $1.00 to $100.00 per 1,000 views. Pay more and you rotate more often — the board sorts itself.</p>
+                    </div>
+                    <div class="note">
+                        <h3>Views are spent, not estimated</h3>
+                        <p>A campaign's balance drops by exactly one on each view served, and stops the moment it hits zero. No overdelivery, no rounding in our favour.</p>
+                    </div>
+                    <div class="note">
+                        <h3>Every ad is read before it runs</h3>
+                        <p>Paid doesn't mean live. A human checks each campaign, so what lands on your site isn't a scam link that bought its way through.</p>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section id="sponsored" class="sponsored-rail">
-            <div class="wrap">
-                <span class="sponsored-label">Sponsored</span>
-                <div id="sponsored-slot"><p class="sponsored-empty">This spot is open — be the first sponsor.</p></div>
-            </div>
-        </section>
-
-        <section id="advertise" class="advertise">
-            <div class="wrap">
-                <h2>Advertise on Sikads</h2>
-                <p>Every campaign is reviewed before it goes live, and stops rotating automatically once its purchased views run out. Higher rates rotate more often.</p>
-                <form id="ad-form" class="ad-form">
+        <section class="wrap lanes">
+            <div class="lane lane-spend" id="spend">
+                <p class="eyebrow">For advertisers</p>
+                <h2>Buy views at your price.</h2>
+                <p>Write one line, set your rate and your budget, pay once. Reviewed, then rotating until the views run out.</p>
+                <form id="ad-form">
                     <label>One-line pitch
                         <input name="headline" type="text" required maxlength="140" placeholder="The tool that does X for Y">
                     </label>
@@ -49,26 +114,88 @@
                         <input name="email" type="email" required placeholder="you@company.com">
                     </label>
                     <div class="price-row">
-                        <label class="price-input">Your price / 1,000 views
+                        <label class="price-input">Rate / 1,000 views
                             <span class="prefix">$</span>
-                            <input id="cpm-input" name="cpmDollars" type="number" required min="1" max="100" step="0.10" value="5.00">
+                            <input id="cpm-input" class="num" type="number" required min="1" max="100" step="0.10" value="5.00">
                         </label>
-                        <label class="price-input">Total budget
+                        <label class="price-input">Budget
                             <span class="prefix">$</span>
-                            <input id="budget-input" name="budgetDollars" type="number" required min="5" max="5000" step="1" value="25">
+                            <input id="budget-input" class="num" type="number" required min="5" max="5000" step="1" value="25">
                         </label>
                     </div>
-                    <p id="views-estimate" class="estimate">≈ 5,000 views</p>
-                    <p class="ad-note">Prices from $1.00 to $100.00 per 1,000 views. Minimum budget $5.</p>
-                    <button type="submit">Continue to payment →</button>
+                    <div class="readout">
+                        <span class="readout-main num" id="views-estimate">5,000 views</span>
+                        <span class="readout-side num" id="views-side">$2.00 of this goes to publishers</span>
+                    </div>
+                    <button class="btn btn-spend" type="submit">Continue to payment →</button>
+                    <p class="hint">$1.00–$100.00 per 1,000 views. Minimum budget $5.</p>
                     <p id="ad-status" class="form-status" role="status" aria-live="polite"></p>
                 </form>
+            </div>
+
+            <div class="lane lane-earn" id="earn">
+                <p class="eyebrow">For publishers</p>
+                <h2>Place the unit. Keep 40%.</h2>
+                <p>One line of HTML on any page you own. You earn on every view it serves, at 40% of whatever that advertiser is paying.</p>
+                <form id="pub-form">
+                    <label>Your email
+                        <input name="email" type="email" required placeholder="you@yoursite.com">
+                    </label>
+                    <label>Where you'll place it
+                        <input name="siteUrl" type="url" required placeholder="https://yoursite.com">
+                    </label>
+                    <div class="readout">
+                        <span class="readout-main num is-earn" id="pub-estimate">$2.00</span>
+                        <span class="readout-side" id="pub-estimate-side">per 1,000 views, at the current top rate</span>
+                    </div>
+                    <button class="btn btn-earn" type="submit">Get my slot key →</button>
+                    <p class="hint">We check the site is real before a key starts earning — usually same day.</p>
+                    <p id="pub-status" class="form-status" role="status" aria-live="polite"></p>
+                    <div class="snippet-block">
+                        <p class="eyebrow">What you'll paste</p>
+                        <pre id="pub-snippet" class="snippet is-placeholder">&lt;div id="sikads"&gt;&lt;/div&gt;
+&lt;script src="/embed.js" data-slot="sk_…"&gt;&lt;/script&gt;</pre>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="mechanic" id="mechanic">
+            <div class="wrap">
+                <p class="eyebrow">End to end</p>
+                <h2>What happens to a dollar.</h2>
+                <p>Four steps, in order, because the money genuinely moves through them in this sequence.</p>
+                <div class="steps">
+                    <div class="step">
+                        <span class="step-n num">01</span>
+                        <h3>Advertiser pays</h3>
+                        <p>They set a rate and a budget. Stripe takes the full amount once; the budget divided by the rate is how many views they own.</p>
+                    </div>
+                    <div class="step">
+                        <span class="step-n num">02</span>
+                        <h3>A human reads it</h3>
+                        <p>Paid campaigns wait in a queue. Approved ones start rotating; rejected ones never appear on anyone's site.</p>
+                    </div>
+                    <div class="step">
+                        <span class="step-n num">03</span>
+                        <h3>The board picks</h3>
+                        <p>Each load draws one campaign, weighted by its rate, and spends exactly one view from its balance.</p>
+                    </div>
+                    <div class="step">
+                        <span class="step-n num">04</span>
+                        <h3>You're credited</h3>
+                        <p>40% of that campaign's rate lands in your balance on the same write. Not a nightly job that might not run.</p>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
 
     <footer class="site-footer">
-        <p>Sikads — self-serve advertising. Every dollar goes to keeping the lights on.</p>
+        <div class="wrap">
+            <span>Sikads — an ad exchange with the rates in the open.</span>
+            <span class="num">40% to publishers · $1–$100 per 1,000</span>
+        </div>
     </footer>
 
     <script type="module" src="./src/main.ts"></script>

@@ -24,6 +24,14 @@ button.danger{background:var(--danger);color:#2b0f08}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
 .stat span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .stat b{display:block;font-size:22px;margin-top:4px}
+.tabs{display:flex;gap:8px;margin:20px 0 4px}
+.tab{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.tab.active{background:var(--accent);color:#20120a;border-color:var(--accent)}
+.tab span{display:inline-block;margin-left:6px;background:rgba(11,14,20,.22);border-radius:999px;padding:1px 7px;font-size:11px}
+.tab:not(.active) span{background:rgba(255,255,255,.09)}
+.panel{display:none}
+.panel.active{display:block}
+.slotkey{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
 .list{display:grid;gap:12px;margin-top:16px}
 .item{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
 .item.is-pending{border-color:rgba(255,154,106,.4);background:rgba(255,154,106,.06)}
