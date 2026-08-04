@@ -149,7 +149,7 @@ findBtn.addEventListener('click', async () => {
     snapshotRow.hidden = true;
     setFindStatus('Looking up available snapshots…');
     try {
-        const data = await callApi<{ snapshots: Snapshot[] }>('/api/snapshots', { domain });
+        const data = await callApi<{ snapshots: Snapshot[]; complete: boolean }>('/api/snapshots', { domain });
         if (!data.snapshots.length) {
             setFindStatus('No snapshots found for that domain.', 'error');
             return;
@@ -163,7 +163,13 @@ findBtn.addEventListener('click', async () => {
             }),
         );
         snapshotRow.hidden = false;
-        setFindStatus(`${data.snapshots.length} snapshot${data.snapshots.length === 1 ? '' : 's'} found — newest first.`, 'ok');
+        const count = `${data.snapshots.length} snapshot${data.snapshots.length === 1 ? '' : 's'} found — newest first.`;
+        setFindStatus(
+            data.complete
+                ? count
+                : `${count} This domain is archived too heavily to list its full history quickly, so these are its recent captures. For an older one, use the exact-timestamp field below.`,
+            'ok',
+        );
     } catch (err) {
         setFindStatus(err instanceof Error ? err.message : 'Could not look up snapshots.', 'error');
     } finally {

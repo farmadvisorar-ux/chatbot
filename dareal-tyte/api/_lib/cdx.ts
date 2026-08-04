@@ -80,46 +80,100 @@ export function collapseToMonthly(snapshots: Snapshot[]): Snapshot[] {
     return [...byMonth.values()].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 }
 
-async function fetchOne(url: string, signal: AbortSignal): Promise<Snapshot[]> {
-    const apiUrl = `${CDX_API_URL}?${buildCdxParams(url).toString()}`;
-    const response = await fetch(apiUrl, { signal, headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new CdxError(`The CDX API returned HTTP ${response.status}.`);
-
-    // The CDX API returns a genuinely empty body (not "[]") when nothing matches.
-    const text = await response.text();
-    if (!text.trim()) return [];
-
-    let data: unknown;
-    try {
-        data = JSON.parse(text);
-    } catch {
-        throw new CdxError('The CDX API returned an unexpected response.');
-    }
-    return parseCdxJson(data);
+/**
+ * Cheap fallback query. Skipping `collapse` is the whole point: collapsing
+ * forces the CDX server to walk a domain's entire capture index, which is
+ * what times out on heavily-archived sites. Without it the server can seek
+ * straight to the tail of the index, so this returns in a fraction of the
+ * time — at the cost of only covering the domain's most recent captures.
+ */
+function buildRecentOnlyParams(url: string): URLSearchParams {
+    return new URLSearchParams({
+        url,
+        matchType: 'exact',
+        output: 'json',
+        fl: 'timestamp,statuscode',
+        filter: 'statuscode:200',
+        limit: '-400',
+    });
 }
 
-export async function fetchSnapshots(domain: string, timeoutMs = 20000): Promise<Snapshot[]> {
+async function fetchOne(params: URLSearchParams, timeoutMs: number): Promise<Snapshot[]> {
+    // Each request gets its own budget. A single shared AbortController meant
+    // one slow variant killed the other mid-flight, turning a partial success
+    // into a total failure.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const apiUrl = `${CDX_API_URL}?${params.toString()}`;
+        const response = await fetch(apiUrl, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new CdxError(`The CDX API returned HTTP ${response.status}.`);
+
+        // The CDX API returns a genuinely empty body (not "[]") when nothing matches.
+        const text = await response.text();
+        if (!text.trim()) return [];
+
+        let data: unknown;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new CdxError('The CDX API returned an unexpected response.');
+        }
+        return parseCdxJson(data);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/** Runs both host variants, tolerating one failing without sinking the other. */
+async function runVariants(
+    variants: string[],
+    build: (url: string) => URLSearchParams,
+    timeoutMs: number,
+): Promise<{ snapshots: Snapshot[]; lastError: unknown }> {
+    const results = await Promise.allSettled(variants.map((v) => fetchOne(build(v), timeoutMs)));
+    const snapshots = results
+        .filter((r): r is PromiseFulfilledResult<Snapshot[]> => r.status === 'fulfilled')
+        .flatMap((r) => r.value);
+    const lastError = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    return { snapshots, lastError: lastError?.reason };
+}
+
+export interface SnapshotResult {
+    snapshots: Snapshot[];
+    /** False when only the cheap recent-only fallback succeeded, so the list isn't the domain's full history. */
+    complete: boolean;
+}
+
+export async function fetchSnapshots(domain: string, timeoutMs = 18000): Promise<SnapshotResult> {
     const trimmed = domain.trim();
     if (!trimmed) throw new CdxError('Please provide a domain to look up.');
 
     const bare = trimmed.replace(/^www\./i, '');
     const variants = [bare, `www.${bare}`];
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-        const results = await Promise.allSettled(variants.map((v) => fetchOne(v, controller.signal)));
-        const fulfilled = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<Snapshot[]>[];
-        if (!fulfilled.length) {
-            const firstError = results.find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
-            const reason = firstError?.reason;
-            throw reason instanceof CdxError
-                ? reason
-                : new CdxError(`Could not reach the Wayback Machine CDX API: ${(reason as Error)?.message ?? 'unknown error'}`);
-        }
-        return collapseToMonthly(fulfilled.flatMap((r) => r.value));
-    } finally {
-        clearTimeout(timer);
+    // Tier 1: full archived history. Times out on the most heavily archived
+    // domains (amazon.com, ebay.com), which is exactly the case this
+    // two-tier approach exists for.
+    const full = await runVariants(variants, buildCdxParams, timeoutMs);
+    if (full.snapshots.length) {
+        return { snapshots: collapseToMonthly(full.snapshots), complete: true };
     }
+
+    // Tier 2: recent captures only, but fast. A shorter list beats the hard
+    // "could not reach the Wayback Machine" error users were getting, since
+    // recent captures are usually what someone restoring a domain wants
+    // anyway.
+    const recent = await runVariants(variants, buildRecentOnlyParams, Math.min(timeoutMs, 10000));
+    if (recent.snapshots.length) {
+        return { snapshots: collapseToMonthly(recent.snapshots), complete: false };
+    }
+
+    // Genuinely nothing: either the domain has no captures, or the archive is
+    // unreachable. Surface the underlying reason rather than a generic message.
+    const reason = full.lastError ?? recent.lastError;
+    if (!reason) return { snapshots: [], complete: true };
+    throw reason instanceof CdxError
+        ? reason
+        : new CdxError(`Could not reach the Wayback Machine CDX API: ${(reason as Error)?.message ?? 'unknown error'}`);
 }

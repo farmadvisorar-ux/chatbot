@@ -5,6 +5,9 @@ import { normalizeDomain, normalizeTimestamp, archiveSnapshotUrl, ValidationErro
 import { fetchSnapshotHtml, ArchiveFetchError } from './_lib/archive.js';
 import { sanitizeSnapshotHtml } from './_lib/sanitize.js';
 
+/** Archive fetch + sanitize (+ deploy) can exceed Vercel's default budget on large pages. */
+export const config = { maxDuration: 60 };
+
 /**
  * POST /api/recover
  * Body: { domain: "examplehairsalon.com", timestamp?: "20220115000000" }

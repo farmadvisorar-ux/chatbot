@@ -6,6 +6,9 @@ import { fetchSnapshotHtml, ArchiveFetchError } from './_lib/archive.js';
 import { sanitizeSnapshotHtml } from './_lib/sanitize.js';
 import { deployToVercel, VercelApiError } from './_lib/vercelClient.js';
 
+/** Archive fetch + sanitize (+ deploy) can exceed Vercel's default budget on large pages. */
+export const config = { maxDuration: 60 };
+
 /**
  * POST /api/launch
  * Body: { domain: "oldhairwebsite.com", timestamp?: "20210101000000" }
