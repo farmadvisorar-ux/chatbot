@@ -1,4 +1,11 @@
--- Sikads schema. Run once against DATABASE_URL via `npm run migrate`.
+-- Sikads schema. Run once against DATABASE_URL via `npm run migrate`, or pipe
+-- this file straight into psql.
+
+-- Required by api/publishers.ts, which mints slot keys with gen_random_bytes().
+-- Declared here rather than only in the migrate scripts so that applying this
+-- file by hand produces a working database — without it the tables all exist
+-- and publisher signup fails on the first request.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Self-serve ads: anyone buys views for a one-line pitch that links to their
 -- own site. The advertiser sets their own price (cpm_cents = price per 1,000
