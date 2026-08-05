@@ -5,6 +5,7 @@ import { clean, validEmail, validUrl } from './_lib/validate.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
 import { getStripe, siteOrigin } from './_lib/stripe.js';
 import { MIN_CPM_CENTS, MAX_CPM_CENTS, MIN_BUDGET_CENTS, MAX_BUDGET_CENTS, computeViews, PUBLISHER_SHARE_PERCENT } from './_lib/pricing.js';
+import { guarded } from './_lib/errors.js';
 
 /**
  * Serves one ad and, in the same statement, spends a view from the campaign
@@ -201,19 +202,21 @@ async function handleBoard(res: VercelResponse): Promise<void> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-    if (req.method === 'POST') {
-        if (req.query.action === 'checkout') {
-            await handleCheckout(req, res);
+    await guarded('ads', res, async () => {
+        if (req.method === 'POST') {
+            if (req.query.action === 'checkout') {
+                await handleCheckout(req, res);
+                return;
+            }
+            json(res, 400, { error: "Unknown action. Use ?action=checkout" });
             return;
         }
-        json(res, 400, { error: "Unknown action. Use ?action=checkout" });
-        return;
-    }
-    if (!requireMethod(req, res, ['GET', 'POST'])) return;
+        if (!requireMethod(req, res, ['GET', 'POST'])) return;
 
-    if (req.query.view === 'board') {
-        await handleBoard(res);
-        return;
-    }
-    await handleServe(req, res);
+        if (req.query.view === 'board') {
+            await handleBoard(res);
+            return;
+        }
+        await handleServe(req, res);
+    });
 }
