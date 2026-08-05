@@ -1,17 +1,24 @@
 # Sikads
 
-A two-sided self-serve ad exchange.
+**An ad exchange whose entire inventory is the seconds a model spends thinking.**
+
+Every AI answer opens with a wait — a thinking indicator someone is watching
+and nothing else. Sikads sells that moment.
 
 - **Advertisers** write a one-line pitch, set **their own price per 1,000 views**
   ($1.00–$100.00), pick a budget, and pay once through Stripe Checkout.
-- **Publishers** paste one line of HTML on a site they own and keep **40%** of
-  whatever the advertiser paid, credited on every view their page serves.
+- **AI apps** (chat wrappers, browser extensions, agent runners) drop one line
+  of HTML into their loading state and keep **40%** of whatever the advertiser
+  paid, credited on every view they serve.
 - Sikads keeps the other 60%.
 
 The differentiator is not the percentage — networks in this category pay
 40–50% — it is that the rate is **public**. The board on the homepage shows
-what each advertiser is actually paying, so a publisher can verify their 40%
-against a real number. Most networks never disclose it.
+what each advertiser is actually paying, so an app can verify its 40% against
+a real number. Most networks never disclose it.
+
+Throughout the code and this document, "publisher" means the app showing the
+ad. The database table is `publishers` for that reason.
 
 ## How a dollar moves
 
