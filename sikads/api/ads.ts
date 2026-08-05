@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPool } from './_lib/db.js';
+import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, requireMethod, clientKey } from './_lib/http.js';
 import { clean, validEmail, validUrl } from './_lib/validate.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
@@ -27,6 +27,15 @@ import { MIN_CPM_CENTS, MAX_CPM_CENTS, MIN_BUDGET_CENTS, MAX_BUDGET_CENTS, compu
  */
 async function handleServe(req: VercelRequest, res: VercelResponse): Promise<void> {
     const slotKey = clean(typeof req.query.slot === 'string' ? req.query.slot : '', 64);
+
+    // Publishers' pages call this. It must never 500 into their site, so an
+    // unconfigured deployment answers "no ad" and embed.js leaves their
+    // container untouched.
+    if (!isDatabaseConfigured()) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        json(res, 200, { ad: null });
+        return;
+    }
 
     // embed.js runs on publishers' own domains, so this response has to be
     // readable cross-origin. Open to any origin by design: a publisher can put
@@ -70,6 +79,10 @@ async function handleServe(req: VercelRequest, res: VercelResponse): Promise<voi
  * theirs to choose, and it's what actually gets charged via Stripe.
  */
 async function handleCheckout(req: VercelRequest, res: VercelResponse): Promise<void> {
+    if (!isDatabaseConfigured()) {
+        json(res, 501, { error: 'Ad purchases are not open yet. Check back shortly.' });
+        return;
+    }
     const pool = getPool();
 
     if (!(await checkRateLimit(pool, 'ad-checkout', clientKey(req), 5, 60))) {
@@ -168,6 +181,15 @@ async function handleCheckout(req: VercelRequest, res: VercelResponse): Promise<
  * their ad in a slot.
  */
 async function handleBoard(res: VercelResponse): Promise<void> {
+    // A deployment without a database is a site that simply has no campaigns
+    // yet, which is exactly what an empty board already communicates. Public
+    // visitors get the normal empty state rather than an error; anyone trying
+    // to actually transact still gets told the truth by the other endpoints.
+    if (!isDatabaseConfigured()) {
+        json(res, 200, { rates: [], sharePercent: PUBLISHER_SHARE_PERCENT, configured: false });
+        return;
+    }
+
     const { rows } = await getPool().query(
         `SELECT headline, cpm_cents AS "cpmCents", views_remaining AS "viewsRemaining"
          FROM ad_campaigns
