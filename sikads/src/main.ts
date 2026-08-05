@@ -3,15 +3,14 @@ import { escapeHtml } from './escape-html';
 
 type Rate = { headline: string; cpmCents: number; viewsRemaining: number };
 
-/** Mirrors PUBLISHER_SHARE_PERCENT in api/_lib/pricing.ts; the board response
- *  carries the server's value so this is only the pre-load placeholder. */
+/** Mirrors PUBLISHER_SHARE_PERCENT in api/_lib/pricing.ts. The board response
+ *  carries the server's value, so this is only the pre-load placeholder. */
 let sharePercent = 40;
 
 const $ = <T extends HTMLElement>(sel: string): T | null => document.querySelector<T>(sel);
 
 const boardRows = $('#board-rows');
 const proofRate = $('#proof-rate');
-const proofLive = $('#proof-live');
 const adForm = $<HTMLFormElement>('#ad-form');
 const adStatus = $('#ad-status');
 const pubForm = $<HTMLFormElement>('#pub-form');
@@ -28,38 +27,136 @@ const noticeBox = $('#notice');
 const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
-/* ---------- the live rate board ---------- */
+/* ---------------- the hero: a wait, on a loop ----------------
+ * The product is a moment that is hard to describe and obvious to watch, so
+ * the hero performs it rather than explaining it: a prompt lands, the model
+ * thinks, the unit fills the gap that was already empty, the answer arrives
+ * and clears it. Whatever is actually top of the board rides along, so the
+ * demonstration is showing real inventory rather than a mock-up.
+ */
+const SCENES = [
+    {
+        host: 'a coding assistant',
+        prompt: 'Refactor this module and explain what changed.',
+        answer: 'Pulled the parsing out into its own function and added the missing null guard — three call sites simplified…',
+    },
+    {
+        host: 'a research agent',
+        prompt: 'Compare these four suppliers on lead time and MOQ.',
+        answer: 'Two of the four publish lead times under 14 days. On minimum order quantity the gap is wider…',
+    },
+    {
+        host: 'a chat app',
+        prompt: 'Summarise this contract and flag anything unusual.',
+        answer: 'The indemnity clause in section 9 is unusually broad, and the renewal term auto-extends unless…',
+    },
+];
+
+const el = {
+    host: $('#host-name'),
+    prompt: $('#m-prompt'),
+    think: $('#m-think'),
+    clock: $('#m-clock'),
+    ad: $('#m-ad'),
+    adText: $('#m-ad-text'),
+    adRate: $('#m-ad-rate'),
+    meter: $('#m-meter'),
+    answer: $('#m-answer'),
+};
+
+/** Top campaign on the board, so the hero advertises whatever is really live. */
+let featured: { headline: string; cpmCents: number } | null = null;
+let sceneIndex = 0;
+const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+async function runScene(): Promise<void> {
+    if (!el.prompt || !el.think || !el.ad || !el.answer || !el.clock) return;
+    const scene = SCENES[sceneIndex % SCENES.length];
+    sceneIndex += 1;
+
+    if (el.host) el.host.textContent = scene.host;
+    el.prompt.textContent = scene.prompt;
+    el.answer.classList.add('hide');
+    el.answer.textContent = '';
+    el.ad.classList.remove('in');
+    el.think.style.visibility = 'visible';
+    // Restart the meter fill; without the reflow the animation would not replay.
+    if (el.meter) { el.meter.style.visibility = 'hidden'; void el.meter.offsetWidth; }
+
+    await wait(700);
+
+    // The unit appears in the gap while the model works.
+    if (el.adText) el.adText.textContent = featured ? featured.headline : 'Your one line, right here.';
+    if (el.adRate) {
+        el.adRate.textContent = featured
+            ? money(Math.round((featured.cpmCents * sharePercent) / 100))
+            : `${sharePercent}%`;
+    }
+    if (el.meter) el.meter.style.visibility = 'visible';
+    el.ad.classList.add('in');
+
+    // A counting clock is the whole point — the inventory is measured in seconds.
+    const startedAt = Date.now();
+    const ticking = window.setInterval(() => {
+        if (el.clock) el.clock.textContent = `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
+    }, 100);
+
+    await wait(3200);
+    window.clearInterval(ticking);
+
+    // Answer arrives; the gap closes and the ad goes with it.
+    el.think.style.visibility = 'hidden';
+    el.ad.classList.remove('in');
+    if (el.meter) el.meter.style.visibility = 'hidden';
+    el.answer.classList.remove('hide');
+
+    for (let i = 1; i <= scene.answer.length; i += 2) {
+        el.answer.textContent = scene.answer.slice(0, i);
+        await wait(12);
+    }
+
+    await wait(2600);
+}
+
+async function loopHero(): Promise<void> {
+    // Motion is the argument here, so with reduced-motion we show one resting
+    // frame — the ad sitting in the gap — rather than an empty box.
+    if (reduceMotion) {
+        if (el.adText) el.adText.textContent = featured ? featured.headline : 'Your one line, right here.';
+        el.ad?.classList.add('in');
+        if (el.clock) el.clock.textContent = '4.2s';
+        return;
+    }
+    for (;;) await runScene();
+}
+
+/* ---------------- live rates ---------------- */
 
 function renderBoard(rates: Rate[]): void {
     if (!boardRows) return;
 
     if (!rates.length) {
-        boardRows.innerHTML = `<p class="board-empty">
-            No campaigns rotating yet — the first advertiser sets the opening rate.
-            Anything from $1.00 to $100.00 per 1,000 views.
-        </p>`;
+        boardRows.innerHTML = `<p class="board-empty">No campaigns rotating yet — the first advertiser sets the opening rate. Anything from $1.00 to $100.00 per 1,000 views.</p>`;
         if (proofRate) proofRate.textContent = '—';
-        if (proofLive) proofLive.textContent = '0';
+        if (pubEstimate) pubEstimate.textContent = '—';
+        if (pubEstimateSide) pubEstimateSide.textContent = 'per 1,000 waits — no live rate yet';
         return;
     }
 
-    boardRows.innerHTML = rates.map(rate => {
-        const cut = Math.round((rate.cpmCents * sharePercent) / 100);
-        return `<div class="board-row">
-            <span class="board-pitch">${escapeHtml(rate.headline)}</span>
-            <span class="board-rate num">${escapeHtml(money(rate.cpmCents))}</span>
-            <span class="board-cut num">${escapeHtml(money(cut))}</span>
-        </div>`;
-    }).join('');
+    boardRows.innerHTML = rates.map(rate => `<div class="board-row">
+        <span class="board-pitch">${escapeHtml(rate.headline)}</span>
+        <span class="board-rate num">${escapeHtml(money(rate.cpmCents))}</span>
+        <span class="board-cut num">${escapeHtml(money(Math.round((rate.cpmCents * sharePercent) / 100)))}</span>
+    </div>`).join('');
 
-    // The headline rate is the top of the board, since that is what a publisher
-    // stands to earn from at best — not an average that nobody is actually paying.
-    const topRate = Math.max(...rates.map(r => r.cpmCents));
-    if (proofRate) proofRate.textContent = money(topRate);
-    if (proofLive) proofLive.textContent = String(rates.length);
-
-    if (pubEstimate) pubEstimate.textContent = money(Math.round((topRate * sharePercent) / 100));
-    if (pubEstimateSide) pubEstimateSide.textContent = `per 1,000 views, at the current top rate of ${money(topRate)}`;
+    // Top of the board, not an average: it is what an app stands to earn at best.
+    const top = rates.reduce((best, r) => (r.cpmCents > best.cpmCents ? r : best), rates[0]);
+    featured = { headline: top.headline, cpmCents: top.cpmCents };
+    if (proofRate) proofRate.textContent = money(top.cpmCents);
+    if (pubEstimate) pubEstimate.textContent = money(Math.round((top.cpmCents * sharePercent) / 100));
+    if (pubEstimateSide) pubEstimateSide.textContent = `per 1,000 waits, at the current top rate of ${money(top.cpmCents)}`;
 }
 
 async function loadBoard(): Promise<void> {
@@ -72,7 +169,7 @@ async function loadBoard(): Promise<void> {
     }
 }
 
-/* ---------- advertiser lane ---------- */
+/* ---------------- advertiser ---------------- */
 
 function updateEstimate(): void {
     if (!estimate || !cpmInput || !budgetInput) return;
@@ -84,11 +181,8 @@ function updateEstimate(): void {
         if (estimateSide) estimateSide.textContent = 'Enter a rate and a budget';
         return;
     }
-    const views = Math.floor((budget / cpm) * 1000);
-    estimate.textContent = `${views.toLocaleString()} views`;
-    if (estimateSide) {
-        estimateSide.textContent = `${money(Math.round(budget * 100 * sharePercent / 100))} of this goes to publishers`;
-    }
+    estimate.textContent = `${Math.floor((budget / cpm) * 1000).toLocaleString()} views`;
+    if (estimateSide) estimateSide.textContent = `${money(Math.round(budget * 100 * sharePercent / 100))} goes to the apps`;
 }
 
 adForm?.addEventListener('submit', async event => {
@@ -127,7 +221,7 @@ adForm?.addEventListener('submit', async event => {
 cpmInput?.addEventListener('input', updateEstimate);
 budgetInput?.addEventListener('input', updateEstimate);
 
-/* ---------- publisher lane ---------- */
+/* ---------------- publisher ---------------- */
 
 pubForm?.addEventListener('submit', async event => {
     event.preventDefault();
@@ -138,19 +232,17 @@ pubForm?.addEventListener('submit', async event => {
 
     if (button) { button.disabled = true; button.textContent = 'Creating your key…'; }
     try {
-        const response = await api.post<{ slotKey: string; status: string }>('/api/publishers', payload);
-        const { slotKey } = response.data;
-
+        const response = await api.post<{ slotKey: string }>('/api/publishers', payload);
         if (pubStatus) {
-            pubStatus.textContent = 'Key created. It starts earning once we have checked the site.';
+            pubStatus.textContent = 'Key created. It starts earning once we have checked the app.';
             pubStatus.className = 'form-status ok';
         }
         if (pubSnippet) {
-            // Shown rather than emailed because the whole pitch is that nothing
-            // here is hidden from the publisher.
-            pubSnippet.classList.remove('is-placeholder');
+            // Shown rather than emailed — the whole pitch is that nothing here
+            // is hidden from the app running the unit.
+            pubSnippet.classList.remove('ph');
             pubSnippet.textContent = `<div id="sikads"></div>
-<script src="${window.location.origin}/embed.js" data-slot="${slotKey}"><\/script>`;
+<script src="${window.location.origin}/embed.js" data-slot="${response.data.slotKey}"><\/script>`;
         }
     } catch (err) {
         if (pubStatus) {
@@ -162,7 +254,7 @@ pubForm?.addEventListener('submit', async event => {
     }
 });
 
-/* ---------- returning from Stripe ---------- */
+/* ---------------- returning from Stripe ---------------- */
 
 const NOTICES: Record<'success' | 'cancelled', { tone: 'success' | 'neutral'; title: string; body: string }> = {
     success: {
@@ -192,8 +284,8 @@ function showNotice(): void {
     </div>`;
     noticeBox.querySelector('.notice-close')?.addEventListener('click', () => { noticeBox.innerHTML = ''; });
 
-    // Drop the parameter so a refresh — or a link someone pastes to a friend —
-    // doesn't replay "payment received" for a person who never bought anything.
+    // Drop the parameter so a refresh — or a link pasted to a friend — doesn't
+    // replay "payment received" for someone who never bought anything.
     const url = new URL(window.location.href);
     url.searchParams.delete('ad');
     window.history.replaceState({}, '', url.pathname + url.search + url.hash);
@@ -202,3 +294,4 @@ function showNotice(): void {
 showNotice();
 updateEstimate();
 loadBoard();
+loopHero();

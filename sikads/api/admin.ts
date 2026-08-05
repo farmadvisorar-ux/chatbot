@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPool } from './_lib/db.js';
+import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, error, requireMethod } from './_lib/http.js';
 import { clean } from './_lib/validate.js';
 
@@ -20,6 +20,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
     if (req.headers.authorization?.replace(/^Bearer\s+/i, '') !== secret) {
         error(res, 401, 'Unauthorized');
+        return;
+    }
+
+    if (!isDatabaseConfigured()) {
+        error(res, 501, 'The database is not configured on this deployment yet, so there is nothing to review.');
         return;
     }
 

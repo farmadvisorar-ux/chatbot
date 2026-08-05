@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPool } from './_lib/db.js';
+import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, requireMethod, clientKey } from './_lib/http.js';
 import { clean, validEmail, validUrl } from './_lib/validate.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
@@ -16,6 +16,11 @@ import { PUBLISHER_SHARE_PERCENT } from './_lib/pricing.js';
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
+
+    if (!isDatabaseConfigured()) {
+        json(res, 501, { error: 'Publisher signups are not open yet. Check back shortly.' });
+        return;
+    }
 
     const pool = getPool();
     if (!(await checkRateLimit(pool, 'publisher-signup', clientKey(req), 5, 60))) {
