@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p api/tsconfig.json",
     "migrate": "node scripts/migrate.mjs",
-    "migrate:http": "node scripts/migrate-http.mjs"
+    "migrate:http": "node scripts/migrate-http.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1",
