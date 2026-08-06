@@ -3,6 +3,7 @@ import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, error, requireMethod } from './_lib/http.js';
 import { clean } from './_lib/validate.js';
 import { guarded } from './_lib/errors.js';
+import { SCHEMA_SQL } from './_lib/schema.js';
 
 /**
  * GET  /api/admin           -> review queue + revenue summary
@@ -31,6 +32,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
 
         const pool = getPool();
+
+        // Applies the schema from inside the deployment, where the connection
+        // string already lives. Running `npm run migrate` needs that string on
+        // whatever machine you are sitting at, which means either copying a
+        // live credential around or having the Postgres port open outbound —
+        // neither is true from every environment this gets operated from.
+        //
+        // Behind ADMIN_SECRET because it writes to the database. Safe to call
+        // repeatedly: every statement in the schema is IF NOT EXISTS and there
+        // are no DROPs, both asserted in tests/schema.test.mjs.
+        if (req.method === 'POST' && clean((req.body as { action?: string } | undefined)?.action, 24) === 'migrate') {
+            await pool.query(SCHEMA_SQL);
+            const { rows } = await pool.query<{ table_name: string }>(
+                `SELECT table_name FROM information_schema.tables
+                 WHERE table_schema = 'public' ORDER BY table_name`,
+            );
+            json(res, 200, { ok: true, tables: rows.map(row => row.table_name) });
+            return;
+        }
 
         if (req.method === 'GET') {
             const [queue, revenue, publishers] = await Promise.all([

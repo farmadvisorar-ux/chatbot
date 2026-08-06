@@ -74,10 +74,15 @@ npm install
 cp .env.example .env    # DATABASE_URL at minimum
 npm run migrate         # applies db/schema.sql
 npm run dev
+npm test                # the payment arithmetic
 ```
 
 `vite dev` serves the pages but not the `/api` functions, so the rate board
 will report itself unreachable until deployed (or run under `vercel dev`).
+
+TLS is detected from the connection string, so a Postgres running on your own
+machine needs no extra flags. If `npm run migrate` hangs, see Troubleshooting
+below — `npm run migrate:http` is the fallback for a blocked port 5432.
 
 ## Deploying to sikads.com
 
@@ -93,6 +98,38 @@ will report itself unreachable until deployed (or run under `vercel dev`).
 5. **Domain** — add `sikads.com` in the Vercel project's Domains settings and
    point DNS at Vercel. Then set `PUBLIC_SITE_URL=https://sikads.com` and
    update the webhook URL to match.
+
+## Troubleshooting a deployment
+
+The API tells you which setup step is missing rather than failing generically.
+Hit `/api/ads?view=board` and match the response:
+
+| Response | What it means | Fix |
+|---|---|---|
+| `{"rates":[…]}` | Working. | — |
+| `{"rates":[],"configured":false}` | No connection string is visible to the functions. | Set `DATABASE_URL` (or any alias below) with **Production** ticked, then **redeploy** — Vercel bakes env vars in at build time, so setting one does nothing to an existing deployment. |
+| `The database is connected but empty…` | Connected; the schema was never applied. | `npm run migrate` |
+| `The database rejected this deployment's credentials…` | The connection string is set but wrong. | Re-copy it from the database provider. |
+| `The database is unreachable…` | Network or a dead host. | Check the database is running and not IP-restricted. |
+| `Admin access is not configured` | `ADMIN_SECRET` is unset. | Set it, tick **Production**, redeploy. |
+| `Stripe webhook is not configured` | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` unset. | Expected until you wire up payments. |
+
+Accepted connection-string variables, in order — attaching Neon from the
+Vercel marketplace sets several of these at once, and any will do:
+
+```
+DATABASE_URL  POSTGRES_URL  POSTGRES_PRISMA_URL
+DATABASE_URL_UNPOOLED  POSTGRES_URL_NON_POOLING
+```
+
+**If `npm run migrate` hangs or is refused**, port 5432 is blocked on your
+network. Use `npm run migrate:http` instead — same schema, applied over Neon's
+HTTPS endpoint.
+
+**A variable that will not take effect** is almost always one of two things:
+it was saved without the **Production** environment ticked, or no deployment
+has been created since it was saved. Integrations like Neon set all
+environments automatically; a hand-added variable does not.
 
 ## Changing the numbers
 

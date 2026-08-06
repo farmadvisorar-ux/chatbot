@@ -1,4 +1,12 @@
--- Sikads schema. Run once against DATABASE_URL via `npm run migrate`, or pipe
+/**
+ * The schema, inlined so it can be applied from a serverless function where
+ * there is no reliable filesystem to read db/schema.sql from.
+ *
+ * db/schema.sql remains the file humans and psql use. tests/schema.test.mjs
+ * asserts the two are byte-identical, so this copy cannot drift out of step
+ * with the one the migration scripts apply.
+ */
+export const SCHEMA_SQL = `-- Sikads schema. Run once against DATABASE_URL via \`npm run migrate\`, or pipe
 -- this file straight into psql.
 
 -- Required by api/publishers.ts, which mints slot keys with gen_random_bytes().
@@ -68,3 +76,4 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS rate_limit_events_lookup ON rate_limit_events (bucket, client_key, created_at);
+`;
