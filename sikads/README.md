@@ -126,10 +126,22 @@ DATABASE_URL_UNPOOLED  POSTGRES_URL_NON_POOLING
 network. Use `npm run migrate:http` instead — same schema, applied over Neon's
 HTTPS endpoint.
 
-**A variable that will not take effect** is almost always one of two things:
-it was saved without the **Production** environment ticked, or no deployment
-has been created since it was saved. Integrations like Neon set all
-environments automatically; a hand-added variable does not.
+**A variable that will not take effect** is almost always one of three things:
+
+1. It was saved without the **Production** environment ticked. Integrations
+   like Neon set every environment automatically; a hand-added variable does
+   not, so one can work while another appears to be ignored.
+2. No deployment has been created since it was saved. Vercel captures
+   environment variables when a deployment is built, so saving one changes
+   nothing about a deployment that already exists.
+3. The redeploy reused a cached build. **Redeploy** on an existing deployment
+   offers *Use existing Build Cache*; with it on, the rebuilt deployment can
+   carry the environment captured by the original build rather than the
+   current one. Untick it, or push a commit so the build starts from source.
+
+To tell (2) and (3) apart from (1), trigger a build from a git push and check
+again — a push-built deployment always captures the variables as they stand at
+build time.
 
 ## Changing the numbers
 
