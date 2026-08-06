@@ -1,4 +1,5 @@
 import { STORM_EVENTS } from './leadgen.ts';
+import { describeEvent, type StormEvent } from './stormData.ts';
 
 /**
  * There is no Twilio (or similar) account wired in, so nothing here sends a
@@ -30,21 +31,26 @@ export function smsHref(phoneE164: string, body: string): string {
     return `sms:${phoneE164}?&body=${encodeURIComponent(body)}`;
 }
 
-function stormReferenceFor(stormScore: number): string {
-    // Higher-scored roofs are attributed to more recent, more severe events —
-    // all four are real documented storms in this territory (see leadgen.ts).
-    const event = stormScore >= 75 ? STORM_EVENTS[0]
-        : stormScore >= 55 ? STORM_EVENTS[1]
-        : stormScore >= 35 ? STORM_EVENTS[2]
+/**
+ * Prefers the lead's actual linked NOAA event (see leadgen.ts / stormData.ts)
+ * when one is on file for its parish; otherwise falls back to an illustrative
+ * real-but-unlinked storm chosen by score band, same as before that data
+ * existed.
+ */
+function stormReferenceFor(lead: MessageLead): string {
+    if (lead.stormEvent) return describeEvent(lead.stormEvent);
+    const event = lead.stormScore >= 75 ? STORM_EVENTS[0]
+        : lead.stormScore >= 55 ? STORM_EVENTS[1]
+        : lead.stormScore >= 35 ? STORM_EVENTS[2]
         : STORM_EVENTS[3];
     return `${event!.name} (${event!.date})`;
 }
 
-export type MessageLead = { name: string; neighborhood: string; stormScore: number };
+export type MessageLead = { name: string; neighborhood: string; stormScore: number; stormEvent?: StormEvent | null };
 
 /** After a call that wasn't answered — the "auto-SMS follow-up" from the spec. */
 export function followUpMessage(lead: MessageLead): string {
-    const storm = stormReferenceFor(lead.stormScore);
+    const storm = stormReferenceFor(lead);
     return `Hi ${firstName(lead.name)}, this is John with Cypress — local roofer here in ${lead.neighborhood}. `
         + `Tried calling about your roof; homes near you took damage from ${storm}. Most LA carriers `
         + `(State Farm, Allstate, USAA, Farmers, Louisiana Citizens) cover wind/hail with a 1-5% deductible, `

@@ -6,6 +6,26 @@
 -- database on its own.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- Real historical severe-weather events for the territory's parishes, from
+-- NOAA/NCEI's public Storm Events Database (see scripts/fetch-storm-events.mjs
+-- for the ingest — free, no API key, no login). source_event_id is NOAA's own
+-- EVENT_ID, so re-running the fetch script is a plain upsert, never a
+-- duplicate. This is the one table in this schema that holds outside data
+-- rather than something the app itself created.
+CREATE TABLE IF NOT EXISTS storm_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_event_id BIGINT NOT NULL UNIQUE,
+    event_date DATE NOT NULL,
+    event_type TEXT NOT NULL,
+    magnitude NUMERIC,
+    magnitude_type TEXT,
+    county_fips INTEGER NOT NULL,
+    county_name TEXT NOT NULL,
+    narrative TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS storm_events_county ON storm_events (county_fips, event_date DESC);
+
 -- One homeowner lead, generated daily or entered by hand. Territory is
 -- enforced at write time (see api/_lib/geo.ts), not by a CHECK here, since
 -- "within 30 miles of Bossier City/Shreveport" is a runtime computation over
@@ -22,6 +42,11 @@ CREATE TABLE IF NOT EXISTS leads (
     roof_age_years INTEGER NOT NULL,
     storm_score INTEGER NOT NULL CHECK (storm_score BETWEEN 0 AND 100),
     insurance_likelihood INTEGER NOT NULL CHECK (insurance_likelihood BETWEEN 0 AND 100),
+    -- The real storm_events row this lead's score/narrative was drawn from,
+    -- when the county had one on file at generation time. Null means the
+    -- score fell back to the roof-age heuristic in api/_lib/leadgen.ts —
+    -- see there for when that happens (e.g. before the fetch script has run).
+    storm_event_id UUID REFERENCES storm_events(id),
     status TEXT NOT NULL DEFAULT 'new'
         CHECK (status IN ('new', 'interested', 'needs_inspection', 'booked', 'not_interested')),
     notes TEXT NOT NULL DEFAULT '',

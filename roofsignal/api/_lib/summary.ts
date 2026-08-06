@@ -1,4 +1,5 @@
 import { STORM_EVENTS } from './leadgen.ts';
+import { describeEvent, type StormEvent } from './stormData.ts';
 
 export type SummaryLead = {
     name: string;
@@ -7,6 +8,8 @@ export type SummaryLead = {
     roofAgeYears: number;
     stormScore: number;
     insuranceLikelihood: number;
+    /** The real NOAA event this lead's score was drawn from, if its parish had one on file. */
+    stormEvent?: StormEvent | null;
 };
 
 export type GeneratedSummary = {
@@ -15,6 +18,34 @@ export type GeneratedSummary = {
     insuranceNotes: string;
     recommendation: string;
 };
+
+/** NOAA carries a free-text narrative on many events; trimmed so it reads as an excerpt, not the raw record. */
+function narrativeExcerpt(event: StormEvent): string {
+    if (!event.narrative) return '';
+    const trimmed = event.narrative.trim();
+    return trimmed.length > 400 ? `${trimmed.slice(0, 400)}…` : trimmed;
+}
+
+function buildRealStormAnalysis(stormScore: number, event: StormEvent): string {
+    const excerpt = narrativeExcerpt(event);
+    return `Storm impact score: ${stormScore}/100, based on real NOAA storm history for this parish. `
+        + `Nearest qualifying event on record: ${describeEvent(event)}. `
+        + (excerpt ? `NOAA's report on this event: "${excerpt}" ` : '')
+        + `Photos from this inspection should be checked against typical damage patterns for a ${event.eventType.toLowerCase()}: `
+        + `granule loss, bruised or cracked shingles, and lifted or missing tabs.`;
+}
+
+/** Used only when the lead's parish has no real storm_events on file yet — see leadgen.ts. */
+function buildFallbackStormAnalysis(stormScore: number): string {
+    const event = stormScore >= 75 ? STORM_EVENTS[0]
+        : stormScore >= 55 ? STORM_EVENTS[1]
+        : stormScore >= 35 ? STORM_EVENTS[2]
+        : STORM_EVENTS[3];
+    return `Storm impact score: ${stormScore}/100. Homes in this part of the territory were `
+        + `in the path of ${event!.name} (${event!.date}), which brought ${event!.kind}. `
+        + `Photos from this inspection should be checked against typical ${event!.kind} damage patterns: `
+        + `granule loss, bruised or cracked shingles, and lifted or missing tabs.`;
+}
 
 /**
  * Drafts the four summary sections from what's already on file for the lead
@@ -30,14 +61,9 @@ export function draftSummary(lead: SummaryLead, fieldNotes: string): GeneratedSu
         + `a home its age in the ${lead.neighborhood} area. `
         + (fieldNotes ? fieldNotes : 'Field notes from the on-site inspection will appear here.');
 
-    const stormEvent = lead.stormScore >= 75 ? STORM_EVENTS[0]
-        : lead.stormScore >= 55 ? STORM_EVENTS[1]
-        : lead.stormScore >= 35 ? STORM_EVENTS[2]
-        : STORM_EVENTS[3];
-    const stormAnalysis = `Storm impact score: ${lead.stormScore}/100. Homes in this part of the territory were `
-        + `in the path of ${stormEvent!.name} (${stormEvent!.date}), which brought ${stormEvent!.kind}. `
-        + `Photos from this inspection should be checked against typical ${stormEvent!.kind} damage patterns: `
-        + `granule loss, bruised or cracked shingles, and lifted or missing tabs.`;
+    const stormAnalysis = lead.stormEvent
+        ? buildRealStormAnalysis(lead.stormScore, lead.stormEvent)
+        : buildFallbackStormAnalysis(lead.stormScore);
 
     const insuranceNotes = `Estimated insurance-claim likelihood: ${lead.insuranceLikelihood}/100, based on roof age `
         + `and local storm exposure. Louisiana homeowner policies commonly carry a percentage-based wind/hail `

@@ -11,7 +11,9 @@ below for why, and what it would take to go native.
 
 - **Daily lead drops** — 20-50 leads/day, each with a name, phone, address,
   neighborhood, roof-age estimate, storm-impact score, and insurance-claim
-  likelihood, all inside the 30-mile territory.
+  likelihood, all inside the 30-mile territory. Storm scoring is drawn from
+  **real NOAA storm history** for the lead's actual parish when it's on file
+  — see [Real data](#real-data-noaa-storm-history) below.
 - **Territory map** — Leaflet + OpenStreetMap (no API key needed), pins
   colored by pipeline status, tap to open a lead.
 - **Homeowner profile** — every field from the spec, call/call-log history,
@@ -35,19 +37,52 @@ below for why, and what it would take to go native.
 - **Pipeline** — New → Interested → Needs Inspection → Booked → Not
   Interested, single-tap to change, plus a kanban board view.
 
+## Real data: NOAA storm history
+
+`storm_events` holds actual historical severe-weather records from
+[NOAA/NCEI's Storm Events Database](https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/)
+— free, public, no API key or login required. `scripts/fetch-storm-events.mjs`
+downloads the bulk CSV for each of the last 10 years, keeps only hail,
+wind, tornado, hurricane, and tropical-storm events (the types that matter
+for a roof), filters to the territory's four real parishes (Bossier, Caddo,
+DeSoto, Webster — verified per-town in `api/_lib/geo.ts`, not guessed from
+proximity), and upserts them keyed on NOAA's own event ID.
+
+When a lead is generated, `api/_lib/leadgen.ts` looks up its parish's real
+storm history: `stormScore` is computed from actual event severity
+(hail size in inches, wind speed in **knots** — not mph; NOAA's own format
+confirms wind magnitude is recorded in knots, see `api/_lib/stormData.ts`)
+weighted by recency, and the lead is linked to the single most relevant
+real event (`leads.storm_event_id`). Follow-up texts and inspection
+summaries then name that actual storm — including an excerpt of NOAA's own
+narrative for it — instead of a generic line. A lead only falls back to the
+roof-age-only heuristic when its parish has no real events on file yet
+(e.g. before the fetch script's first run).
+
+Run it once after deploying (`npm run fetch:storms`, needs `DATABASE_URL`),
+then `.github/workflows/roofsignal-storm-data.yml` re-runs it monthly —
+NOAA revises recent months' records for a while after they happen, so a
+single run goes stale.
+
 ## What's intentionally *not* wired up, and why
 
-**No live storm/insurance-data vendor.** "Verified" leads with real storm
-and claim-likelihood scoring need a paid data contract (NOAA Storm Events
-for hail/wind history, a roofing lead broker, or a carrier claims feed) —
-nobody has handed this deployment credentials for one. `api/_lib/leadgen.ts`
-generates clearly-synthetic leads instead, so the rest of the app (calling,
-texting, scheduling, inspection, summaries, pipeline) is fully functional
-today. Two things make the synthetic data safe to run: phone numbers use the
-`555-01XX` block the NANP reserves for fiction (never rings a real person),
-and names are drawn from generic pools, not real homeowners. Swap in a real
-source by writing a `LeadSource` that fills the same `leads` columns —
-nothing downstream changes.
+**No real homeowner identity or phone data — this is a firm limit, not a
+missing integration.** I looked: Caddo and Bossier Parish assessor records
+and GIS portals do exist and are publicly searchable, and they do expose an
+owner's *name* and *address* — but never a phone number, which is simply
+never a public assessor field anywhere. Compiling real people's names into
+an unsolicited-contact list, or attaching invented phone numbers to real
+addresses, isn't something this app will do regardless of what's technically
+scrapable — that's a TCPA/privacy problem, not an engineering one.
+`api/_lib/leadgen.ts` generates clearly-synthetic leads instead, so the rest
+of the app (calling, texting, scheduling, inspection, summaries, pipeline)
+is fully functional today. Two things make the synthetic data safe to run:
+phone numbers use the `555-01XX` block the NANP reserves for fiction (never
+rings a real person), and names are drawn from generic pools, not real
+homeowners. If John ever gets a licensed lead-data vendor or wants to key
+leads off his own parish assessor lookups by hand, swap in a real source by
+writing a `LeadSource` that fills the same `leads` columns — nothing
+downstream changes.
 
 **No automated SMS/voice sending — this is the Google Voice caveat.**
 Google Voice has no supported API for sending SMS or placing calls
@@ -112,20 +147,30 @@ report itself unreachable until deployed (or run under `vercel dev`).
    `CRON_SECRET` as a GitHub Actions repository secret too, and
    `ROOFSIGNAL_URL` as a repo variable if the deployment domain isn't
    `roofsignal.vercel.app`.
-6. **Sign in** — open the deployed app and enter the `APP_SECRET` value as
+6. **Real storm data** — run `npm run fetch:storms` once (needs
+   `DATABASE_URL`), and set `DATABASE_URL` as a GitHub Actions repository
+   secret so `.github/workflows/roofsignal-storm-data.yml` can keep it fresh
+   monthly. Leads generate fine without this step — they just fall back to
+   the roof-age heuristic until a parish has real events on file.
+7. **Sign in** — open the deployed app and enter the `APP_SECRET` value as
    the app key. There's exactly one user, so there's no signup flow.
 
 ## Territory
 
 Center: Bossier City / Shreveport, LA (32.5205, -93.7412). Radius: 30
-miles. `api/_lib/geo.ts` holds the center, the haversine distance function,
-and a seeded list of real neighborhoods/towns within range (Haughton,
-Benton, Blanchard, Greenwood, Keithville, Stonewall, Minden, and more) —
-every one of them checked against the radius in `tests/geo.test.mjs`.
+miles, spanning four real parishes: Caddo, Bossier, DeSoto, and Webster.
+`api/_lib/geo.ts` holds the center, the haversine distance function, and a
+seeded list of real neighborhoods/towns within range (Haughton, Benton,
+Blanchard, Greenwood, Keithville, Stonewall, Minden, and more), each tagged
+with the parish it's actually in — verified per-town, not guessed from map
+proximity, since that mapping is what routes a lead to the correct county's
+real storm history. Every neighborhood is checked against the 30-mile
+radius in `tests/geo.test.mjs`.
 
 ## What is not built yet
 
-- **Real lead sourcing.** See above — this needs a paid data vendor.
+- **Real homeowner identity/phone data.** See above — a firm limit, not
+  a missing integration.
 - **Automated SMS/voice sending.** See above — this needs Twilio or
   equivalent; Google Voice has no API for it.
 - **Multi-day route optimization.** The calendar shows appointments in time

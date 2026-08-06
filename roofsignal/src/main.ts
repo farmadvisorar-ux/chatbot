@@ -279,7 +279,7 @@ overlay.addEventListener('click', event => { if (event.target === overlay) close
 
 function renderDetail(): void {
     if (!activeDetail) return;
-    const { lead, calls, messages, appointments, photos, summaries } = activeDetail;
+    const { lead, stormEvent, calls, messages, appointments, photos, summaries } = activeDetail;
     const latestSummary = summaries[0];
     const shareUrl = latestSummary ? `${location.origin}/s/${latestSummary.shareToken}` : '';
 
@@ -297,6 +297,9 @@ function renderDetail(): void {
             <span class="pill">Storm <b>${lead.stormScore}/100</b></span>
             <span class="pill">Claim <b>${lead.insuranceLikelihood}%</b></span>
         </div>
+        ${stormEvent
+            ? `<p class="small-muted" style="margin-top:8px">📡 Real NOAA record: ${escapeHtml(stormEvent.eventType)}${stormEvent.magnitude != null ? ` (${stormEvent.magnitude}${stormEvent.eventType.toLowerCase().includes('hail') ? ' in' : ' kt'})` : ''} — ${escapeHtml(stormEvent.countyName)} Parish, ${fmtDate(stormEvent.eventDate)}</p>`
+            : `<p class="small-muted" style="margin-top:8px">Storm score is a roof-age estimate — no real NOAA event on file for this parish yet.</p>`}
         <div class="contact-row" style="margin-top:10px">
             <a class="btn primary" href="${telHref(lead.phone)}">📞 Call</a>
             <button class="btn" data-action="text-followup">💬 Text follow-up</button>

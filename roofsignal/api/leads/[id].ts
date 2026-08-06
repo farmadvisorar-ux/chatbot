@@ -9,18 +9,26 @@ import { followUpMessage, confirmationMessage, reminderMessage, summaryLinkMessa
 import { draftSummary, shareExpiry } from '../_lib/summary.ts';
 import { storePhoto, isConfigured as blobConfigured } from '../_lib/photos.ts';
 import { findNextSlot } from '../_lib/scheduling.ts';
+import { fetchStormEventById, type StormEvent } from '../_lib/stormData.ts';
 
 const LEAD_COLUMNS = `
     id, name, phone, address, neighborhood, lat, lng,
     distance_miles AS "distanceMiles", roof_age_years AS "roofAgeYears",
     storm_score AS "stormScore", insurance_likelihood AS "insuranceLikelihood",
+    storm_event_id AS "stormEventId",
     status, notes, lead_date AS "leadDate", source, created_at AS "createdAt"
 `;
 
 type Lead = {
     id: string; name: string; phone: string; address: string; neighborhood: string;
     stormScore: number; insuranceLikelihood: number; roofAgeYears: number; status: string;
+    stormEventId: string | null;
 };
+
+/** Fetches the real NOAA event a lead's score was drawn from, if it has one on file. */
+async function loadLeadStormEvent(pool: ReturnType<typeof getPool>, lead: Lead): Promise<StormEvent | null> {
+    return lead.stormEventId ? fetchStormEventById(pool, lead.stormEventId) : null;
+}
 
 const STATUSES = ['new', 'interested', 'needs_inspection', 'booked', 'not_interested'];
 const CALL_OUTCOMES = ['answered', 'no_answer', 'voicemail', 'callback_requested'];
@@ -34,6 +42,7 @@ async function loadLead(pool: ReturnType<typeof getPool>, id: string): Promise<L
 async function handleGet(pool: ReturnType<typeof getPool>, res: VercelResponse, id: string): Promise<void> {
     const lead = await loadLead(pool, id);
     if (!lead) { error(res, 404, 'Lead not found'); return; }
+    const stormEvent = await loadLeadStormEvent(pool, lead);
 
     const [calls, messages, appointments, photos, summaries] = await Promise.all([
         pool.query(`SELECT id, outcome, notes, created_at AS "createdAt" FROM call_logs
@@ -53,7 +62,7 @@ async function handleGet(pool: ReturnType<typeof getPool>, res: VercelResponse, 
     ]);
 
     json(res, 200, {
-        lead, calls: calls.rows, messages: messages.rows,
+        lead, stormEvent, calls: calls.rows, messages: messages.rows,
         appointments: appointments.rows, photos: photos.rows, summaries: summaries.rows,
     });
 }
@@ -100,7 +109,8 @@ async function handleCall(pool: ReturnType<typeof getPool>, req: VercelRequest, 
 
     let autoMessage = null;
     if (body.outcome === 'no_answer' || body.outcome === 'voicemail') {
-        const text = followUpMessage(lead);
+        const stormEvent = await loadLeadStormEvent(pool, lead);
+        const text = followUpMessage({ ...lead, stormEvent });
         const msg = await pool.query(
             `INSERT INTO messages (lead_id, kind, body) VALUES ($1, 'follow_up', $2)
              RETURNING id, kind, body, status, created_at AS "createdAt"`,
@@ -121,7 +131,7 @@ async function handleMessage(pool: ReturnType<typeof getPool>, req: VercelReques
         text = clean(body.body, 1000);
         if (!text) { error(res, 400, 'Provide body for a manual message'); return; }
     } else if (kind === 'follow_up') {
-        text = followUpMessage(lead);
+        text = followUpMessage({ ...lead, stormEvent: await loadLeadStormEvent(pool, lead) });
     } else if (kind === 'reminder') {
         text = reminderMessage(lead);
     } else if (kind === 'confirmation') {
@@ -221,7 +231,8 @@ async function handleAppointmentStatus(pool: ReturnType<typeof getPool>, req: Ve
 
 async function handleSummary(pool: ReturnType<typeof getPool>, req: VercelRequest, res: VercelResponse, lead: Lead): Promise<void> {
     const body = (req.body || {}) as { notes?: string };
-    const draft = draftSummary(lead as unknown as Parameters<typeof draftSummary>[0], clean(body.notes, 3000));
+    const stormEvent = await loadLeadStormEvent(pool, lead);
+    const draft = draftSummary({ ...lead, stormEvent }, clean(body.notes, 3000));
     const shareToken = randomBytes(24).toString('base64url');
     const expiresAt = shareExpiry();
 

@@ -10,6 +10,7 @@ const LEAD_COLUMNS = `
     id, name, phone, address, neighborhood, lat, lng,
     distance_miles AS "distanceMiles", roof_age_years AS "roofAgeYears",
     storm_score AS "stormScore", insurance_likelihood AS "insuranceLikelihood",
+    storm_event_id AS "stormEventId",
     status, notes, lead_date AS "leadDate", source, created_at AS "createdAt"
 `;
 
@@ -47,14 +48,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 ? clamp(Math.round(Number(body.count)), 1, 75)
                 : Math.floor(Math.random() * 31) + 20; // 20-50, per the daily-drop spec
 
-            const batch = generateDailyBatch(count);
+            const batch = await generateDailyBatch(count, pool);
             for (const lead of batch) {
                 await pool.query(
                     `INSERT INTO leads (name, phone, address, neighborhood, lat, lng, distance_miles,
-                                         roof_age_years, storm_score, insurance_likelihood)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                                         roof_age_years, storm_score, insurance_likelihood, storm_event_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                     [lead.name, lead.phone, lead.address, lead.neighborhood, lead.lat, lead.lng,
-                        lead.distanceMiles, lead.roofAgeYears, lead.stormScore, lead.insuranceLikelihood],
+                        lead.distanceMiles, lead.roofAgeYears, lead.stormScore, lead.insuranceLikelihood, lead.stormEventId],
                 );
             }
             json(res, 200, { ok: true, generated: batch.length });

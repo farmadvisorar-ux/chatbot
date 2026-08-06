@@ -18,7 +18,7 @@ test('the inlined schema is byte-identical to db/schema.sql', () => {
 });
 
 test('the schema creates the tables the application queries', () => {
-    for (const table of ['leads', 'call_logs', 'messages', 'appointments', 'photos', 'inspection_summaries', 'rate_limit_events']) {
+    for (const table of ['storm_events', 'leads', 'call_logs', 'messages', 'appointments', 'photos', 'inspection_summaries', 'rate_limit_events']) {
         assert.ok(
             SCHEMA_SQL.includes(`CREATE TABLE IF NOT EXISTS ${table}`),
             `schema no longer creates ${table}`,

@@ -12,11 +12,24 @@ export type Lead = {
     roofAgeYears: number;
     stormScore: number;
     insuranceLikelihood: number;
+    stormEventId: string | null;
     status: LeadStatus;
     notes: string;
     leadDate: string;
     source: string;
     createdAt: string;
+};
+
+/** A real NOAA/NCEI Storm Events record — see api/_lib/stormData.ts. */
+export type StormEvent = {
+    id: string;
+    eventDate: string;
+    eventType: string;
+    magnitude: number | null;
+    magnitudeType: string | null;
+    countyFips: number;
+    countyName: string;
+    narrative: string;
 };
 
 export type CallLog = { id: string; outcome: string; notes: string; createdAt: string };
@@ -34,7 +47,7 @@ export type Summary = {
 };
 
 export type LeadDetail = {
-    lead: Lead; calls: CallLog[]; messages: MessageLog[];
+    lead: Lead; stormEvent: StormEvent | null; calls: CallLog[]; messages: MessageLog[];
     appointments: Appointment[]; photos: Photo[]; summaries: Summary[];
 };
 

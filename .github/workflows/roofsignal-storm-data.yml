@@ -1,0 +1,35 @@
+name: RoofSignal storm data refresh
+
+# NOAA revises recent months' Storm Events records for a while after they
+# happen (see roofsignal/README.md), so this re-fetches monthly rather than
+# once. Free public source, no API key — see scripts/fetch-storm-events.mjs.
+on:
+  schedule:
+    - cron: '30 13 1 * *'  # 1st of the month
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: roofsignal
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: roofsignal/package-lock.json
+
+      - run: npm ci
+
+      - name: Fetch and upsert real NOAA storm events
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "DATABASE_URL repository secret is not set — nothing to write to." >&2
+            exit 1
+          fi
+          npm run fetch:storms

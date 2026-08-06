@@ -1,16 +1,21 @@
+import type pg from 'pg';
 import { TERRITORY_CENTER, NEIGHBORHOODS, milesBetween, isInTerritory } from './geo.ts';
+import { fetchStormEventsForCounty, scoreFromEvents, representativeEvent } from './stormData.ts';
 
 /**
- * There is no live storm-data / insurance-claim-likelihood vendor wired up
- * here — that needs a paid data contract (e.g. NOAA Storm Events for hail
- * and wind history, a roofing lead broker, or a carrier-side claims feed)
- * and credentials nobody has handed this deployment. Rather than fake a real
- * data source, this generates clearly-synthetic daily leads so the rest of
- * the app (calling, texting, scheduling, inspection, summaries, pipeline)
- * is fully working today and a real `LeadSource` can be dropped in later
- * without touching anything downstream.
+ * There is no real, verified homeowner data behind these leads — that would
+ * mean compiling real people's names and phone numbers into an unsolicited
+ * contact list, which this app won't do regardless of what's technically
+ * fetchable (see roofsignal/README.md for the full reasoning). Storm scoring
+ * is different: NOAA/NCEI's Storm Events Database is free, public, and
+ * requires no account, so a lead's storm_score and the event referenced in
+ * its follow-up texts and summary are drawn from `storm_events` — real
+ * historical hail/wind/tornado/hurricane events for the lead's actual parish
+ * — whenever the fetch script (scripts/fetch-storm-events.mjs) has been run
+ * for that county. Falls back to a roof-age-only heuristic when it hasn't
+ * (e.g. a brand new deployment before the first scheduled ingest).
  *
- * Two things are deliberate about the synthetic data:
+ * Two things are deliberate about the rest of the synthetic data:
  *  - Phone numbers use the 555-01XX block, reserved by the NANP specifically
  *    for fiction, so a generated lead can never ring an actual person.
  *  - Names are drawn from generic first/last-name pools, not tied to any
@@ -39,11 +44,12 @@ const STREET_NAMES = [
 const STREET_SUFFIXES = ['St', 'Ave', 'Dr', 'Ln', 'Rd', 'Ct', 'Blvd', 'Way'];
 
 /**
- * Real, publicly documented severe-weather events for the territory. Used to
- * write specific-sounding storm analysis instead of generic filler — the
- * dates and storm names are factual, the assignment of a given lead's roof to
- * one of them is a synthetic scoring heuristic, not a claim about that
- * specific address.
+ * Illustrative fallback storms — used only when a lead's county has no real
+ * `storm_events` on file yet (see the module doc comment above). Once
+ * scripts/fetch-storm-events.mjs has run, messaging.ts and summary.ts prefer
+ * the actual linked NOAA event over this list. The dates and storm names
+ * here are still factual; it's the assignment of a given lead's roof to one
+ * of them that's a placeholder, not a claim about that specific address.
  */
 export const STORM_EVENTS = [
     { name: 'Hurricane Laura', date: 'August 2020', kind: 'category 4 hurricane winds' },
@@ -71,7 +77,16 @@ export type GeneratedLead = {
     roofAgeYears: number;
     stormScore: number;
     insuranceLikelihood: number;
+    /** Real storm_events row this score/narrative came from, or null if none was on file for the county. */
+    stormEventId: string | null;
 };
+
+/** Roof-age-only fallback, used when the lead's county has no real storm_events on file. */
+function heuristicStormScore(roofAgeYears: number): number {
+    const ageComponent = clamp(roofAgeYears * 2.4, 0, 65);
+    const stormComponent = randomInt(0, 45);
+    return Math.round(clamp(ageComponent * 0.4 + stormComponent, 5, 98));
+}
 
 /** Places a point near a neighborhood center, retrying until it's in territory. */
 function scatterPoint(center: { lat: number; lng: number }): { lat: number; lng: number } {
@@ -87,19 +102,32 @@ function scatterPoint(center: { lat: number; lng: number }): { lat: number; lng:
     return center;
 }
 
-export function generateLead(): GeneratedLead {
+/**
+ * `pool` is optional so this stays usable in pure unit tests and in any
+ * context without a database — it just falls back to the roof-age heuristic
+ * (see heuristicStormScore above) instead of looking up real storm history.
+ */
+export async function generateLead(pool?: pg.Pool): Promise<GeneratedLead> {
     const neighborhood = pick(NEIGHBORHOODS);
     const point = scatterPoint(neighborhood);
     const distanceMiles = Math.round(milesBetween(TERRITORY_CENTER, point) * 10) / 10;
 
     const roofAgeYears = randomInt(4, 32);
 
-    // Older roofs and roofs in the path of a real recent storm score higher.
-    // Bounded random walk rather than pure uniform, so the daily batch reads
-    // like a plausible distribution instead of noise.
-    const ageComponent = clamp(roofAgeYears * 2.4, 0, 65);
-    const stormComponent = randomInt(0, 45);
-    const stormScore = Math.round(clamp(ageComponent * 0.4 + stormComponent, 5, 98));
+    let stormScore: number;
+    let stormEventId: string | null = null;
+    const realEvents = pool ? await fetchStormEventsForCounty(pool, neighborhood.countyFips) : [];
+    const realScore = scoreFromEvents(realEvents);
+    if (realScore !== null) {
+        // Blend in a little roof-age signal so two homes in the same county
+        // with very different roof ages don't score identically off the same
+        // parish-wide storm history.
+        const ageComponent = clamp(roofAgeYears * 2.4, 0, 65);
+        stormScore = Math.round(clamp(realScore * 0.8 + ageComponent * 0.2, 5, 98));
+        stormEventId = representativeEvent(realEvents)?.id ?? null;
+    } else {
+        stormScore = heuristicStormScore(roofAgeYears);
+    }
     const insuranceLikelihood = Math.round(clamp(stormScore * 0.7 + randomInt(0, 25), 5, 97));
 
     const first = pick(FIRST_NAMES);
@@ -120,11 +148,20 @@ export function generateLead(): GeneratedLead {
         roofAgeYears,
         stormScore,
         insuranceLikelihood,
+        stormEventId,
     };
 }
 
-export function generateDailyBatch(count: number): GeneratedLead[] {
-    return Array.from({ length: count }, () => generateLead());
+/**
+ * Sequential rather than Promise.all: each lead with real storm data on file
+ * makes one DB query, and the pool this runs against is capped at 3
+ * connections (see api/_lib/db.ts) — a batch of up to 75 is an infrequent
+ * daily/admin action, not a latency-sensitive path, so simple beats parallel.
+ */
+export async function generateDailyBatch(count: number, pool?: pg.Pool): Promise<GeneratedLead[]> {
+    const batch: GeneratedLead[] = [];
+    for (let i = 0; i < count; i++) batch.push(await generateLead(pool));
+    return batch;
 }
 
 function clamp(value: number, min: number, max: number): number {
