@@ -1,0 +1,12 @@
+{
+    "name": "RoofSignal — John with Cypress",
+    "short_name": "RoofSignal",
+    "description": "Solo lead engine and inspection workflow for John with Cypress, Bossier City / Shreveport.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f8fafc",
+    "theme_color": "#c2410c",
+    "icons": [
+        { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    ]
+}

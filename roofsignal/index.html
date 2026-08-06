@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#c2410c" />
+    <title>RoofSignal — John with Cypress</title>
+    <meta name="description" content="Solo lead engine and inspection workflow for John with Cypress, Bossier City / Shreveport." />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icon.svg" />
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-card">
+            <h1>🏠 RoofSignal</h1>
+            <p class="tagline">John with Cypress — Bossier City / Shreveport</p>
+            <form id="login-form">
+                <input id="app-secret" type="password" placeholder="App key" autocomplete="current-password" required />
+                <button type="submit">Open RoofSignal</button>
+            </form>
+            <div class="login-status" id="login-status"></div>
+        </div>
+    </div>
+
+    <div id="app" class="hidden">
+        <header class="topbar">
+            <h1><span class="brand">RoofSignal</span> · John with Cypress</h1>
+            <button class="icon-btn" id="signout-btn">Sign out</button>
+        </header>
+
+        <main class="panels">
+            <section class="panel active" data-panel="leads">
+                <div class="chips" id="status-chips">
+                    <button class="chip active" data-status="">All</button>
+                    <button class="chip" data-status="new">New</button>
+                    <button class="chip" data-status="interested">Interested</button>
+                    <button class="chip" data-status="needs_inspection">Needs Inspection</button>
+                    <button class="chip" data-status="booked">Booked</button>
+                    <button class="chip" data-status="not_interested">Not Interested</button>
+                </div>
+                <div class="action-row">
+                    <button class="btn primary block" id="generate-btn">Generate today's leads</button>
+                </div>
+                <div id="leads-list"></div>
+            </section>
+
+            <section class="panel" data-panel="map">
+                <div id="map"></div>
+                <div class="map-legend">
+                    <span><i style="background:#64748b"></i>New</span>
+                    <span><i style="background:#2563eb"></i>Interested</span>
+                    <span><i style="background:#d97706"></i>Needs Inspection</span>
+                    <span><i style="background:#16a34a"></i>Booked</span>
+                    <span><i style="background:#94a3b8"></i>Not Interested</span>
+                </div>
+                <p class="small-muted" style="margin-top:8px">30-mile territory around Bossier City / Shreveport.</p>
+            </section>
+
+            <section class="panel" data-panel="pipeline">
+                <div class="pipeline-board" id="pipeline-board"></div>
+            </section>
+
+            <section class="panel" data-panel="calendar">
+                <div class="chips">
+                    <button class="chip active" data-range="today">Today</button>
+                    <button class="chip" data-range="upcoming">Upcoming</button>
+                </div>
+                <div id="calendar-list"></div>
+            </section>
+        </main>
+
+        <nav class="bottom-nav">
+            <button class="active" data-tab="leads"><span class="dot">📋</span>Leads</button>
+            <button data-tab="map"><span class="dot">🗺️</span>Map</button>
+            <button data-tab="pipeline"><span class="dot">🔀</span>Pipeline</button>
+            <button data-tab="calendar"><span class="dot">📅</span>Schedule</button>
+        </nav>
+    </div>
+
+    <div id="detail-overlay" class="hidden">
+        <div id="detail-drawer"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

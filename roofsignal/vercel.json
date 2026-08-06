@@ -1,0 +1,28 @@
+{
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "rewrites": [
+        { "source": "/s/:token", "destination": "/share.html" }
+    ],
+    "headers": [
+        {
+            "source": "/(.*)",
+            "headers": [
+                { "key": "X-Content-Type-Options", "value": "nosniff" },
+                { "key": "X-Frame-Options", "value": "DENY" },
+                { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+                { "key": "Permissions-Policy", "value": "camera=(self), microphone=(), geolocation=()" },
+                {
+                    "key": "Content-Security-Policy",
+                    "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.public.blob.vercel-storage.com; connect-src 'self' https://*.public.blob.vercel-storage.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+                }
+            ]
+        },
+        {
+            "source": "/api/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "no-store" }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,57 @@
+name: RoofSignal scheduled jobs
+
+# Vercel's Hobby plan caps cron at once a day, too coarse for a reminder
+# that has to land near a specific hour mark, so both schedules live here
+# instead and just call the deployed cron endpoint. See roofsignal/README.md.
+on:
+  schedule:
+    - cron: '10 12 * * *'   # daily-leads: ~7am Central (adjust with DST if it matters)
+    - cron: '*/15 * * * *'  # reminders: every 15 minutes, api/cron.ts widens the window
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'daily-leads or reminders'
+        required: false
+        default: reminders
+
+jobs:
+  run-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the cron endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BASE_URL: ${{ vars.ROOFSIGNAL_URL || 'https://roofsignal.vercel.app' }}
+          MANUAL_TASK: ${{ github.event.inputs.task }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repository secret is not set." >&2
+            exit 1
+          fi
+
+          task="$MANUAL_TASK"
+          if [ -z "$task" ]; then
+            if [ "$SCHEDULE" = "10 12 * * *" ]; then
+              task="daily-leads"
+            else
+              task="reminders"
+            fi
+          fi
+
+          response=$(curl -sS -X POST "$BASE_URL/api/cron?task=$task" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -w '\n%{http_code}' \
+            --max-time 60)
+
+          status=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+          echo "task=$task"
+          echo "$body"
+
+          if [ "$status" != "200" ]; then
+            echo "Cron task '$task' failed with HTTP $status" >&2
+            exit 1
+          fi
