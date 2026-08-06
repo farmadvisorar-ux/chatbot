@@ -1,3 +1,6 @@
+import { getPool, isDatabaseConfigured } from './db.js';
+import { SCHEMA_SQL } from './schema.js';
+
 /**
  * Turns a thrown database error into something an operator can act on.
  *
@@ -38,6 +41,46 @@ export function describeDbError(err: unknown): { status: number; message: string
 }
 
 /**
+ * One attempt per process. A cold start resets it, which is the point: it
+ * retries after a genuine transient failure, but a database that keeps
+ * rejecting the schema will not be hammered by every request in an instance.
+ */
+let schemaAttempted = false;
+
+/**
+ * Creates the schema on the first request that finds it missing.
+ *
+ * A deployment can reach its database and still have no tables, and closing
+ * that gap has required either the connection string on the operator's own
+ * machine or an outbound Postgres port — neither is available everywhere this
+ * gets run from. Since the application already knows how to connect, the one
+ * thing it was missing was permission to fix itself.
+ *
+ * Deliberately not a new endpoint: this runs inside request paths that already
+ * exist, so it adds no public surface and nothing here can be triggered that a
+ * visitor could not already trigger by loading the homepage. The schema is
+ * idempotent and contains no DROP, both asserted in tests/schema.test.mjs.
+ *
+ * The request that triggers it is not retried. Re-running a handler risks
+ * repeating whatever it did before it failed, and no amount of care makes that
+ * worth it on paths that take money — so the caller is told to try again, and
+ * the next request succeeds.
+ */
+async function createSchemaOnce(label: string): Promise<boolean> {
+    if (schemaAttempted) return false;
+    schemaAttempted = true;
+    try {
+        if (!isDatabaseConfigured()) return false;
+        await getPool().query(SCHEMA_SQL);
+        console.log(`[${label}] schema was missing and has been created`);
+        return true;
+    } catch (err) {
+        console.error(`[${label}] could not create the schema`, err);
+        return false;
+    }
+}
+
+/**
  * Runs a handler and converts anything it throws into a described response.
  * Full detail goes to the server log, where it is safe to be specific.
  */
@@ -49,6 +92,16 @@ export async function guarded(
     try {
         await run();
     } catch (err) {
+        const code = (err as { code?: string } | null)?.code;
+
+        if (code === '42P01' && await createSchemaOnce(label)) {
+            res.status(503).json({
+                error: 'The database has just been set up. Retry this request.',
+                initialised: true,
+            });
+            return;
+        }
+
         console.error(`[${label}]`, err);
         const { status, message } = describeDbError(err);
         res.status(status).json({ error: message });
