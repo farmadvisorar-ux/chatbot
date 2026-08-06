@@ -11,6 +11,7 @@ const $ = <T extends HTMLElement>(sel: string): T | null => document.querySelect
 
 const boardRows = $('#board-rows');
 const proofRate = $('#proof-rate');
+const proofWait = $('#proof-wait');
 const adForm = $<HTMLFormElement>('#ad-form');
 const adStatus = $('#ad-status');
 const pubForm = $<HTMLFormElement>('#pub-form');
@@ -52,6 +53,122 @@ const SCENES = [
     },
 ];
 
+/* ---------------- the latency trace ----------------
+ * The chat panel shows a person waiting; this shows the same wait as the
+ * machine reports it. Drawn on a canvas rather than assembled from SVG paths
+ * because it is a continuously updating signal, not a fixed illustration.
+ *
+ * `thinking` is driven by the chat loop below, so the two are the same event
+ * seen twice — the trace lifts exactly when the sponsored line appears.
+ */
+let thinking = false;
+let waitStartedAt = 0;
+let peakSeconds = 0;
+
+function startTrace(): void {
+    const canvas = $<HTMLCanvasElement>('#trace');
+    const stateLabel = $('#trace-state');
+    const peakLabel = $('#trace-peak');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const styles = getComputedStyle(document.documentElement);
+    const colour = (name: string, fallback: string): string =>
+        styles.getPropertyValue(name).trim() || fallback;
+
+    // Samples are a ring of recent amplitudes; the canvas redraws all of them
+    // each frame, which is cheap at this width and avoids scroll artefacts.
+    const samples: number[] = [];
+    let width = 0;
+    let height = 0;
+
+    const resize = (): void => {
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        width = canvas.clientWidth;
+        height = canvas.clientHeight;
+        canvas.width = Math.max(1, Math.round(width * ratio));
+        canvas.height = Math.max(1, Math.round(height * ratio));
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    let phase = 0;
+
+    const frame = (): void => {
+        phase += 1;
+
+        // Idle is a low, slow ripple; thinking is a taller, busier signal that
+        // decays as the wait goes on — the shape of work finishing.
+        const elapsed = thinking ? (Date.now() - waitStartedAt) / 1000 : 0;
+        const envelope = thinking ? Math.max(0.25, 1 - elapsed / 6) : 0.12;
+        const noise = thinking ? Math.sin(phase / 3) * 0.35 + Math.sin(phase / 7.3) * 0.3 : 0;
+        const base = Math.sin(phase / 22) * 0.5 + Math.sin(phase / 9.1) * 0.2;
+        samples.push((base + noise) * envelope);
+
+        const maxSamples = Math.max(60, Math.floor(width / 2));
+        while (samples.length > maxSamples) samples.shift();
+
+        ctx.clearRect(0, 0, width, height);
+        const mid = height / 2;
+
+        // Baseline
+        ctx.strokeStyle = colour('--edge', 'rgba(255,255,255,.09)');
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, mid);
+        ctx.lineTo(width, mid);
+        ctx.stroke();
+
+        const line = thinking ? colour('--pulse', '#6f8dff') : colour('--dim', '#6f7a92');
+        const step = samples.length > 1 ? width / (samples.length - 1) : width;
+
+        // Filled area under the trace, then the trace itself on top.
+        ctx.beginPath();
+        ctx.moveTo(0, mid);
+        samples.forEach((value, i) => ctx.lineTo(i * step, mid - value * (height * 0.42)));
+        ctx.lineTo(width, mid);
+        ctx.closePath();
+        // globalAlpha rather than a color-mix() fill: canvas support for
+        // colour functions is uneven, and a fill that silently fails to parse
+        // paints solid black over the panel.
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = line;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.beginPath();
+        samples.forEach((value, i) => {
+            const x = i * step;
+            const y = mid - value * (height * 0.42);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+
+        // The leading edge, so the eye has somewhere to sit.
+        if (samples.length) {
+            const y = mid - samples[samples.length - 1] * (height * 0.42);
+            ctx.beginPath();
+            ctx.arc(width - 1, y, thinking ? 3 : 2, 0, Math.PI * 2);
+            ctx.fillStyle = line;
+            ctx.fill();
+        }
+
+        if (thinking) {
+            peakSeconds = Math.max(peakSeconds, elapsed);
+            if (proofWait) proofWait.textContent = `${elapsed.toFixed(1)}s`;
+        }
+        if (stateLabel) stateLabel.textContent = thinking ? 'thinking' : 'idle';
+        if (peakLabel) peakLabel.textContent = `${peakSeconds.toFixed(1)}s`;
+
+        requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+}
+
 const el = {
     host: $('#host-name'),
     prompt: $('#m-prompt'),
@@ -82,6 +199,9 @@ async function runScene(): Promise<void> {
     el.answer.textContent = '';
     el.ad.classList.remove('in');
     el.think.style.visibility = 'visible';
+    // Drives the latency trace, so both views show the same moment.
+    thinking = true;
+    waitStartedAt = Date.now();
     // Restart the meter fill; without the reflow the animation would not replay.
     if (el.meter) { el.meter.style.visibility = 'hidden'; void el.meter.offsetWidth; }
 
@@ -108,6 +228,7 @@ async function runScene(): Promise<void> {
 
     // Answer arrives; the gap closes and the ad goes with it.
     el.think.style.visibility = 'hidden';
+    thinking = false;
     el.ad.classList.remove('in');
     if (el.meter) el.meter.style.visibility = 'hidden';
     el.answer.classList.remove('hide');
@@ -294,4 +415,5 @@ function showNotice(): void {
 showNotice();
 updateEstimate();
 loadBoard();
+startTrace();
 loopHero();
