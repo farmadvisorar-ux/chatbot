@@ -17,6 +17,11 @@
     --danger: #ff5d5d;
     --radius: 14px;
     --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    /* Nods to Tooiicy's actual signature product detail — glow-in-the-dark
+       print lettering on the real hoodies — without trying to fake the
+       photoreal effect in a UI. Used sparingly: the brand mark, the hero
+       headline, and a primary-button hover, not every accent-colored pixel. */
+    --glow: 0 0 14px rgba(46, 168, 255, 0.55), 0 0 36px rgba(46, 168, 255, 0.3);
     --font-display: 'Bebas Neue', 'Arial Narrow', sans-serif;
     --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
@@ -65,7 +70,7 @@ a { color: inherit; }
     color: var(--text);
 }
 
-.logo b { color: var(--accent); }
+.logo b { color: var(--accent); text-shadow: var(--glow); }
 
 .logo-tag {
     font-family: var(--font-body);
@@ -138,7 +143,7 @@ a { color: inherit; }
     margin: 0 0 16px;
 }
 
-.hero h1 .juice { color: var(--accent); }
+.hero h1 .juice { color: var(--accent); text-shadow: var(--glow); }
 
 .hero-sub {
     max-width: 560px;
@@ -170,7 +175,7 @@ a { color: inherit; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary { background: var(--accent); color: var(--accent-ink); }
-.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.btn-primary:hover:not(:disabled) { opacity: 0.9; box-shadow: var(--glow); }
 
 .btn-outline { background: transparent; border-color: var(--border); color: var(--text); }
 .btn-outline:hover { border-color: var(--accent); }
