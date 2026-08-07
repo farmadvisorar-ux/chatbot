@@ -70,6 +70,11 @@ export function getPool(): pg.Pool {
             connectionString,
             ssl: sslFor(connectionString),
             max: 3,
+            // A stalled connection or query must not hold a serverless
+            // invocation open until the platform kills it.
+            connectionTimeoutMillis: 5_000,
+            statement_timeout: 10_000,
+            query_timeout: 10_000,
         });
     }
     return globalThis.__autopassportPool;

@@ -64,7 +64,9 @@ run under `vercel dev`).
    `autopassport`.
 3. **Stripe** — one **secret key**, plus a webhook endpoint at
    `https://<your-domain>/api/webhooks/stripe` subscribed to
-   `checkout.session.completed`.
+   `checkout.session.completed` and `checkout.session.async_payment_succeeded`
+   (the second covers delayed payment methods, where the form can be
+   submitted before the money actually arrives).
 4. **Env vars** — `DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
    `ADMIN_SECRET` (any long random string), `PUBLIC_SITE_URL`.
 5. **Domain** — add the domain in the Vercel project's Domains settings and

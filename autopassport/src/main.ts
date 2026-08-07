@@ -39,6 +39,18 @@ const noticeBox = $('#notice');
 const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
+// The submit API already rejects non-http(s) storeUrl values before a row
+// can exist, but a link rendered for every visitor is worth checking again
+// here rather than trusting that no other path into this table will ever
+// appear.
+const safeHref = (url: string): string => {
+    try {
+        return ['http:', 'https:'].includes(new URL(url).protocol) ? url : '#';
+    } catch {
+        return '#';
+    }
+};
+
 /* ---------------- the dash mock: one tile stamped at a time ---------------- */
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -90,7 +102,7 @@ function renderApps(apps: App[]): void {
         return;
     }
 
-    appGrid.innerHTML = apps.map(app => `<a class="app-card" href="${escapeHtml(app.storeUrl)}" target="_blank" rel="noopener noreferrer">
+    appGrid.innerHTML = apps.map(app => `<a class="app-card" href="${escapeHtml(safeHref(app.storeUrl))}" target="_blank" rel="noopener noreferrer">
         <div class="app-card-top">
             <img class="app-icon" src="${escapeHtml(app.iconUrl)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
             <div>
@@ -167,8 +179,8 @@ submitForm?.addEventListener('submit', async event => {
 const NOTICES: Record<'success' | 'cancelled', { tone: 'success' | 'neutral'; title: string; body: string }> = {
     success: {
         tone: 'success',
-        title: 'Payment received.',
-        body: 'Your app is in the review queue — it joins the passport as soon as someone has actually driven with it.',
+        title: 'Checkout complete.',
+        body: 'Once your payment is confirmed, your app moves into the review queue — it joins the passport as soon as someone has actually driven with it.',
     },
     cancelled: {
         tone: 'neutral',
