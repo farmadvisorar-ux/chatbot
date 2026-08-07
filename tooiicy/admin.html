@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Tooiicy Admin</title>
+    <link rel="stylesheet" href="./src/admin.css">
+</head>
+<body>
+    <main id="admin-root">
+        <section id="admin-login" class="card">
+            <h1>Tooiicy Admin</h1>
+            <p class="muted">Enter your admin key to manage products and orders.</p>
+            <form id="login-form">
+                <label>Admin key
+                    <input id="admin-key" type="password" autocomplete="current-password" required placeholder="Paste your ADMIN_SECRET">
+                </label>
+                <label class="checkbox"><input id="remember" type="checkbox" checked> Stay signed in on this device</label>
+                <button type="submit">Sign in</button>
+                <p id="login-status" class="status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section id="admin-app" hidden>
+            <header class="topbar">
+                <h1>Tooiicy Admin</h1>
+                <div>
+                    <a class="ghost linkbtn" href="/" target="_blank" rel="noopener">View site</a>
+                    <button id="refresh" type="button" class="ghost">Refresh</button>
+                    <button id="signout" type="button" class="ghost">Sign out</button>
+                </div>
+            </header>
+
+            <div id="stats" class="stats"></div>
+
+            <nav class="tabs">
+                <button class="tab active" data-tab="orders" type="button">Orders <span id="count-orders">0</span></button>
+                <button class="tab" data-tab="products" type="button">Products <span id="count-products">0</span></button>
+            </nav>
+
+            <div class="panel active" data-panel="orders">
+                <p class="muted">Paid orders are submitted to Printful automatically. Anything stuck in "fulfillment error" (usually a missing shipping field or a Printful outage) can be retried once the cause is fixed.</p>
+                <div id="orders-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="products">
+                <p class="muted">Each variant needs the Printful catalog variant id it maps to — find it in Printful's product catalog or an existing store product before adding it here.</p>
+
+                <form id="product-form" class="card inline-card">
+                    <h2>Add a product</h2>
+                    <label>Name <input id="pf-name" type="text" required placeholder="Tooiicy Tee"></label>
+                    <label>Slug <input id="pf-slug" type="text" required placeholder="tooiicy-tee" pattern="[a-z0-9-]+"></label>
+                    <label>Description <textarea id="pf-description" rows="2" placeholder="Optional"></textarea></label>
+                    <label>Image URL <input id="pf-image" type="url" placeholder="Optional"></label>
+                    <div id="pf-variants"></div>
+                    <button type="button" id="pf-add-variant" class="ghost">+ Add variant</button>
+                    <button type="submit">Create product</button>
+                    <p id="product-status" class="status" role="status" aria-live="polite"></p>
+                </form>
+
+                <div id="products-list" class="list"></div>
+            </div>
+        </section>
+    </main>
+    <script type="module" src="./src/admin.ts"></script>
+</body>
+</html>

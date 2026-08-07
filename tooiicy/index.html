@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tooiicy — Official Juicecuzz Merch</title>
+    <meta name="description" content="Official merchandise from Juicecuzz. Shop the Tooiicy drop.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <a class="logo" href="/">Tooi<b>icy</b><span class="logo-tag">Juicecuzz</span></a>
+        <div class="header-actions">
+            <button class="cart-btn" id="cart-open" type="button" aria-haspopup="true">
+                Cart <span class="cart-count" id="cart-count">0</span>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero wrap">
+            <p class="badge">Official store</p>
+            <h1>TOO<span class="juice">ICY</span></h1>
+            <p class="hero-sub">Official merch from Juicecuzz. Every order is printed and shipped just for you — nothing sits in a warehouse.</p>
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="#shop">Shop the drop</a>
+            </div>
+        </section>
+
+        <section class="shop wrap" id="shop">
+            <div class="notice-slot" id="notice"></div>
+            <div class="shop-header">
+                <h2>Shop</h2>
+            </div>
+            <div class="grid" id="product-grid"></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="wrap">© <span id="year"></span> Tooiicy. All rights reserved.</div>
+    </footer>
+
+    <div class="scrim" id="scrim"></div>
+
+    <div class="overlay" id="product-overlay" role="dialog" aria-modal="true">
+        <div class="modal" id="product-modal"></div>
+    </div>
+
+    <aside class="drawer" id="cart-drawer" aria-label="Shopping cart">
+        <div class="drawer-header">
+            <h3>Your cart</h3>
+            <button class="modal-close" id="cart-close" type="button" aria-label="Close cart" style="position: static; margin: 0;">✕</button>
+        </div>
+        <div class="drawer-items" id="cart-items"></div>
+        <div class="drawer-footer">
+            <div class="notice-slot" id="cart-notice"></div>
+            <input class="email-input" id="cart-email" type="email" placeholder="Email for your receipt (optional)" autocomplete="email">
+            <div class="drawer-total"><span>Total</span><span id="cart-total">$0.00</span></div>
+            <button class="btn btn-primary btn-block" id="cart-checkout" type="button">Checkout</button>
+        </div>
+    </aside>
+
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
