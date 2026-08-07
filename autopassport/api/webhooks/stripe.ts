@@ -42,7 +42,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
-    if (event.type === 'checkout.session.completed') {
+    // completed fires once the form is submitted, which for delayed payment
+    // methods (e.g. bank debits) can still be unpaid; async_payment_succeeded
+    // is Stripe's later confirmation that the money actually arrived. Both
+    // carry the same session shape, so both go through the same guarded update.
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
         const session = event.data.object as Stripe.Checkout.Session;
         const appId = session.metadata?.appId;
         const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;

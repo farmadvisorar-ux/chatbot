@@ -33,6 +33,17 @@ const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 const day = (value: string | null): string => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
 
+// The submit API already rejects non-http(s) storeUrl values before a row
+// can exist, but an admin-facing link is worth checking again here rather
+// than trusting that no other path into this table will ever appear.
+const safeHref = (url: string): string => {
+    try {
+        return ['http:', 'https:'].includes(new URL(url).protocol) ? url : '#';
+    } catch {
+        return '#';
+    }
+};
+
 async function callAdmin<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(path, {
         ...init,
@@ -64,7 +75,7 @@ function renderQueue(items: Submission[]): void {
         </div>
         <p class="meta">
           ${escapeHtml(CATEGORY_LABELS[item.category] || item.category)}
-          &nbsp;·&nbsp; <a href="${escapeHtml(item.storeUrl)}" target="_blank" rel="noopener noreferrer">app link</a>
+          &nbsp;·&nbsp; <a href="${escapeHtml(safeHref(item.storeUrl))}" target="_blank" rel="noopener noreferrer">app link</a>
           &nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.developerEmail)}">${escapeHtml(item.developerEmail)}</a>
           &nbsp;·&nbsp; paid ${escapeHtml(day(item.paidAt))}
         </p>
