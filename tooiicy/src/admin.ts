@@ -17,6 +17,7 @@ type Order = {
     printfulOrderId: string | number | null; trackingNumber: string | null; trackingUrl: string | null;
     fulfillmentError: string | null; paidAt: string | null; createdAt: string; items: OrderItem[];
 };
+type SocialLink = { id: string; platform: string; url: string; active: boolean; sortOrder: number; createdAt: string };
 
 const ORDER_STATUSES = ['awaiting_payment', 'paid', 'submitted_to_printful', 'fulfillment_error', 'shipped', 'cancelled'];
 const STORAGE_KEY = 'tooiicy_admin_key';
@@ -39,6 +40,7 @@ let adminKey = '';
 let latestProducts: Product[] = [];
 let latestVariants: Variant[] = [];
 let latestOrders: Order[] = [];
+let latestSocialLinks: SocialLink[] = [];
 
 const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
@@ -229,6 +231,77 @@ async function onProductClick(event: Event): Promise<void> {
 
 productsList.addEventListener('click', onProductClick);
 
+/* ---------------- social links ---------------- */
+
+const socialForm = $<HTMLFormElement>('#social-form');
+const socialStatus = $('#social-status');
+const socialLinksList = $('#social-links-list');
+
+function renderSocialLinks(): void {
+    $('#count-social').textContent = String(latestSocialLinks.length);
+    socialLinksList.innerHTML = latestSocialLinks.length ? latestSocialLinks.map(link => `
+      <article class="item" data-id="${escapeHtml(link.id)}">
+        <div class="item-head">
+          <h3>${escapeHtml(link.platform)}</h3>
+          <span class="badge ${link.active ? 'active' : 'inactive'}">${link.active ? 'active' : 'hidden'}</span>
+        </div>
+        <p class="meta"><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">${escapeHtml(link.url)}</a></p>
+        <div class="row">
+          <button type="button" class="ghost small" data-action="toggle-active">${link.active ? 'Hide' : 'Show'}</button>
+          <button type="button" class="ghost small danger" data-action="delete">Delete</button>
+        </div>
+      </article>
+    `).join('') : `<div class="empty">No social links yet — add one below.</div>`;
+}
+
+async function onSocialLinkClick(event: Event): Promise<void> {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
+    if (!button) return;
+    const id = button.closest<HTMLElement>('[data-id]')?.dataset.id;
+    const action = button.dataset.action;
+    if (!id || !action) return;
+
+    const link = latestSocialLinks.find(l => l.id === id);
+    if (!link) return;
+
+    try {
+        if (action === 'toggle-active') {
+            await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ action: 'update_social_link', id, active: !link.active }) });
+        } else if (action === 'delete') {
+            if (!confirm(`Delete ${link.platform}?`)) return;
+            await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ action: 'delete_social_link', id }) });
+        }
+        await loadAll();
+    } catch (err) {
+        alert(err instanceof Error ? err.message : 'Action failed');
+    }
+}
+
+socialLinksList.addEventListener('click', onSocialLinkClick);
+
+socialForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    socialStatus.textContent = 'Saving…';
+    socialStatus.className = 'status';
+
+    const platform = $<HTMLInputElement>('#social-platform').value.trim();
+    const url = $<HTMLInputElement>('#social-url').value.trim();
+
+    try {
+        await callAdmin('/api/admin', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'create_social_link', platform, url }),
+        });
+        socialStatus.textContent = 'Link added.';
+        socialStatus.className = 'status success';
+        socialForm.reset();
+        await loadAll();
+    } catch (err) {
+        socialStatus.textContent = err instanceof Error ? err.message : 'Could not add link';
+        socialStatus.className = 'status error';
+    }
+});
+
 /* ---------------- create-product form ---------------- */
 
 function addVariantRow(): void {
@@ -283,13 +356,15 @@ productForm.addEventListener('submit', async event => {
 /* ---------------- load + auth ---------------- */
 
 async function loadAll(): Promise<void> {
-    const data = await callAdmin<{ products: Product[]; variants: Variant[]; orders: Order[] }>('/api/admin');
+    const data = await callAdmin<{ products: Product[]; variants: Variant[]; orders: Order[]; socialLinks: SocialLink[] }>('/api/admin');
     latestProducts = data.products;
     latestVariants = data.variants;
     latestOrders = data.orders;
+    latestSocialLinks = data.socialLinks;
     renderStats();
     renderOrders();
     renderProducts();
+    renderSocialLinks();
 }
 
 function showApp(): void {

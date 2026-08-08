@@ -39,6 +39,7 @@
             <nav class="tabs">
                 <button class="tab active" data-tab="orders" type="button">Orders <span id="count-orders">0</span></button>
                 <button class="tab" data-tab="products" type="button">Products <span id="count-products">0</span></button>
+                <button class="tab" data-tab="social" type="button">Social Links <span id="count-social">0</span></button>
             </nav>
 
             <div class="panel active" data-panel="orders">
@@ -62,6 +63,20 @@
                 </form>
 
                 <div id="products-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="social">
+                <p class="muted">Manage social media links that appear on the storefront and in the footer.</p>
+
+                <form id="social-form" class="card inline-card">
+                    <h2>Add a social link</h2>
+                    <label>Platform <input id="social-platform" type="text" required placeholder="twitter"></label>
+                    <label>URL <input id="social-url" type="url" required placeholder="https://twitter.com/tooiicy"></label>
+                    <button type="submit">Add link</button>
+                    <p id="social-status" class="status" role="status" aria-live="polite"></p>
+                </form>
+
+                <div id="social-links-list" class="list"></div>
             </div>
         </section>
     </main>

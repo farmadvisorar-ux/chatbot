@@ -24,6 +24,23 @@ const cartCountEl = $('#cart-count');
 const cartCheckoutBtn = $<HTMLButtonElement>('#cart-checkout');
 const cartEmailInput = $<HTMLInputElement>('#cart-email');
 const cartNotice = $('#cart-notice');
+const socialLinksContainer = $('#social-links');
+const footerSocial = $('#footer-social');
+
+type SocialLink = { id: string; platform: string; url: string; sortOrder: number };
+
+const platformIcons: Record<string, string> = {
+    'twitter': '𝕏',
+    'instagram': '📸',
+    'youtube': '▶️',
+    'spotify': '🎵',
+    'apple-music': '🎶',
+    'youtube-music': '🎼',
+};
+
+function getSocialIcon(platform: string): string {
+    return platformIcons[platform] || '🔗';
+}
 
 const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
@@ -253,5 +270,35 @@ cartCheckoutBtn?.addEventListener('click', async () => {
     }
 });
 
+/* ---------------- social links ---------------- */
+
+function renderSocialLinks(links: SocialLink[]): void {
+    const linkHtml = links
+        .map(link => `
+            <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="social-link" title="${escapeHtml(link.platform)}">
+                <span class="social-icon">${getSocialIcon(link.platform)}</span>
+                <span class="social-text">${escapeHtml(link.platform)}</span>
+            </a>
+        `)
+        .join('');
+
+    if (socialLinksContainer) {
+        socialLinksContainer.innerHTML = linkHtml;
+    }
+    if (footerSocial) {
+        footerSocial.innerHTML = linkHtml;
+    }
+}
+
+async function loadSocialLinks(): Promise<void> {
+    try {
+        const { data } = await api.get<{ socialLinks: SocialLink[] }>('/api/social-links');
+        renderSocialLinks(data.socialLinks);
+    } catch (err) {
+        // Silently fail if social links can't load
+    }
+}
+
 renderCart();
 loadProducts();
+loadSocialLinks();

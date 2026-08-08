@@ -216,8 +216,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
+        if (action === 'create_social_link') {
+            const platform = clean(body.platform, 40);
+            const url = clean(body.url, 500);
+            if (!platform || !url) {
+                error(res, 400, 'A social link needs a platform and a URL');
+                return;
+            }
+            const { rows } = await pool.query<{ id: string }>(
+                `INSERT INTO social_links (platform, url) VALUES ($1, $2) RETURNING id`,
+                [platform, url],
+            );
+            json(res, 200, { ok: true, id: rows[0].id });
+            return;
+        }
+
+        if (action === 'update_social_link') {
+            const id = body.id;
+            if (!isUuid(id)) {
+                error(res, 400, 'Missing or invalid social link id');
+                return;
+            }
+            const { rowCount } = await pool.query(
+                `UPDATE social_links SET
+                    platform = COALESCE($2, platform),
+                    url = COALESCE($3, url),
+                    active = COALESCE($4, active),
+                    sort_order = COALESCE($5, sort_order)
+                 WHERE id = $1`,
+                [
+                    id,
+                    typeof body.platform === 'string' ? clean(body.platform, 40) : null,
+                    typeof body.url === 'string' ? clean(body.url, 500) : null,
+                    typeof body.active === 'boolean' ? body.active : null,
+                    typeof body.sortOrder === 'number' ? Math.trunc(body.sortOrder) : null,
+                ],
+            );
+            if (!rowCount) {
+                error(res, 404, 'Social link not found');
+                return;
+            }
+            json(res, 200, { ok: true });
+            return;
+        }
+
+        if (action === 'delete_social_link') {
+            const id = body.id;
+            if (!isUuid(id)) {
+                error(res, 400, 'Missing or invalid social link id');
+                return;
+            }
+            const { rowCount } = await pool.query('DELETE FROM social_links WHERE id = $1', [id]);
+            if (!rowCount) {
+                error(res, 404, 'Social link not found');
+                return;
+            }
+            json(res, 200, { ok: true });
+            return;
+        }
+
         if (req.method === 'GET') {
-            const [products, variants, orders] = await Promise.all([
+            const [products, variants, orders, socialLinks] = await Promise.all([
                 pool.query(
                     `SELECT id, slug, name, description, image_url AS "imageUrl", active,
                             sort_order AS "sortOrder", created_at AS "createdAt"
@@ -236,6 +295,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                             tracking_number AS "trackingNumber", tracking_url AS "trackingUrl",
                             fulfillment_error AS "fulfillmentError", paid_at AS "paidAt", created_at AS "createdAt"
                      FROM orders WHERE status <> 'awaiting_payment' ORDER BY created_at DESC LIMIT 200`,
+                ),
+                pool.query(
+                    `SELECT id, platform, url, active, sort_order AS "sortOrder", created_at AS "createdAt"
+                     FROM social_links ORDER BY sort_order, created_at`,
                 ),
             ]);
 
@@ -257,6 +320,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 products: products.rows,
                 variants: variants.rows,
                 orders: orders.rows.map(order => ({ ...order, items: itemsByOrder.get(order.id) ?? [] })),
+                socialLinks: socialLinks.rows,
             });
             return;
         }
