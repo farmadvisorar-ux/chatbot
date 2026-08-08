@@ -1,0 +1,9 @@
+node_modules/
+dist/
+
+# The repository root .gitignore carries `lib/` from a Python packaging
+# template, which matches src/lib/ here and silently drops every source file
+# in it — `git add -A` reports success and commits nothing. Re-included as a
+# directory rather than file-by-file, because git will not re-include a file
+# whose parent directory is excluded.
+!src/lib/

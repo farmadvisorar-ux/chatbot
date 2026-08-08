@@ -1,0 +1,21 @@
+{
+  "name": "sheds",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "catalog": "node --experimental-strip-types scripts/build-catalog.mjs",
+    "build": "npm run catalog && node --experimental-strip-types scripts/generate-site.mjs",
+    "dev": "npm run build && node scripts/serve.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@types/pg": "^8.21.0",
+    "@vercel/node": "^5.9.7",
+    "pg": "^8.23.0"
+  }
+}
