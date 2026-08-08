@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import {
     parseSize, parseType, parseEdition, parseSiding, parseFeatures,
     cleanTitle, slugFor, priceToCents, parseDescription, parseSidingColor,
-    normalizeProduct,
+    normalizeProduct, sized,
 } from '../src/lib/normalize.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -235,4 +235,35 @@ test('"Custom" is not treated as a colour', () => {
     assert.equal(parseSidingColor([{ part: 'Siding', color: 'Boothbay Blue' }], []), 'Boothbay Blue');
     // Some descriptions put the same line among the base specs instead.
     assert.equal(parseSidingColor([], ['Siding: Mountain Sage']), 'Mountain Sage');
+});
+
+test('CDN images are requested at a sane size, keeping the cache-buster', () => {
+    // The feed points at camera originals — one measured at 1.66 MB, and a
+    // catalogue page carries 198 of them. The same image at width=480 is
+    // 53 KB. The `v=` parameter has to survive: replacing the query string
+    // instead of appending serves a stale photograph forever.
+    const url = 'https://cdn.shopify.com/s/files/1/0686/x.jpg?v=1775936142';
+    assert.equal(sized(url, 480), `${url}&width=480`);
+
+    // No existing query string.
+    assert.equal(
+        sized('https://cdn.shopify.com/s/files/1/0686/x.jpg', 900),
+        'https://cdn.shopify.com/s/files/1/0686/x.jpg?width=900',
+    );
+
+    // Already sized: left alone rather than given two conflicting widths.
+    const already = 'https://cdn.shopify.com/s/files/x.jpg?width=400';
+    assert.equal(sized(already, 900), already);
+
+    // Not Shopify: untouched, so mirroring the photographs to the dealer's
+    // own storage later needs no change here.
+    assert.equal(sized('https://dealer.example/x.jpg', 480), 'https://dealer.example/x.jpg');
+});
+
+test('every image in the catalogue is a resizable CDN URL', () => {
+    // If the supplier moved their images elsewhere, sized() would silently
+    // stop doing anything and every page would go back to shipping originals.
+    const buildings = snapshot.map(normalizeProduct).filter(Boolean);
+    const offCdn = buildings.flatMap((b) => b.images).filter((u) => !u.startsWith('https://cdn.shopify.com/'));
+    assert.deepEqual(offCdn, [], 'some images are no longer on the Shopify CDN — sized() is a no-op for those');
 });

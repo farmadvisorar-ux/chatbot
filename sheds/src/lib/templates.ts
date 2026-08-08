@@ -13,7 +13,7 @@
  */
 import { html, raw, join, esc, safeUrl, type Raw } from './html.ts';
 import { DEALER, formatPrice } from './dealer.ts';
-import { TYPE_LABELS, EDITION_LABELS, SIDING_LABELS, type Building } from './normalize.ts';
+import { TYPE_LABELS, EDITION_LABELS, SIDING_LABELS, sized, type Building } from './normalize.ts';
 
 export interface PageOptions {
     title: string;
@@ -145,10 +145,24 @@ export function summaryLine(b: Building): string {
  * the page reflows as each one lands, moving the thing someone is about to
  * tap. The dimensions are the CDN's own, passed through.
  */
+const WIDTHS = [400, 600, 900, 1400];
+
 function image(src: string, alt: string, opts: { eager?: boolean; sizes?: string } = {}): Raw {
-    return html`<img src="${raw(safeUrl(src))}" alt="${alt}" width="1200" height="900"
+    // A srcset so a phone fetches the 400px file and a desktop the 900px one,
+    // rather than everyone downloading the 1.66 MB original the feed points at.
+    const srcset = WIDTHS.map((w) => `${sized(src, w)} ${w}w`).join(', ');
+    const sizes = opts.sizes ?? '(max-width: 860px) 100vw, 33vw';
+    return html`<img src="${raw(safeUrl(sized(src, 600)))}"
+        srcset="${raw(srcset.split(', ').map(safeUrlPart).join(', '))}" sizes="${raw(sizes)}"
+        alt="${alt}" width="1200" height="900"
         loading="${raw(opts.eager ? 'eager' : 'lazy')}" decoding="async"
         ${raw(opts.eager ? 'fetchpriority="high"' : '')}>`;
+}
+
+/** `<url> <descriptor>` — the URL is checked, the descriptor is ours. */
+function safeUrlPart(entry: string): string {
+    const [url, descriptor] = entry.split(' ');
+    return `${safeUrl(url)} ${descriptor}`;
 }
 
 /**
@@ -250,7 +264,7 @@ export function buildingPage(b: Building, related: Building[]): string {
 
   <article class="wrap building">
     <div class="building-shots">
-      ${b.images.slice(0, 8).map((src, i) => html`<figure class="shot${raw(i === 0 ? ' shot-lead' : '')}">${image(src, `${name} — view ${i + 1}`, { eager: i === 0 })}</figure>`)}
+      ${b.images.slice(0, 8).map((src, i) => html`<figure class="shot${raw(i === 0 ? ' shot-lead' : '')}">${image(src, `${name} — view ${i + 1}`, { eager: i === 0, sizes: i === 0 ? '(max-width: 900px) 100vw, 640px' : '(max-width: 900px) 50vw, 310px' })}</figure>`)}
     </div>
 
     <div class="building-side">
@@ -431,7 +445,7 @@ export function homePage(buildings: Building[], facets: CatalogFacets): string {
         </dl>
       </div>
       <div class="hero-shot">
-        ${featured[0]?.images[0] ? image(featured[0].images[0], featured[0].title, { eager: true }) : raw('')}
+        ${featured[0]?.images[0] ? image(featured[0].images[0], `${sizeLabel(featured[0])} ${TYPE_LABELS[featured[0].type]}`, { eager: true, sizes: '(max-width: 900px) 100vw, 560px' }) : raw('')}
       </div>
     </div>
   </section>

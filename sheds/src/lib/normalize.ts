@@ -223,6 +223,30 @@ export function slugFor(handle: string): string {
     return handle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+/**
+ * The same photograph, resized by the CDN.
+ *
+ * The feed's image URLs are the originals straight off a phone camera — the
+ * one measured was **1.66 MB**, and a catalogue page carries 198 of them. Left
+ * alone that is 329 MB of photographs behind a page whose entire selling point
+ * is that it loads fast, and lazy-loading only defers the problem to whoever
+ * scrolls.
+ *
+ * Shopify's CDN resizes on request: the same image at `width=480` is 53 KB,
+ * thirty-one times smaller, and visually identical at the size a card
+ * actually renders. The parameter is appended rather than replacing the query
+ * string because the URL already carries a `v=` cache-buster that must
+ * survive — dropping it serves a stale image forever.
+ *
+ * Anything that is not a Shopify CDN URL is returned untouched, so mirroring
+ * the photographs later to the dealer's own storage needs no change here.
+ */
+export function sized(url: string, width: number): string {
+    if (!/^https:\/\/cdn\.shopify\.com\//i.test(url)) return url;
+    if (/[?&]width=/.test(url)) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}width=${width}`;
+}
+
 /** Money as integer cents. Floats are not allowed anywhere near a price. */
 export function priceToCents(price: string | number): number {
     return Math.round(Number(price) * 100);
