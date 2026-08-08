@@ -6,6 +6,7 @@ import { checkRateLimit } from './_lib/rateLimit.js';
 import { getStripe, siteOrigin } from './_lib/stripe.js';
 import { MIN_CPM_CENTS, MAX_CPM_CENTS, MIN_BUDGET_CENTS, MAX_BUDGET_CENTS, computeViews, PUBLISHER_SHARE_PERCENT } from './_lib/pricing.js';
 import { guarded } from './_lib/errors.js';
+import { describeEnv } from './_lib/status.js';
 
 /**
  * Serves one ad and, in the same statement, spends a view from the campaign
@@ -215,6 +216,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         if (req.query.view === 'board') {
             await handleBoard(res);
+            return;
+        }
+        // Self-report: which deployment this is and which settings it can see.
+        // No database call, so it answers even when everything else is broken —
+        // which is precisely when someone needs it. See _lib/status.ts for why
+        // nothing secret can come out of here.
+        if (req.query.view === 'status') {
+            res.setHeader('Cache-Control', 'no-store');
+            json(res, 200, describeEnv(process.env));
             return;
         }
         await handleServe(req, res);

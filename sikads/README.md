@@ -101,8 +101,33 @@ below — `npm run migrate:http` is the fallback for a blocked port 5432.
 
 ## Troubleshooting a deployment
 
-The API tells you which setup step is missing rather than failing generically.
-Hit `/api/ads?view=board` and match the response:
+**Start here: `/api/ads?view=status`.** It touches no database, so it answers
+even when everything else is broken, and it reports two things at once — which
+project, branch and commit this deployment was actually built from, and which
+settings the running functions can see:
+
+```json
+{
+  "deployment": { "project": "sikads.com", "environment": "production",
+                  "branch": "main", "commit": "a8ed4f5" },
+  "settings": { "DATABASE_URL": true, "STRIPE_SECRET_KEY": false, … },
+  "databaseVariable": "POSTGRES_URL",
+  "stripeMode": null,
+  "missing": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
+  "ready": false
+}
+```
+
+Presence only — no secret value, or any fragment of one, is returned, and a
+test enforces that by whitelisting every string the response may contain. The
+two non-secrets it does report are the effective site origin (wrong, and
+Stripe cannot redirect back after checkout) and whether the Stripe key is a
+`live` or `test` one, which nothing else on the site reveals.
+
+Check `deployment.project` first. Every hour lost to this so far has been a
+setting saved to a real project that was not the one serving the site.
+
+Then, for anything database-shaped, hit `/api/ads?view=board`:
 
 | Response | What it means | Fix |
 |---|---|---|
