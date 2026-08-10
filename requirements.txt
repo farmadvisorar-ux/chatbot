@@ -5,6 +5,7 @@ dash-bootstrap-components==1.6.0
 # Chatbot
 langchain==0.2.9
 langchain-openai==0.1.17
+requests==2.34.2
 
 # Environment variables
 python-dotenv==1.0.1

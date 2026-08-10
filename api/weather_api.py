@@ -39,7 +39,9 @@ class OpenWeatherMapAPIWrapper:
         # handle response
         response = self.handle_response(response)
         if isinstance(response, str):
-            return f"Could not get location because of following error: {response}"
+            return response
+        if not response:
+            return f'no location found for "{location}"'
         loc = response[0]
         _ = loc.pop("local_names", None)
         return loc
@@ -77,9 +79,11 @@ class OpenWeatherMapAPIWrapper:
 
         # prepare location string
         loc = self.location["name"]
-        if self.location["country"] == "US":
-            loc += f", {self.location['state']}"
-        loc += f", {self.location['country']}"
+        country = self.location["country"]
+        state = self.location.get("state")
+        if country == "US" and state:
+            loc += f", {state}"
+        loc += f", {country}"
 
         # get current and forecast data
         current = self.weather["current"]
