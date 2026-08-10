@@ -1,5 +1,5 @@
 import './admin.css';
-import { escapeHtml } from './escape-html';
+import { escapeHtml, safeHttpUrl } from './escape-html';
 
 type Campaign = {
     id: string; advertiserEmail: string; headline: string; url: string;
@@ -28,6 +28,7 @@ const loginStatus = $('#login-status');
 const adsList = $('#ads-list');
 const publishersList = $('#publishers-list');
 const statsEl = $('#stats');
+const refreshStatus = $('#refresh-status');
 
 let adminKey = '';
 
@@ -38,6 +39,20 @@ const perThousand = (cents: number): string => `${money(cents)}/1,000`;
 // money at whole cents — anything below that is rounded down, never up.
 const microMoney = (microcents: string | number): string => money(Math.floor(Number(microcents) / 1000));
 const day = (value: string | null): string => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+
+function badgeClass(status: string): string {
+    if (status === 'pending_review') return 'pending';
+    if (status === 'active' || status === 'live') return 'live';
+    if (status === 'rejected') return 'rejected';
+    if (status === 'exhausted') return 'exhausted';
+    return 'pending';
+}
+
+function linkOrText(url: string): string {
+    const safe = safeHttpUrl(url);
+    if (!safe) return escapeHtml(url);
+    return `<a href="${escapeHtml(safe)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+}
 
 async function callAdmin<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(path, {
@@ -60,7 +75,10 @@ function renderStats(revenue: Revenue, queue: Campaign[], publishers: Publisher[
     statsEl.innerHTML = [
         ['Gross taken', money(gross)],
         ['Owed to publishers', money(owedCents)],
-        ['Yours to keep', money(gross - owedCents)],
+        // Gross includes paid-but-rejected budgets; owed is only the unpaid
+        // publisher balance — so this is cash in hand minus unsettled payouts,
+        // not a true P&L after the publisher share of served views.
+        ['Gross − unpaid owed', money(gross - owedCents)],
         ['Campaigns', String(revenue.campaigns)],
         ['Live now', String(queue.filter(c => c.status === 'live').length)],
         ['Awaiting review', String(pending)],
@@ -73,10 +91,10 @@ function renderPublishers(items: Publisher[]): void {
       <article class="item${item.status === 'pending_review' ? ' is-pending' : ''}" data-id="${escapeHtml(item.id)}">
         <div class="item-head">
           <h3>${escapeHtml(item.email)}</h3>
-          <span class="badge ${item.status === 'active' ? 'live' : item.status === 'rejected' ? 'rejected' : 'pending'}">${item.status.replace('_', ' ')}</span>
+          <span class="badge ${badgeClass(item.status)}">${item.status.replace('_', ' ')}</span>
         </div>
         <p class="meta">
-          <a href="${escapeHtml(item.siteUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.siteUrl)}</a>
+          ${linkOrText(item.siteUrl)}
           &nbsp;·&nbsp; <span class="slotkey">${escapeHtml(item.slotKey)}</span>
           &nbsp;·&nbsp; joined ${escapeHtml(day(item.createdAt))}
         </p>
@@ -103,10 +121,10 @@ function renderQueue(items: Campaign[]): void {
       <article class="item${item.status === 'pending_review' ? ' is-pending' : ''}" data-id="${escapeHtml(item.id)}">
         <div class="item-head">
           <h3>${escapeHtml(item.headline)}</h3>
-          <span class="badge ${item.status}">${item.status.replace('_', ' ')}</span>
+          <span class="badge ${badgeClass(item.status)}">${item.status.replace('_', ' ')}</span>
         </div>
         <p class="meta">
-          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a>
+          ${linkOrText(item.url)}
           &nbsp;·&nbsp; <a href="mailto:${escapeHtml(item.advertiserEmail)}">${escapeHtml(item.advertiserEmail)}</a>
           &nbsp;·&nbsp; paid ${escapeHtml(day(item.paidAt))}
         </p>
@@ -128,6 +146,10 @@ async function loadQueue(): Promise<void> {
     renderStats(data.revenue, data.queue, data.publishers);
     renderQueue(data.queue);
     renderPublishers(data.publishers);
+    if (refreshStatus) {
+        refreshStatus.textContent = '';
+        refreshStatus.className = 'status';
+    }
 }
 
 function showApp(): void {
@@ -142,6 +164,7 @@ async function trySignIn(key: string, remember: boolean): Promise<void> {
     try {
         await loadQueue();
         if (remember) localStorage.setItem(STORAGE_KEY, key);
+        else localStorage.removeItem(STORAGE_KEY);
         showApp();
     } catch (err) {
         adminKey = '';
@@ -155,7 +178,18 @@ loginForm.addEventListener('submit', event => {
     trySignIn(keyInput.value.trim(), rememberInput.checked);
 });
 
-$('#refresh').addEventListener('click', () => { loadQueue().catch(() => undefined); });
+$('#refresh').addEventListener('click', () => {
+    if (refreshStatus) {
+        refreshStatus.textContent = 'Refreshing…';
+        refreshStatus.className = 'status';
+    }
+    loadQueue().catch(err => {
+        if (refreshStatus) {
+            refreshStatus.textContent = err instanceof Error ? err.message : 'Refresh failed';
+            refreshStatus.className = 'status error';
+        }
+    });
+});
 
 $('#signout').addEventListener('click', () => {
     localStorage.removeItem(STORAGE_KEY);

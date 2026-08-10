@@ -68,10 +68,13 @@ let schemaAttempted = false;
  */
 async function createSchemaOnce(label: string): Promise<boolean> {
     if (schemaAttempted) return false;
-    schemaAttempted = true;
     try {
         if (!isDatabaseConfigured()) return false;
         await getPool().query(SCHEMA_SQL);
+        // Only lock out further attempts after a successful apply. A transient
+        // failure (permissions race, brief outage) must not disable recovery
+        // for the rest of this process's life.
+        schemaAttempted = true;
         console.log(`[${label}] schema was missing and has been created`);
         return true;
     } catch (err) {

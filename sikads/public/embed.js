@@ -39,7 +39,21 @@
         'text-transform:uppercase', 'opacity:.6',
     ].join(';');
 
+    function isHttpUrl(value) {
+        if (!value || typeof value !== 'string') return false;
+        try {
+            var parsed = new URL(value);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch (err) {
+            return false;
+        }
+    }
+
     function render(ad) {
+        // Refuse non-http(s) destinations even if the API somehow returned one —
+        // assigning javascript: to href would execute on the publisher's origin.
+        if (!ad || !isHttpUrl(ad.url) || typeof ad.headline !== 'string') return;
+
         // Built with DOM calls, not innerHTML: the headline is advertiser-supplied
         // text and this runs inside someone else's page, so it never becomes markup.
         var link = document.createElement('a');

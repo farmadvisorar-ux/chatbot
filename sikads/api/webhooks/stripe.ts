@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type Stripe from 'stripe';
-import { getPool } from '../_lib/db.js';
+import { getPool, isDatabaseConfigured } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { getStripe } from '../_lib/stripe.js';
+import { isUuid } from '../_lib/secrets.js';
 
 // Signature verification needs the exact bytes Stripe signed, so the parsed
 // body must be disabled here.
@@ -27,6 +28,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
+    if (!isDatabaseConfigured()) {
+        error(res, 501, 'The database is not configured on this deployment yet');
+        return;
+    }
+
     const signature = req.headers['stripe-signature'];
     if (typeof signature !== 'string') {
         error(res, 400, 'Missing Stripe signature');
@@ -46,18 +52,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         const session = event.data.object as Stripe.Checkout.Session;
         const adCampaignId = session.metadata?.adCampaignId;
         const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+        const amountTotal = session.amount_total;
 
         if (adCampaignId && session.payment_status === 'paid') {
-            // Paid campaigns still land in pending_review, not live: a scam or
-            // NSFW link must not be able to buy its way onto the site
-            // unreviewed. Guarded on status so a redelivered event can't
-            // double-apply.
-            await getPool().query(
-                `UPDATE ad_campaigns
-                 SET status = 'pending_review', stripe_payment_intent_id = $2, paid_at = now()
-                 WHERE id = $1 AND status = 'awaiting_payment'`,
-                [adCampaignId, paymentIntentId],
-            );
+            // Poison / mistyped metadata must not 500 the webhook into a Stripe
+            // retry loop — skip quietly and acknowledge receipt.
+            if (!isUuid(adCampaignId)) {
+                console.error('[webhooks/stripe] ignoring non-UUID adCampaignId', adCampaignId);
+            } else if (typeof amountTotal !== 'number') {
+                console.error('[webhooks/stripe] missing amount_total for', adCampaignId);
+            } else {
+                // Paid campaigns still land in pending_review, not live: a scam or
+                // NSFW link must not be able to buy its way onto the site
+                // unreviewed. Guarded on status so a redelivered event can't
+                // double-apply. budget_cents must match what Stripe actually
+                // charged — metadata alone is not enough defence-in-depth.
+                const result = await getPool().query(
+                    `UPDATE ad_campaigns
+                     SET status = 'pending_review', stripe_payment_intent_id = $2, paid_at = now()
+                     WHERE id = $1
+                       AND status = 'awaiting_payment'
+                       AND budget_cents = $3
+                     RETURNING id`,
+                    [adCampaignId, paymentIntentId, amountTotal],
+                );
+                if (!result.rowCount) {
+                    console.error(
+                        '[webhooks/stripe] no awaiting_payment campaign matched',
+                        { adCampaignId, amountTotal },
+                    );
+                }
+            }
         }
     }
 

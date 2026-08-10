@@ -25,6 +25,8 @@ import { guarded } from './_lib/errors.js';
  *
  * `slotKey` is optional: an empty one is an ad served on Sikads' own pages,
  * where there is no publisher to pay and the whole price is platform revenue.
+ * A non-empty key must belong to an *active* publisher — pending or rejected
+ * slots must not burn paid inventory before (or without) earning.
  */
 async function handleServe(req: VercelRequest, res: VercelResponse): Promise<void> {
     const slotKey = clean(typeof req.query.slot === 'string' ? req.query.slot : '', 64);
@@ -44,10 +46,37 @@ async function handleServe(req: VercelRequest, res: VercelResponse): Promise<voi
     // just the ad that is about to be shown to that page's visitor.
     res.setHeader('Access-Control-Allow-Origin', '*');
 
-    const { rows } = await getPool().query(
-        `WITH candidate AS (
-             SELECT id FROM ad_campaigns
-             WHERE status = 'live' AND views_remaining > 0
+    const pool = getPool();
+
+    // The slot key authorises nothing, so this endpoint is the fraud surface:
+    // anyone who can hit it can drain live inventory. Cap per-IP requests so a
+    // for-loop cannot exhaust a campaign in seconds. Over the limit we still
+    // answer 200 with no ad — a broken unit must not break the publisher page.
+    if (!(await checkRateLimit(pool, 'ad-serve', clientKey(req), 120, 1))) {
+        json(res, 200, { ad: null });
+        return;
+    }
+
+    // Candidate pick and spend re-check `views_remaining > 0` on the UPDATE so
+    // two concurrent serves cannot both decrement the last view into the
+    // negatives (READ COMMITTED would otherwise let both pass the SELECT).
+    const { rows } = await pool.query(
+        `WITH allowed AS (
+             SELECT CASE
+                 WHEN $1 = '' THEN true
+                 WHEN EXISTS (
+                     SELECT 1 FROM publishers
+                     WHERE slot_key = $1 AND status = 'active'
+                 ) THEN true
+                 ELSE false
+             END AS ok
+         ),
+         candidate AS (
+             SELECT ad_campaigns.id
+             FROM ad_campaigns, allowed
+             WHERE allowed.ok
+               AND ad_campaigns.status = 'live'
+               AND ad_campaigns.views_remaining > 0
              ORDER BY -ln(GREATEST(random(), 0.0000001)) / cpm_cents ASC
              LIMIT 1
          ),
@@ -57,7 +86,9 @@ async function handleServe(req: VercelRequest, res: VercelResponse): Promise<voi
                  status = CASE WHEN views_remaining - 1 <= 0 THEN 'exhausted' ELSE status END
              FROM candidate
              WHERE ad_campaigns.id = candidate.id
-             RETURNING ad_campaigns.id, ad_campaigns.headline, ad_campaigns.url, ad_campaigns.cpm_cents
+               AND ad_campaigns.status = 'live'
+               AND ad_campaigns.views_remaining > 0
+             RETURNING ad_campaigns.headline, ad_campaigns.url, ad_campaigns.cpm_cents
          ),
          credited AS (
              UPDATE publishers
@@ -67,10 +98,18 @@ async function handleServe(req: VercelRequest, res: VercelResponse): Promise<voi
              WHERE slot_key = $1 AND status = 'active' AND EXISTS (SELECT 1 FROM spent)
              RETURNING id
          )
-         SELECT id, headline, url FROM spent`,
+         SELECT headline, url FROM spent`,
         [slotKey, PUBLISHER_SHARE_PERCENT],
     );
-    json(res, 200, { ad: rows[0] ?? null });
+
+    const row = rows[0];
+    // Defence in depth: never hand a non-http(s) URL to the embed, even if a
+    // bad row somehow landed in the catalog before checkout validation existed.
+    if (row && !validUrl(row.url)) {
+        json(res, 200, { ad: null });
+        return;
+    }
+    json(res, 200, { ad: row ?? null });
 }
 
 /**
@@ -142,32 +181,48 @@ async function handleCheckout(req: VercelRequest, res: VercelResponse): Promise<
         return;
     }
 
-    const session = await stripe.checkout.sessions.create({
-        mode: 'payment',
-        customer_email: email,
-        line_items: [{
-            quantity: 1,
-            price_data: {
-                currency: 'usd',
-                unit_amount: budgetCents,
-                product_data: {
-                    name: `Sikads campaign — ${views.toLocaleString()} views at $${(cpmCents / 100).toFixed(2)}/1,000`,
-                    description: headline,
+    let session;
+    try {
+        session = await stripe.checkout.sessions.create({
+            mode: 'payment',
+            customer_email: email,
+            line_items: [{
+                quantity: 1,
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: budgetCents,
+                    product_data: {
+                        name: `Sikads campaign — ${views.toLocaleString()} views at $${(cpmCents / 100).toFixed(2)}/1,000`,
+                        description: headline,
+                    },
                 },
-            },
-        }],
-        // adCampaignId travels with the session so the webhook can match the
-        // payment back to our row without trusting anything from the browser.
-        metadata: { adCampaignId: adId },
-        // Without this the charge inherits the Stripe account's own descriptor,
-        // so an advertiser who bought a Sikads ad sees an unrelated business
-        // name on their card statement — the classic trigger for a "I don't
-        // recognise this charge" dispute. The suffix appends to the account
-        // prefix, giving e.g. "ADJUSTER* SIKADS".
-        payment_intent_data: { statement_descriptor_suffix: 'SIKADS' },
-        success_url: `${siteOrigin()}/?ad=success`,
-        cancel_url: `${siteOrigin()}/?ad=cancelled`,
-    });
+            }],
+            // adCampaignId travels with the session so the webhook can match the
+            // payment back to our row without trusting anything from the browser.
+            metadata: { adCampaignId: adId },
+            // Without this the charge inherits the Stripe account's own descriptor,
+            // so an advertiser who bought a Sikads ad sees an unrelated business
+            // name on their card statement — the classic trigger for a "I don't
+            // recognise this charge" dispute. The suffix appends to the account
+            // prefix, giving e.g. "ADJUSTER* SIKADS".
+            payment_intent_data: { statement_descriptor_suffix: 'SIKADS' },
+            success_url: `${siteOrigin()}/?ad=success`,
+            cancel_url: `${siteOrigin()}/?ad=cancelled`,
+        }, {
+            // Ties retries of this create to the row we just wrote, so a
+            // double-click cannot open two Stripe sessions for one campaign.
+            idempotencyKey: `sikads-checkout-${adId}`,
+        });
+    } catch (err) {
+        console.error('[ads] stripe checkout failed', err);
+        json(res, 502, { error: 'Checkout could not be started. Try again in a moment.' });
+        return;
+    }
+
+    if (!session.url) {
+        json(res, 502, { error: 'Checkout could not be started. Try again in a moment.' });
+        return;
+    }
 
     await pool.query('UPDATE ad_campaigns SET stripe_session_id = $2 WHERE id = $1', [adId, session.id]);
 
@@ -198,7 +253,7 @@ async function handleBoard(res: VercelResponse): Promise<void> {
          ORDER BY cpm_cents DESC LIMIT 8`,
     );
     res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=60');
-    json(res, 200, { rates: rows, sharePercent: PUBLISHER_SHARE_PERCENT });
+    json(res, 200, { rates: rows, sharePercent: PUBLISHER_SHARE_PERCENT, configured: true });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

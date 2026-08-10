@@ -39,10 +39,14 @@ const schema = readFileSync(join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
 
 // Split on statement terminators that end a line, which keeps the CHECK
 // constraints and function bodies in schema.sql intact.
+//
+// Do NOT drop chunks that begin with `--`: the table definitions are preceded
+// by comment blocks in the same chunk, and filtering those out skipped
+// CREATE TABLE entirely — leaving only indexes / rate_limit_events applied.
 const statements = schema
     .split(/;\s*\n/)
     .map(statement => statement.trim())
-    .filter(statement => statement.length > 0 && !statement.startsWith('--'));
+    .filter(statement => statement.length > 0);
 
 try {
     await sql.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
