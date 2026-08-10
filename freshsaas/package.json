@@ -10,11 +10,11 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p api/tsconfig.json",
     "migrate": "node scripts/migrate.mjs",
     "migrate:http": "node scripts/migrate-http.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@clerk/backend": "^1.21.0",
-    "@clerk/clerk-js": "^5.51.0",
+    "@clerk/backend": "^3.16.1",
+    "@clerk/clerk-js": "^6.27.1",
     "jose": "^6.2.4",
     "lucide": "^0.469.0",
     "pg": "^8.13.1",
@@ -28,7 +28,7 @@
   "devDependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@types/pg": "^8.11.10",
-    "@vercel/node": "^3.2.24",
+    "@vercel/node": "^5.9.8",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
