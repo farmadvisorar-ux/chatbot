@@ -1,8 +1,7 @@
 import os
 import dash
-from dash import html, dcc, callback, Output, Input, State, ctx
+from dash import html, dcc, Output, Input, State, ctx
 import dash_bootstrap_components as dbc
-from time import sleep
 from itertools import chain, zip_longest
 from datetime import datetime, timezone, timedelta
 from bot import setup_agent, query_llm, check_open_ai_key
@@ -129,11 +128,19 @@ def weather_card(title: str, temp: str = "--", cloud: str = "--", wind: str = "-
     )
 
 
+def _forecast_day_names(timezone_offset: int = 0, count: int = 7) -> list[str]:
+    """Return day labels using the location's timezone when available."""
+    local_now = datetime.now(timezone.utc) + timedelta(seconds=timezone_offset)
+    labels = ["Today", "Tomorrow"]
+    labels.extend((local_now + timedelta(days=i)).strftime("%A") for i in range(2, count))
+    return labels[:count]
+
+
 def _update_display(questions: list, answers: list) -> list:
     """Update the display of the conversation."""
 
     # Combine the questions and answers
-    history = [x for x in chain(*zip_longest(questions, answers)) if x is not None]
+    history = [x for x in chain(*zip_longest(questions or [], answers or [])) if x is not None]
 
     # Create the initial message
     initial_msg = [textbox("Hi, my name is Sky! How can I help you?", box="ai")]
@@ -265,7 +272,7 @@ app.layout = html.Div(
 )
 
 
-@callback(
+@app.callback(
     [
         Output("weather-cards-wrapper-id", "children"),
         Output("location-name", "children")
@@ -276,18 +283,13 @@ app.layout = html.Div(
 def update_weather_cards(answer_history, n_clicks):
     """Update the weather forecast cards."""
 
-    # Define dates for next 7 days
-    now = datetime.now(timezone(timedelta(hours=2)))
-    dates = ["Today", "Tomorrow"]
-    dates.extend([(now + timedelta(days=i)).strftime("%A") for i in range(2, 7)])
-
     # Get the location and weather data from api wrapper
     wrapper = tools[0].api_wrapper
     location_data = wrapper.location
     weather_data = wrapper.weather
 
     # Check if location data is available
-    if (location_data is not None) and (answer_history != []):
+    if location_data is not None and answer_history:
         location = location_data["name"]
         if location_data.get("state") is not None:
             location += f", {location_data['state']}"
@@ -296,12 +298,13 @@ def update_weather_cards(answer_history, n_clicks):
         location = "No location set."
 
     # Return empty cards if no data is available
-    if (n_clicks is None) or (weather_data is None):
-        cards = [weather_card(day) for day in dates]
+    if not answer_history or weather_data is None or "daily" not in weather_data:
+        cards = [weather_card(day) for day in _forecast_day_names()]
         return cards, location
 
     # Get the weather data
-    daily = weather_data["daily"]
+    daily = weather_data["daily"][:7]
+    dates = _forecast_day_names(weather_data.get("timezone_offset", 0), len(daily))
 
     # Get the icons
     icons = wrapper.get_icon_ids()
@@ -323,7 +326,7 @@ def update_weather_cards(answer_history, n_clicks):
     return cards, location
 
 
-@callback(
+@app.callback(
     Output("user-input", "value", allow_duplicate=True),
     [Input(f"example-button_{i}", "n_clicks") for i in range(len(PROMPT_EXAMPLES))],
     [State(f"example-button_{i}", "children") for i in range(len(PROMPT_EXAMPLES))],
@@ -344,7 +347,7 @@ def on_button_click(*inputs):
     return inputs[idx]
 
 
-@callback(
+@app.callback(
     Output("display-conversation", "children"),
     [Input("store-questions", "data")],
     [State("store-answers", "data")],
@@ -354,7 +357,7 @@ def update_display_questions(questions, answers):
     return _update_display(questions, answers)
 
 
-@callback(
+@app.callback(
     Output("display-conversation", "children", allow_duplicate=True),
     [Input("store-answers", "data")],
     [State("store-questions", "data")],
@@ -365,7 +368,7 @@ def update_display_answers(answers, questions):
     return _update_display(questions, answers)
 
 
-@callback(
+@app.callback(
     [
         Output("store-questions", "data"),
         Output("user-input", "value")
@@ -382,20 +385,17 @@ def update_display_answers(answers, questions):
 def update_conversation(n_clicks, n_submit, user_input, question_history):
     """Update the conversation history with new questions."""
 
-    # Return empty question history if no questions are submitted
-    if n_clicks == 0:
-        return [], ""
+    question_history = list(question_history or [])
+    user_input = (user_input or "").strip()
 
-    # Return the old question history if empty input is submitted
-    if user_input is None or user_input == "":
+    # Empty submissions, including Dash's initial callback, do not change history.
+    if not user_input:
         return question_history, ""
 
-    # Append the new question to the question history
-    question_history.append(user_input)
-    return question_history, ""
+    return [*question_history, user_input], ""
 
 
-@callback(
+@app.callback(
     Output("store-answers", "data"),
     [
         Input("submit", "n_clicks"),
@@ -410,22 +410,23 @@ def update_conversation(n_clicks, n_submit, user_input, question_history):
 def run_chatbot(n_clicks, n_submit, user_input, answer_history, offline_mode):
     """Runs the chatbot in online or offline mode and returns the answer history."""
 
-    # Return old answer history if no questions are submitted
-    if user_input is None or user_input == "":
+    answer_history = list(answer_history or [])
+    user_input = (user_input or "").strip()
+
+    # Empty submissions, including Dash's initial callback, do not create answers.
+    if not user_input:
         return answer_history
 
     # Return default message if chatbot is running in offline mode
-    if len(offline_mode) == 1:
-        sleep(1)
-        answer_history.append("The weather is nice today!")
-        return answer_history
+    if offline_mode:
+        return [*answer_history, "The weather is nice today!"]
     # Return warning message if OpenAI API key is missing
     elif not open_ai_is_valid:
-        answer_history.append(
+        return [
+            *answer_history,
             "It seems that your OpenAI API key is missing. Please provide valid API keys to chat with the bot or \
             enable 'Offline Mode'."
-        )
-        return answer_history
+        ]
     # Return warning message if OpenWeatherMap API key is missing
     elif not open_weather_is_valid:
         warning = ("It seems that your OpenWeatherMap API key is missing or invalid. "
@@ -437,8 +438,7 @@ def run_chatbot(n_clicks, n_submit, user_input, answer_history, offline_mode):
             response = str(e)
         # Append the response and warning message to the answer history
         res = f"{response}\n\n**Note:** {warning}"
-        answer_history.append(res)
-        return answer_history
+        return [*answer_history, res]
     # Run the chatbot in online mode
     else:
         # Try to query the chatbot
@@ -447,22 +447,21 @@ def run_chatbot(n_clicks, n_submit, user_input, answer_history, offline_mode):
         # Return error message if an exception occurs
         except Exception as e:
             response = f"**Oops! Something went wrong:** \n\n{e}"
-        answer_history.append(response)
-        return answer_history
+        return [*answer_history, response]
 
 
-@callback(
+@app.callback(
     Output('theme-css', 'href'),
     [Input('theme-switch', 'value')]
 )
 def update_theme(theme):
     """Update the theme of the website."""
-    if "dark" in theme:
+    if theme and "dark" in theme:
         return '/assets/dark_style.css'
     return '/assets/style.css'
 
 
-@callback(
+@app.callback(
     [
         Output("overlay-alert", "is_open"),
         Output("overlay-alert", "children"),
@@ -474,7 +473,7 @@ def toggle_alert(offline_mode):
     """Toggle the alert message based on the offline switch."""
     if open_ai_is_valid and open_weather_is_valid:
         # Return warning message if chatbot is running in offline mode
-        if len(offline_mode) == 1:
+        if offline_mode:
             msg = "The chatbot is running in Offline Mode!"
             color = "warning"
         # Return success message if chatbot is running in online mode
