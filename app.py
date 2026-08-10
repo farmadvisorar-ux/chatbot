@@ -302,12 +302,12 @@ def update_weather_cards(answer_history, n_clicks):
         cards = [weather_card(day) for day in _forecast_day_names()]
         return cards, location
 
-    # Get the weather data
-    daily = weather_data["daily"][:7]
+    # Get normalized daily entries (filtering applied consistently with icons)
+    daily = wrapper.get_normalized_daily_entries()[:7]
     dates = _forecast_day_names(weather_data.get("timezone_offset", 0), len(daily))
 
     # Get the icons
-    icons = wrapper.get_icon_ids()
+    icons = wrapper.get_icon_ids()[:7]
 
     # Fill the weather cards
     cards = [

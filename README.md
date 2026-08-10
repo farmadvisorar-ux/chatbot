@@ -27,7 +27,7 @@ account — only the Render owner of that service can.
 
 To host your own copy:
 
-1. Open [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** (or **Web Service**).
+1. Open [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint**.
 2. Connect `farmadvisorar-ux/chatbot` and deploy (Blueprint uses `render.yaml`).
 3. Set `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY` if you want online mode (omit them for offline demo).
 4. Use the new `*.onrender.com` URL Render assigns to your service.
@@ -141,8 +141,8 @@ made a successful API call.
 If you encounter any server related issues (Error code: 5XX), please check the server status on the
 [Render Status Page](https://status.render.com) for any ongoing incidents and try again later.
 
-If a URL shows **“This service has been suspended by its owner.”**:
-- That service was paused in **its** Render account (or hit a free-tier suspend).
+If a URL shows **"This service has been suspended by its owner."**:
+- That service was paused in **its** Render account.
 - Only that account can **Resume** it. A fork of the GitHub repo does **not** transfer Render ownership.
 - For `iu-weather-chatbot.onrender.com`, ownership is upstream (`chris-official`), not this fork — deploy
   your own service from `render.yaml` instead (see **Web UI** above).

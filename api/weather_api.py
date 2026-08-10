@@ -130,7 +130,7 @@ class OpenWeatherMapAPIWrapper:
             weather=current["weather"][0]["description"]
         )
 
-        # format forecast weather information templates
+        # format forecast weather information templates, filtering entries the same way as get_icon_ids()
         weather_forecasts = [self.future_template.format(
             location=loc,
             date=datetime.fromtimestamp(data["dt"] + self.weather["timezone_offset"], timezone.utc).strftime('%A %Y-%m-%d'),
@@ -147,7 +147,7 @@ class OpenWeatherMapAPIWrapper:
             rain=self._precipitation_amount(data.get("rain", 0)),
             snow=self._precipitation_amount(data.get("snow", 0)),
             weather=data["weather"][0]["description"]
-        ) for data in forecast[1:]]
+        ) for data in forecast[1:] if data.get("weather")]
 
         # join current and forecast weather information
         weather_forecast = "\n####\n".join(weather_forecasts)
@@ -155,11 +155,16 @@ class OpenWeatherMapAPIWrapper:
         # return context string
         return f"{weather_current}\n####\n{weather_forecast}"
 
-    def get_icon_ids(self) -> list[str]:
-        """Get icon ids for weather forecast column."""
+    def get_normalized_daily_entries(self) -> list[dict]:
+        """Get normalized daily entries with consistent filtering."""
         if not self.weather or not self.weather.get("daily"):
             return []
-        icon_ids = [data["weather"][0]["icon"] for data in self.weather["daily"] if data.get("weather")]
+        # Only include entries that have a weather field (same filtering as get_icon_ids)
+        return [data for data in self.weather["daily"] if data.get("weather")]
+
+    def get_icon_ids(self) -> list[str]:
+        """Get icon ids for weather forecast column."""
+        icon_ids = [data["weather"][0]["icon"] for data in self.get_normalized_daily_entries()]
         return icon_ids
 
     @staticmethod
