@@ -9,6 +9,9 @@ load_dotenv()
 
 class OpenWeatherMapAPIWrapper:
     """Wrapper class for OpenWeatherMap API."""
+
+    REQUEST_TIMEOUT = 10
+
     def __init__(self):
         self.key = os.getenv("OPENWEATHERMAP_API_KEY", "")
         self.current_template = CURRENT_TEMPLATE
@@ -33,13 +36,25 @@ class OpenWeatherMapAPIWrapper:
             "appid": self.key
         }
 
+        if not self.key:
+            return "OpenWeatherMap API key is missing"
+
         # request location information
-        response = requests.get("https://api.openweathermap.org/geo/1.0/direct", params=params)
+        try:
+            response = requests.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params=params,
+                timeout=self.REQUEST_TIMEOUT,
+            )
+        except requests.RequestException as error:
+            return f"OpenWeatherMap request failed: {error}"
 
         # handle response
         response = self.handle_response(response)
         if isinstance(response, str):
             return f"Could not get location because of following error: {response}"
+        if not response:
+            return "Could not find a matching location"
         loc = response[0]
         _ = loc.pop("local_names", None)
         return loc
@@ -50,6 +65,7 @@ class OpenWeatherMapAPIWrapper:
         # get location information
         self.location = self.get_location(city_name, country, state)
         if isinstance(self.location, str):
+            self.weather = None
             return f"Could not get location because of following error: {self.location}"
 
         # prepare request parameters
@@ -62,10 +78,18 @@ class OpenWeatherMapAPIWrapper:
         }
 
         # request weather information
-        self.weather = requests.get("https://api.openweathermap.org/data/3.0/onecall", params=params)
+        try:
+            response = requests.get(
+                "https://api.openweathermap.org/data/3.0/onecall",
+                params=params,
+                timeout=self.REQUEST_TIMEOUT,
+            )
+        except requests.RequestException as error:
+            self.weather = None
+            return f"Could not get weather because of following error: OpenWeatherMap request failed: {error}"
 
         # handle response
-        self.weather = self.handle_response(self.weather)
+        self.weather = self.handle_response(response)
         if isinstance(self.weather, str):
             return f"Could not get weather because of following error: {self.weather}"
 
@@ -78,7 +102,8 @@ class OpenWeatherMapAPIWrapper:
         # prepare location string
         loc = self.location["name"]
         if self.location["country"] == "US":
-            loc += f", {self.location['state']}"
+            if self.location.get("state"):
+                loc += f", {self.location['state']}"
         loc += f", {self.location['country']}"
 
         # get current and forecast data
@@ -86,12 +111,10 @@ class OpenWeatherMapAPIWrapper:
         forecast = self.weather["daily"]
 
         # extract rain data
-        rain = current.get("rain", 0)
-        rain = rain if isinstance(rain, int) else rain.get("1h", 0)
+        rain = self._precipitation_amount(current.get("rain", 0))
 
         # extract snow data
-        snow = current.get("snow", 0)
-        snow = snow if isinstance(snow, int) else snow.get("1h", 0)
+        snow = self._precipitation_amount(current.get("snow", 0))
 
         # format current weather information template
         weather_current = self.current_template.format(
@@ -111,18 +134,18 @@ class OpenWeatherMapAPIWrapper:
         weather_forecasts = [self.future_template.format(
             location=loc,
             date=datetime.fromtimestamp(data["dt"] + self.weather["timezone_offset"], timezone.utc).strftime('%A %Y-%m-%d'),
-            summary=data["summary"],
+            summary=data.get("summary", data["weather"][0]["description"]),
             temp_morn=data["temp"]["morn"],
             temp_day=data["temp"]["day"],
             temp_eve=data["temp"]["eve"],
             temp_night=data["temp"]["night"],
             humidity=data["humidity"],
-            uvi=data["uvi"],
+            uvi=data.get("uvi", 0),
             clouds=data["clouds"],
             wind_speed=data["wind_speed"],
             pop=data["pop"],
-            rain=data.get("rain", 0),
-            snow=data.get("snow", 0),
+            rain=self._precipitation_amount(data.get("rain", 0)),
+            snow=self._precipitation_amount(data.get("snow", 0)),
             weather=data["weather"][0]["description"]
         ) for data in forecast[1:]]
 
@@ -134,8 +157,20 @@ class OpenWeatherMapAPIWrapper:
 
     def get_icon_ids(self) -> list[str]:
         """Get icon ids for weather forecast column."""
-        icon_ids = [data["weather"][0]["icon"] for data in self.weather["daily"]]
+        if not self.weather or not self.weather.get("daily"):
+            return []
+        icon_ids = [data["weather"][0]["icon"] for data in self.weather["daily"] if data.get("weather")]
         return icon_ids
+
+    @staticmethod
+    def _precipitation_amount(value) -> float:
+        """Normalize OpenWeatherMap's numeric or object precipitation values."""
+        if isinstance(value, dict):
+            value = value.get("1h", value.get("3h", 0))
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
 
     @staticmethod
     def handle_response(response) -> dict | str:

@@ -13,17 +13,28 @@ This is a weather chatbot that uses the [LangChain](https://python.langchain.com
 [OpenWeatherMap](https://openweathermap.org/api) API to generate responses to weather-related user queries. A user
 interface is provided by a [Dash](https://dash.plotly.com/tutorial) web application that allows users to chat with the
 chatbot intuitively without any manual installations. The chatbot has been deployed on [Render](https://render.com/)
-and can be accessed online by visiting [iu-weather-chatbot.onrender.com](https://iu-weather-chatbot.onrender.com).
+and can be deployed on [Render](https://render.com/) using the included `render.yaml`.
 
 
 ## Web UI (recommended)
 
-No manual installation is required, and you can start chatting immediately! <br>
-You can visit the online chatbot here: [iu-weather-chatbot.onrender.com](https://iu-weather-chatbot.onrender.com)
+### Deploy your own (required for a live link you control)
+
+This repository is a fork of [`chris-official/chatbot`](https://github.com/chris-official/chatbot).
+The old demo URL [iu-weather-chatbot.onrender.com](https://iu-weather-chatbot.onrender.com) is owned by
+that upstream project. If it shows **“suspended by its owner”**, you cannot unblock it from your
+account — only the Render owner of that service can.
+
+To host your own copy:
+
+1. Open [Render Dashboard](https://dashboard.render.com) → **New** → **Blueprint** (or **Web Service**).
+2. Connect `farmadvisorar-ux/chatbot` and deploy (Blueprint uses `render.yaml`).
+3. Set `OPENAI_API_KEY` and `OPENWEATHERMAP_API_KEY` if you want online mode (omit them for offline demo).
+4. Use the new `*.onrender.com` URL Render assigns to your service.
 
 > [!WARNING]
-> When accessing the online chatbot after a longer period of inactivity, you may need to wait for the
-> server to start up. This can take up to 3 minutes. Therefore, please be patient and wait for the website to load.
+> On Render’s free tier, a service may take up to a few minutes to wake after idle. That is different
+> from “suspended by its owner,” which means the service was paused and only its owner can resume it.
 
 > [!TIP]
 > For the best experience, use the chatbot on a desktop or laptop. Even though the chatbot is mobile-friendly,
@@ -129,6 +140,12 @@ made a successful API call.
 
 If you encounter any server related issues (Error code: 5XX), please check the server status on the
 [Render Status Page](https://status.render.com) for any ongoing incidents and try again later.
+
+If a URL shows **“This service has been suspended by its owner.”**:
+- That service was paused in **its** Render account (or hit a free-tier suspend).
+- Only that account can **Resume** it. A fork of the GitHub repo does **not** transfer Render ownership.
+- For `iu-weather-chatbot.onrender.com`, ownership is upstream (`chris-official`), not this fork — deploy
+  your own service from `render.yaml` instead (see **Web UI** above).
 
 
 ## License
