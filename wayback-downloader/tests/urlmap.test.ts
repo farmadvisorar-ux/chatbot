@@ -31,6 +31,17 @@ test("percent-encoded segments are decoded", () => {
   assert.equal(urlToFilepath("http://example.com/hello%20world.html"), "example.com/hello world.html");
 });
 
+test("percent-encoded path separators cannot escape the host directory", () => {
+  assert.equal(
+    urlToFilepath("https://example.com/%2e%2e%2fsecret.txt"),
+    "example.com/.._secret.txt",
+  );
+  assert.equal(
+    urlToFilepath("https://example.com/folder%2f..%2fpayload.js"),
+    "example.com/folder_.._payload.js",
+  );
+});
+
 test("deep paths preserve structure", () => {
   assert.equal(urlToFilepath("http://example.com/a/b/c/page.html"), "example.com/a/b/c/page.html");
 });

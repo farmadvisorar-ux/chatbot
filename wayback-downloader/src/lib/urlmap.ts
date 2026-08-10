@@ -4,7 +4,10 @@
  * directories, sanitized query strings, no illegal filesystem characters).
  */
 
-const ILLEGAL_CHARS = /[<>:"\\|?*\x00-\x1f]/g;
+// Path separators can appear only after percent-decoding (for example,
+// "%2e%2e%2fsecret"). Keep every decoded URL segment inside one ZIP entry
+// segment so an archived URL cannot escape its host directory.
+const ILLEGAL_CHARS = /[<>:"/\\|?*\x00-\x1f]/g;
 const MAX_SEGMENT_LEN = 200;
 
 export function sanitizeSegment(segment: string): string {
