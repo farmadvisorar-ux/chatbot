@@ -10,8 +10,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Self-serve ads: anyone buys views for a one-line pitch that links to their
 -- own site. The advertiser sets their own price (cpm_cents = price per 1,000
 -- views) rather than picking from fixed packages; views_purchased is derived
--- server-side from budget_cents / cpm_cents. 100% of the price is platform
--- revenue — there is no seller payout to track.
+-- server-side from budget_cents / cpm_cents. Publishers earn a share of that
+-- price for every view they serve; the rest is platform revenue.
 --
 -- Lifecycle: awaiting_payment -> pending_review (paid, held for a manual look
 -- before it can go live) -> live -> exhausted (ran out of views) or rejected.
@@ -24,16 +24,17 @@ CREATE TABLE IF NOT EXISTS ad_campaigns (
     -- are weighted to rotate more often in the sponsored slot (see api/ads.ts).
     cpm_cents INTEGER NOT NULL CHECK (cpm_cents > 0),
     budget_cents INTEGER NOT NULL CHECK (budget_cents > 0),
-    views_purchased INTEGER NOT NULL DEFAULT 0,
-    views_remaining INTEGER NOT NULL DEFAULT 0,
+    views_purchased INTEGER NOT NULL DEFAULT 0 CHECK (views_purchased >= 0),
+    views_remaining INTEGER NOT NULL DEFAULT 0 CHECK (views_remaining >= 0),
     status TEXT NOT NULL DEFAULT 'awaiting_payment'
         CHECK (status IN ('awaiting_payment', 'pending_review', 'live', 'rejected', 'exhausted')),
     stripe_session_id TEXT UNIQUE,
-    stripe_payment_intent_id TEXT,
+    stripe_payment_intent_id TEXT UNIQUE,
     paid_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS ad_campaigns_live ON ad_campaigns (status) WHERE status IN ('live', 'pending_review');
+CREATE INDEX IF NOT EXISTS ad_campaigns_serving ON ad_campaigns (status, views_remaining)
+    WHERE status = 'live';
 
 -- Publishers place the Sikads ad unit on their own site and earn a share of
 -- what advertisers pay for every view served there. This is what makes Sikads
@@ -54,10 +55,11 @@ CREATE TABLE IF NOT EXISTS publishers (
     slot_key TEXT NOT NULL UNIQUE,
     status TEXT NOT NULL DEFAULT 'pending_review'
         CHECK (status IN ('pending_review', 'active', 'rejected')),
-    views_served BIGINT NOT NULL DEFAULT 0,
-    earnings_microcents BIGINT NOT NULL DEFAULT 0,
-    paid_microcents BIGINT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    views_served BIGINT NOT NULL DEFAULT 0 CHECK (views_served >= 0),
+    earnings_microcents BIGINT NOT NULL DEFAULT 0 CHECK (earnings_microcents >= 0),
+    paid_microcents BIGINT NOT NULL DEFAULT 0 CHECK (paid_microcents >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (paid_microcents <= earnings_microcents)
 );
 CREATE INDEX IF NOT EXISTS publishers_active ON publishers (slot_key) WHERE status = 'active';
 

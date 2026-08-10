@@ -255,8 +255,16 @@ async function loopHero(): Promise<void> {
 
 /* ---------------- live rates ---------------- */
 
-function renderBoard(rates: Rate[]): void {
+function renderBoard(rates: Rate[], configured = true): void {
     if (!boardRows) return;
+
+    if (!configured) {
+        boardRows.innerHTML = `<p class="board-empty">The exchange is not configured on this deployment yet — no database is connected.</p>`;
+        if (proofRate) proofRate.textContent = '—';
+        if (pubEstimate) pubEstimate.textContent = '—';
+        if (pubEstimateSide) pubEstimateSide.textContent = 'per 1,000 waits — exchange offline';
+        return;
+    }
 
     if (!rates.length) {
         boardRows.innerHTML = `<p class="board-empty">No campaigns rotating yet — the first advertiser sets the opening rate. Anything from $1.00 to $100.00 per 1,000 views.</p>`;
@@ -282,9 +290,9 @@ function renderBoard(rates: Rate[]): void {
 
 async function loadBoard(): Promise<void> {
     try {
-        const response = await api.get<{ rates: Rate[]; sharePercent: number }>('/api/ads?view=board');
+        const response = await api.get<{ rates: Rate[]; sharePercent: number; configured?: boolean }>('/api/ads?view=board');
         if (typeof response.data.sharePercent === 'number') sharePercent = response.data.sharePercent;
-        renderBoard(response.data.rates || []);
+        renderBoard(response.data.rates || [], response.data.configured !== false);
     } catch {
         if (boardRows) boardRows.innerHTML = `<p class="board-empty">The board is unreachable right now.</p>`;
     }
@@ -321,10 +329,12 @@ adForm?.addEventListener('submit', async event => {
     };
 
     if (button) { button.disabled = true; button.textContent = 'Starting checkout…'; }
+    let redirecting = false;
     try {
         const response = await api.post<{ checkoutUrl?: string }>('/api/ads?action=checkout', payload);
         if (response.data.checkoutUrl) {
             if (adStatus) { adStatus.textContent = 'Redirecting to secure checkout…'; adStatus.className = 'form-status ok'; }
+            redirecting = true;
             window.location.assign(response.data.checkoutUrl);
             return;
         }
@@ -335,7 +345,10 @@ adForm?.addEventListener('submit', async event => {
             adStatus.className = 'form-status bad';
         }
     } finally {
-        if (button) { button.disabled = false; button.textContent = 'Continue to payment →'; }
+        // Keep the button disabled once navigation has started — re-enabling
+        // it lets a second click open another Checkout session (and another
+        // awaiting_payment campaign) before the browser leaves the page.
+        if (button && !redirecting) { button.disabled = false; button.textContent = 'Continue to payment →'; }
     }
 });
 
@@ -353,9 +366,14 @@ pubForm?.addEventListener('submit', async event => {
 
     if (button) { button.disabled = true; button.textContent = 'Creating your key…'; }
     try {
-        const response = await api.post<{ slotKey: string }>('/api/publishers', payload);
+        const response = await api.post<{ slotKey: string; status?: string }>('/api/publishers', payload);
         if (pubStatus) {
-            pubStatus.textContent = 'Key created. It starts earning once we have checked the app.';
+            const status = response.data.status;
+            pubStatus.textContent = status === 'active'
+                ? 'Welcome back — your key is already approved and earning.'
+                : status === 'rejected'
+                    ? 'Key recovered. This app was rejected before; it is back in the review queue.'
+                    : 'Key created. It starts earning once we have checked the app.';
             pubStatus.className = 'form-status ok';
         }
         if (pubSnippet) {
@@ -415,5 +433,5 @@ function showNotice(): void {
 showNotice();
 updateEstimate();
 loadBoard();
-startTrace();
+if (!reduceMotion) startTrace();
 loopHero();

@@ -294,7 +294,8 @@ input:focus { box-shadow: inset 0 0 0 1px var(--pulse); }
 @media (max-width: 560px) {
     .steps, .price-row { grid-template-columns: 1fr; }
     .lane { padding: 24px; }
-    .header-nav a:not(.n-spend) { display: none; }
+    /* Keep both primary CTAs — Earn is half the product. */
+    .header-nav a:not(.n-spend):not(.n-earn) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }

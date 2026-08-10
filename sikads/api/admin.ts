@@ -1,9 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
-import { json, error, requireMethod } from './_lib/http.js';
+import { json, error, requireMethod, clientKey } from './_lib/http.js';
 import { clean } from './_lib/validate.js';
 import { guarded } from './_lib/errors.js';
 import { SCHEMA_SQL } from './_lib/schema.js';
+import { checkRateLimit } from './_lib/rateLimit.js';
+import { isUuid, secretsEqual } from './_lib/secrets.js';
 
 /**
  * GET  /api/admin           -> review queue + revenue summary
@@ -21,7 +23,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             error(res, 501, 'Admin access is not configured');
             return;
         }
-        if (req.headers.authorization?.replace(/^Bearer\s+/i, '') !== secret) {
+
+        const provided = req.headers.authorization?.replace(/^Bearer\s+/i, '') || '';
+        if (!secretsEqual(provided, secret)) {
+            // Throttle failed guesses only — a shared success bucket would let
+            // an attacker lock the real operator out by filling it first.
+            if (isDatabaseConfigured()) {
+                try {
+                    const allowed = await checkRateLimit(getPool(), 'admin-auth-fail', clientKey(req), 20, 1);
+                    if (!allowed) {
+                        error(res, 429, 'Too many failed sign-in attempts. Try again later.');
+                        return;
+                    }
+                } catch {
+                    // Rate-limit storage being down must not change the auth
+                    // answer — still reject the bad key.
+                }
+            }
             error(res, 401, 'Unauthorized');
             return;
         }
@@ -63,15 +81,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                      ORDER BY CASE status WHEN 'pending_review' THEN 0 ELSE 1 END, created_at DESC
                      LIMIT 200`,
                 ),
-                // Gross is what advertisers paid; owed is what publishers have
-                // earned and not yet been paid. Net is what the business actually
-                // keeps, and is the only one of the three worth looking at alone.
+                // Gross is every paid budget still on the books — including
+                // rejected campaigns, which were charged even if they never
+                // went live. Owed is unpaid publisher balance.
                 pool.query(
                     `SELECT
                          (SELECT COALESCE(sum(budget_cents), 0)::bigint FROM ad_campaigns
-                          WHERE status IN ('pending_review', 'live', 'exhausted')) AS "grossCents",
+                          WHERE paid_at IS NOT NULL) AS "grossCents",
                          (SELECT count(*)::int FROM ad_campaigns
-                          WHERE status IN ('pending_review', 'live', 'exhausted')) AS "campaigns",
+                          WHERE paid_at IS NOT NULL) AS "campaigns",
                          (SELECT COALESCE(sum(earnings_microcents - paid_microcents), 0)::bigint
                           FROM publishers) AS "owedMicrocents"`,
                 ),
@@ -97,8 +115,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         const action = clean(body.action, 24);
         const id = clean(body.id, 64);
 
-        if (!id) {
-            error(res, 400, 'Provide the id');
+        if (!id || !isUuid(id)) {
+            error(res, 400, 'Provide a valid id');
             return;
         }
 
@@ -120,16 +138,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             // Marks everything currently owed as paid, for after the money has
             // actually been sent. Recorded as a running total rather than zeroing
             // earnings, so lifetime earnings stay auditable after a payout.
+            // Only active publishers with a payable balance can be settled —
+            // marking rejected/zero-owed rows paid is a silent no-op that
+            // confuses the ledger.
             const updated = await pool.query(
-                `UPDATE publishers SET paid_microcents = earnings_microcents
-                 WHERE id = $1 RETURNING email, earnings_microcents::bigint AS "earnedMicrocents"`,
+                `WITH before AS (
+                     SELECT id, email, earnings_microcents,
+                            (earnings_microcents - paid_microcents) AS owed_microcents
+                     FROM publishers
+                     WHERE id = $1
+                       AND status = 'active'
+                       AND earnings_microcents > paid_microcents
+                 )
+                 UPDATE publishers AS p
+                 SET paid_microcents = p.earnings_microcents
+                 FROM before
+                 WHERE p.id = before.id
+                 RETURNING before.email AS email,
+                           before.earnings_microcents::bigint AS "earnedMicrocents",
+                           before.owed_microcents::bigint AS "settledMicrocents"`,
                 [id],
             );
             if (!updated.rows[0]) {
-                error(res, 404, 'Publisher not found');
+                error(res, 404, 'Publisher not found, inactive, or already settled');
                 return;
             }
-            json(res, 200, { ok: true, email: updated.rows[0].email, settled: true });
+            json(res, 200, {
+                ok: true,
+                email: updated.rows[0].email,
+                settled: true,
+                settledMicrocents: updated.rows[0].settledMicrocents,
+            });
             return;
         }
 
