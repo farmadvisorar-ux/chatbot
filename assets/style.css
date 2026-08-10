@@ -206,7 +206,10 @@ p {
   }
 }
 
-@media (pointer: none), (pointer: coarse) {
+/* Hide side columns on narrow viewports only.
+   Do not key off (pointer: coarse) — many desktops report touch and would
+   incorrectly lose Examples + Forecast. */
+@media (max-width: 992px) {
   .button-column {
       display: none;
   }
