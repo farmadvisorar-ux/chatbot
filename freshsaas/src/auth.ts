@@ -23,7 +23,11 @@ function loadClerk(): Promise<ClerkType | null> {
 
         const { Clerk } = await import('@clerk/clerk-js');
         clerk = new Clerk(key);
-        await clerk.load({ signInUrl: undefined, signUpUrl: undefined });
+        await clerk.load({
+            signInUrl: undefined,
+            signUpUrl: undefined,
+            afterSignOutUrl: window.location.href,
+        });
         clerk.addListener(renderHeaderControls);
         renderHeaderControls();
         return clerk;
@@ -72,7 +76,7 @@ function renderHeaderControls(): void {
             mountPoint.appendChild(accountLink);
             const userButtonSlot = document.createElement('div');
             mountPoint.appendChild(userButtonSlot);
-            clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
+            clerk.mountUserButton(userButtonSlot);
             continue;
         }
         renderSignedOutControls(mountPoint, () => clerk?.openSignIn({}), () => clerk?.openSignUp({}));
