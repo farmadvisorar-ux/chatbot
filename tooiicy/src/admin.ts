@@ -211,7 +211,7 @@ async function onProductClick(event: Event): Promise<void> {
     }
 
     if (button.dataset.action === 'add-variant') {
-        const printfulVariantId = Number(prompt('Printful variant id'));
+        const printfulVariantId = Number(prompt('Printful sync variant id'));
         const name = prompt('Variant name (e.g. "Black / M")');
         const priceInput = prompt('Price in dollars');
         if (!printfulVariantId || !name || !priceInput) return;
@@ -308,7 +308,7 @@ function addVariantRow(): void {
     const row = document.createElement('div');
     row.className = 'pf-variant-row';
     row.innerHTML = `
-        <input type="number" min="1" placeholder="Printful variant id" data-field="printfulVariantId" required>
+        <input type="number" min="1" placeholder="Printful sync variant id" data-field="printfulVariantId" required>
         <input type="text" placeholder="Name (e.g. Black / M)" data-field="name" required>
         <input type="number" min="0.01" step="0.01" placeholder="Price ($)" data-field="priceDollars" required>
     `;

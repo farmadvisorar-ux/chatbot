@@ -24,7 +24,7 @@ test('the inlined schema is byte-identical to db/schema.sql', () => {
 test('the schema creates the tables the application queries', () => {
     // Guards against a rename landing in one place and not the query that
     // reads it, which typechecking cannot catch inside a SQL string.
-    for (const table of ['products', 'product_variants', 'orders', 'order_items', 'rate_limit_events']) {
+    for (const table of ['products', 'product_variants', 'orders', 'order_items', 'rate_limit_events', 'social_links']) {
         assert.ok(
             SCHEMA_SQL.includes(`CREATE TABLE IF NOT EXISTS ${table}`),
             `schema no longer creates ${table}`,

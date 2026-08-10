@@ -2,12 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, error, requireMethod, clientKey } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
-import { getStripe, siteOrigin } from './_lib/stripe.js';
+import { getStripe, siteOrigin, shippingFlatCents } from './_lib/stripe.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
 import { isUuid, clean, validEmail } from './_lib/validate.js';
-import { clampQuantity, subtotalCents, MAX_LINE_ITEMS } from './_lib/cart.js';
-
-type CartLine = { variantId: string; quantity: number };
+import { mergeCartLines, subtotalCents, MAX_LINE_ITEMS } from './_lib/cart.js';
 
 /**
  * POST /api/checkout {items: [{variantId, quantity}], email?}
@@ -46,13 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
-        const lines: CartLine[] = [];
+        const parsed: { variantId: string; quantity: number }[] = [];
         for (const entry of rawItems) {
             const variantId = (entry as { variantId?: unknown } | null)?.variantId;
             const quantity = (entry as { quantity?: unknown } | null)?.quantity;
             if (!isUuid(variantId)) continue;
-            lines.push({ variantId, quantity: clampQuantity(Number(quantity)) });
+            parsed.push({ variantId, quantity: Number(quantity) });
         }
+        const lines = mergeCartLines(parsed);
         if (lines.length === 0) {
             error(res, 400, 'Your cart is empty');
             return;
@@ -98,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
-        const shippingCents = Math.max(0, Math.trunc(Number(process.env.SHIPPING_FLAT_CENTS) || 500));
+        const shippingCents = shippingFlatCents();
         const subtotal = subtotalCents(orderItems);
         const total = subtotal + shippingCents;
 
@@ -128,29 +127,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
 
         const origin = siteOrigin();
-        const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
-            line_items: orderItems.map(item => ({
-                quantity: item.quantity,
-                price_data: {
-                    currency: 'usd',
-                    unit_amount: item.unitPriceCents,
-                    product_data: { name: item.name },
-                },
-            })),
-            shipping_address_collection: { allowed_countries: ['US'] },
-            shipping_options: [{
-                shipping_rate_data: {
-                    type: 'fixed_amount',
-                    fixed_amount: { amount: shippingCents, currency: 'usd' },
-                    display_name: 'Standard Shipping',
-                },
-            }],
-            customer_email: email || undefined,
-            success_url: `${origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${origin}/`,
-            metadata: { orderId },
-        });
+        let session;
+        try {
+            session = await stripe.checkout.sessions.create({
+                mode: 'payment',
+                line_items: orderItems.map(item => ({
+                    quantity: item.quantity,
+                    price_data: {
+                        currency: 'usd',
+                        unit_amount: item.unitPriceCents,
+                        product_data: { name: item.name },
+                    },
+                })),
+                shipping_address_collection: { allowed_countries: ['US'] },
+                shipping_options: [{
+                    shipping_rate_data: {
+                        type: 'fixed_amount',
+                        fixed_amount: { amount: shippingCents, currency: 'usd' },
+                        display_name: 'Standard Shipping',
+                    },
+                }],
+                customer_email: email || undefined,
+                success_url: `${origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${origin}/`,
+                metadata: { orderId },
+            });
+        } catch (err) {
+            await pool.query(
+                `UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'awaiting_payment'`,
+                [orderId],
+            );
+            throw err;
+        }
+
+        if (!session.url) {
+            await pool.query(
+                `UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'awaiting_payment'`,
+                [orderId],
+            );
+            error(res, 502, 'Stripe did not return a checkout URL');
+            return;
+        }
 
         await pool.query('UPDATE orders SET stripe_session_id = $2 WHERE id = $1', [orderId, session.id]);
 

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
-import { json, error, requireMethod } from './_lib/http.js';
+import { json, requireMethod } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
 
 /**
@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     await guarded('social-links', res, async () => {
         if (!requireMethod(req, res, ['GET'])) return;
         if (!isDatabaseConfigured()) {
-            error(res, 501, 'The database is not configured on this deployment yet.');
+            json(res, 200, { socialLinks: [] });
             return;
         }
 

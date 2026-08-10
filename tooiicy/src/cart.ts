@@ -58,11 +58,12 @@ export function setQuantity(variantId: string, quantity: number): void {
     const items = readCart();
     const existing = items.find(i => i.variantId === variantId);
     if (!existing) return;
-    if (quantity <= 0) {
+    const whole = Math.trunc(quantity);
+    if (!Number.isFinite(whole) || whole <= 0) {
         writeCart(items.filter(i => i.variantId !== variantId));
         return;
     }
-    existing.quantity = Math.min(MAX_QUANTITY, quantity);
+    existing.quantity = Math.min(MAX_QUANTITY, whole);
     writeCart(items);
 }
 

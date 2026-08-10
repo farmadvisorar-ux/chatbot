@@ -1,12 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
-import { json, error, requireMethod, isAdmin } from './_lib/http.js';
+import { json, error, requireMethod, isAdmin, clientKey } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
 import { SCHEMA_SQL } from './_lib/schema.js';
-import { clean, isUuid, asPositiveInt } from './_lib/validate.js';
+import { clean, isUuid, asPositiveInt, validUrl } from './_lib/validate.js';
 import { submitToPrintful } from './_lib/fulfillment.js';
+import { checkRateLimit } from './_lib/rateLimit.js';
 
 const ORDER_STATUSES = ['awaiting_payment', 'paid', 'submitted_to_printful', 'fulfillment_error', 'shipped', 'cancelled'];
+
+/** Manual status changes that won't leave money/fulfillment in an impossible state. */
+const ALLOWED_STATUS_TRANSITIONS: Record<string, string[]> = {
+    awaiting_payment: ['cancelled'],
+    paid: ['fulfillment_error', 'cancelled'],
+    fulfillment_error: ['paid', 'cancelled'],
+    submitted_to_printful: ['shipped', 'fulfillment_error'],
+    shipped: [],
+    cancelled: [],
+};
 
 type VariantInput = { printfulVariantId?: unknown; name?: unknown; priceCents?: unknown; imageUrl?: unknown };
 
@@ -15,7 +26,16 @@ function readVariant(raw: VariantInput): { printfulVariantId: number; name: stri
     const name = clean(raw.name, 200);
     const priceCents = asPositiveInt(raw.priceCents);
     if (!printfulVariantId || !name || !priceCents) return null;
-    return { printfulVariantId, name, priceCents, imageUrl: clean(raw.imageUrl, 2048) };
+    const imageUrl = clean(raw.imageUrl, 2048);
+    if (imageUrl && !validUrl(imageUrl)) return null;
+    return { printfulVariantId, name, priceCents, imageUrl };
+}
+
+function optionalHttpUrl(value: unknown): string | null | undefined {
+    if (typeof value !== 'string') return undefined;
+    const url = clean(value, 2048);
+    if (!url) return null;
+    return validUrl(url) ? url : undefined;
 }
 
 /**
@@ -33,16 +53,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             error(res, 501, 'Admin access is not configured');
             return;
         }
-        if (!isAdmin(req)) {
-            error(res, 401, 'Unauthorized');
-            return;
-        }
         if (!isDatabaseConfigured()) {
             error(res, 501, 'The database is not configured on this deployment yet.');
             return;
         }
 
         const pool = getPool();
+        if (!isAdmin(req)) {
+            // Count failed bearer guesses so a shared ADMIN_SECRET can't be
+            // brute-forced unboundedly from a serverless function.
+            const allowed = await checkRateLimit(pool, 'admin_auth', clientKey(req), 30, 15);
+            if (!allowed) {
+                error(res, 429, 'Too many failed admin attempts. Try again later.');
+                return;
+            }
+            error(res, 401, 'Unauthorized');
+            return;
+        }
+
         const body = (req.body ?? {}) as Record<string, unknown>;
         const action = req.method === 'POST' ? clean(body.action, 40) : '';
 
@@ -63,12 +91,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const slug = clean(body.slug, 100).toLowerCase().replace(/[^a-z0-9-]/g, '');
             const name = clean(body.name, 200);
             const description = clean(body.description, 4000);
-            const imageUrl = clean(body.imageUrl, 2048);
+            const imageUrlRaw = clean(body.imageUrl, 2048);
+            if (imageUrlRaw && !validUrl(imageUrlRaw)) {
+                error(res, 400, 'Product image URL must be http or https');
+                return;
+            }
+            const imageUrl = imageUrlRaw;
             const rawVariants = Array.isArray(body.variants) ? body.variants : [];
             const variants = rawVariants.map(v => readVariant(v as VariantInput)).filter(v => v !== null);
 
             if (!slug || !name || variants.length === 0 || variants.length !== rawVariants.length) {
-                error(res, 400, 'A product needs a slug, a name, and at least one valid variant (Printful variant id, name, price).');
+                error(res, 400, 'A product needs a slug, a name, and at least one valid variant (Printful sync variant id, name, price).');
                 return;
             }
 
@@ -104,6 +137,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'Missing or invalid product id');
                 return;
             }
+            const imageUrl = optionalHttpUrl(body.imageUrl);
+            if (body.imageUrl !== undefined && imageUrl === undefined) {
+                error(res, 400, 'Product image URL must be http or https');
+                return;
+            }
             const { rowCount } = await pool.query(
                 `UPDATE products SET
                     name = COALESCE($2, name),
@@ -116,7 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                     id,
                     typeof body.name === 'string' ? clean(body.name, 200) : null,
                     typeof body.description === 'string' ? clean(body.description, 4000) : null,
-                    typeof body.imageUrl === 'string' ? clean(body.imageUrl, 2048) : null,
+                    imageUrl === undefined ? null : imageUrl,
                     typeof body.active === 'boolean' ? body.active : null,
                     typeof body.sortOrder === 'number' ? Math.trunc(body.sortOrder) : null,
                 ],
@@ -133,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const productId = body.productId;
             const variant = readVariant(body as VariantInput);
             if (!isUuid(productId) || !variant) {
-                error(res, 400, 'A variant needs a product id, a Printful variant id, a name, and a price.');
+                error(res, 400, 'A variant needs a product id, a Printful sync variant id, a name, and a price.');
                 return;
             }
             const { rowCount } = await pool.query(
@@ -151,6 +189,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'Missing or invalid variant id');
                 return;
             }
+            const imageUrl = optionalHttpUrl(body.imageUrl);
+            if (body.imageUrl !== undefined && imageUrl === undefined) {
+                error(res, 400, 'Variant image URL must be http or https');
+                return;
+            }
             const { rowCount } = await pool.query(
                 `UPDATE product_variants SET
                     name = COALESCE($2, name),
@@ -163,7 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                     id,
                     typeof body.name === 'string' ? clean(body.name, 200) : null,
                     asPositiveInt(body.priceCents),
-                    typeof body.imageUrl === 'string' ? clean(body.imageUrl, 2048) : null,
+                    imageUrl === undefined ? null : imageUrl,
                     typeof body.inStock === 'boolean' ? body.inStock : null,
                     typeof body.sortOrder === 'number' ? Math.trunc(body.sortOrder) : null,
                 ],
@@ -181,6 +224,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const status = clean(body.status, 40);
             if (!isUuid(id) || !ORDER_STATUSES.includes(status)) {
                 error(res, 400, `status must be one of: ${ORDER_STATUSES.join(', ')}`);
+                return;
+            }
+            const { rows: current } = await pool.query<{ status: string }>('SELECT status FROM orders WHERE id = $1', [id]);
+            if (!current[0]) {
+                error(res, 404, 'Order not found');
+                return;
+            }
+            const allowed = ALLOWED_STATUS_TRANSITIONS[current[0].status] ?? [];
+            if (!allowed.includes(status)) {
+                error(res, 409, `Cannot move an order from ${current[0].status} to ${status}`);
                 return;
             }
             const { rowCount } = await pool.query('UPDATE orders SET status = $2 WHERE id = $1', [id, status]);
@@ -223,6 +276,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'A social link needs a platform and a URL');
                 return;
             }
+            if (!validUrl(url)) {
+                error(res, 400, 'Social link URL must be http or https');
+                return;
+            }
             const { rows } = await pool.query<{ id: string }>(
                 `INSERT INTO social_links (platform, url) VALUES ($1, $2) RETURNING id`,
                 [platform, url],
@@ -237,6 +294,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'Missing or invalid social link id');
                 return;
             }
+            let nextUrl: string | null = null;
+            if (typeof body.url === 'string') {
+                const url = clean(body.url, 500);
+                if (!validUrl(url)) {
+                    error(res, 400, 'Social link URL must be http or https');
+                    return;
+                }
+                nextUrl = url;
+            }
             const { rowCount } = await pool.query(
                 `UPDATE social_links SET
                     platform = COALESCE($2, platform),
@@ -247,7 +313,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 [
                     id,
                     typeof body.platform === 'string' ? clean(body.platform, 40) : null,
-                    typeof body.url === 'string' ? clean(body.url, 500) : null,
+                    nextUrl,
                     typeof body.active === 'boolean' ? body.active : null,
                     typeof body.sortOrder === 'number' ? Math.trunc(body.sortOrder) : null,
                 ],

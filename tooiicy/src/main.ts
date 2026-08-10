@@ -262,6 +262,9 @@ cartCheckoutBtn?.addEventListener('click', async () => {
             items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
             email: cartEmailInput?.value || undefined,
         });
+        if (!data.url) {
+            throw new ApiError(502, 'Checkout did not return a redirect URL');
+        }
         window.location.href = data.url;
     } catch (err) {
         showNotice(cartNotice, err instanceof ApiError ? err.message : 'Checkout failed. Try again.');
@@ -273,7 +276,15 @@ cartCheckoutBtn?.addEventListener('click', async () => {
 /* ---------------- social links ---------------- */
 
 function renderSocialLinks(links: SocialLink[]): void {
-    const linkHtml = links
+    const safeLinks = links.filter(link => {
+        try {
+            const parsed = new URL(link.url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    });
+    const linkHtml = safeLinks
         .map(link => `
             <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="social-link" title="${escapeHtml(link.platform)}">
                 <span class="social-icon">${getSocialIcon(link.platform)}</span>

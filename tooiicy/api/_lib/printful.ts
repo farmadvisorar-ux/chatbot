@@ -16,7 +16,22 @@ export type PrintfulRecipient = {
     email?: string;
 };
 
-export type PrintfulOrderItem = { variant_id: number; quantity: number };
+/**
+ * Branded merch (stickers, tees with designs) should use Printful *sync*
+ * variant ids from the store product that already has artwork attached.
+ * Catalog variant ids alone produce blank goods unless print files are also
+ * supplied — set PRINTFUL_USE_CATALOG_VARIANTS=true only for that path.
+ */
+export type PrintfulOrderItem =
+    | { sync_variant_id: number; quantity: number }
+    | { variant_id: number; quantity: number };
+
+export function printfulOrderItem(printfulVariantId: number, quantity: number): PrintfulOrderItem {
+    if (process.env.PRINTFUL_USE_CATALOG_VARIANTS === 'true') {
+        return { variant_id: printfulVariantId, quantity };
+    }
+    return { sync_variant_id: printfulVariantId, quantity };
+}
 
 export class PrintfulError extends Error {}
 

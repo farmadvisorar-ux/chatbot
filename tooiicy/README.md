@@ -14,30 +14,33 @@ printing and shipping.
    a US shipping address.
 2. **Stripe confirms.** `api/webhooks/stripe.ts` flips the order to `paid` on
    `checkout.session.completed` and immediately attempts to submit it to
-   Printful.
+   Printful. Shipping is read from Stripe's `collected_information.shipping_details`
+   (with a legacy fallback). Abandoned sessions become `cancelled` on
+   `checkout.session.expired`.
 3. **Printful fulfills.** On success the order becomes
    `submitted_to_printful`; the Printful API call failing (bad address,
    Printful outage) instead leaves it as `fulfillment_error`, visible in
-   `/admin.html` with the reason and a retry button.
-4. **It ships.** If a Printful webhook is configured
-   (`PRINTFUL_WEBHOOK_SECRET` + Dashboard → Settings → Webhooks →
-   `package_shipped` → `/api/webhooks/printful`), the order flips to
-   `shipped` with tracking info attached automatically.
+   `/admin.html` with the reason and a retry button. By default each line
+   item is sent as a Printful **sync variant** (store product with artwork
+   already attached) — required for branded stickers and apparel.
+4. **It ships.** Configure `PRINTFUL_WEBHOOK_SECRET` (required in production)
+   and Dashboard → Settings → Webhooks → `package_shipped` →
+   `/api/webhooks/printful` so the order flips to `shipped` with tracking.
 
 ## Admin
 
 `/admin.html`, gated by `ADMIN_SECRET` (bearer token, no per-user roles):
 
 - **Products** — add a product with one or more variants. Each variant needs
-  the *Printful catalog variant id* it fulfills as — look this up in
-  Printful's product catalog (or an existing store product) before adding it
-  here; nothing here talks to Printful's catalog automatically. Price,
-  stock, and visibility are all editable after creation.
+  the *Printful sync variant id* from a store product that already has your
+  design. Look this up under Printful → Stores → Products → the variant;
+  nothing here talks to Printful's catalog automatically. Price, stock, and
+  visibility are all editable after creation.
 - **Orders** — see what was ordered, the shipping address, and current
   status. Retry fulfillment on anything stuck in `fulfillment_error` once the
   underlying problem (usually a missing address field, or Printful being
-  briefly down) is fixed. Status can also be changed by hand for edge cases
-  the automatic flow doesn't cover.
+  briefly down) is fixed. Status can also be changed by hand within a safe
+  transition set.
 
 ## Local setup
 
@@ -45,18 +48,23 @@ printing and shipping.
 npm install
 cp .env.example .env   # fill in DATABASE_URL, STRIPE_SECRET_KEY, PRINTFUL_API_KEY, ADMIN_SECRET at minimum
 npm run migrate         # creates the schema; npm run migrate:http works instead if your network blocks port 5432
-npm run dev
+npx vercel dev          # serves /api/* and the Vite front end together
 ```
 
+`npm run dev` (Vite alone) does **not** mount the serverless `/api` routes —
+use `vercel dev` for an end-to-end local shop, or point Stripe CLI at a
+Vercel preview deployment.
+
 Stripe webhooks need a public URL to reach — during local development, run
-`stripe listen --forward-to localhost:5173/api/webhooks/stripe` (or test
-against a Vercel preview deployment, which already has one).
+`stripe listen --forward-to localhost:3000/api/webhooks/stripe` while
+`vercel dev` is running (or test against a Vercel preview).
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Vite dev server |
+| `npm run dev` | Vite front end only (no `/api`) |
+| `npx vercel dev` | Front end + serverless API (preferred locally) |
 | `npm run build` | Production build (`dist/`) |
 | `npm run typecheck` | Type-checks both `src/` and `api/` |
 | `npm test` | Runs `tests/*.test.mjs` |
@@ -71,9 +79,11 @@ database directly.
 
 See `.env.example` for the full list with explanations. At minimum, a working
 deployment needs `DATABASE_URL`, `STRIPE_SECRET_KEY` +
-`STRIPE_WEBHOOK_SECRET`, `PRINTFUL_API_KEY`, and `ADMIN_SECRET`. Everything
-that isn't configured yet fails with a clear "not set up" message instead of
-crashing.
+`STRIPE_WEBHOOK_SECRET`, `PRINTFUL_API_KEY`, `PRINTFUL_WEBHOOK_SECRET`
+(production), and `ADMIN_SECRET`. Set `PUBLIC_SITE_URL` to your canonical
+host so Stripe success/cancel links are correct; otherwise Vercel URL env
+vars are used. Everything that isn't configured yet fails with a clear
+"not set up" message instead of crashing.
 
 ## Design placeholders
 

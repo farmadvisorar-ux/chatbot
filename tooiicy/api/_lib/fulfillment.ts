@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { createPrintfulOrder, type PrintfulRecipient } from './printful.js';
+import { createPrintfulOrder, printfulOrderItem, type PrintfulRecipient } from './printful.js';
 
 /**
  * Sends a paid order to Printful and records the outcome. Never throws: a
@@ -51,7 +51,7 @@ export async function submitToPrintful(pool: pg.Pool, orderId: string): Promise<
     try {
         const printfulOrder = await createPrintfulOrder(
             recipient,
-            items.map(item => ({ variant_id: Number(item.printfulVariantId), quantity: item.quantity })),
+            items.map(item => printfulOrderItem(Number(item.printfulVariantId), item.quantity)),
             orderId,
         );
         await pool.query(

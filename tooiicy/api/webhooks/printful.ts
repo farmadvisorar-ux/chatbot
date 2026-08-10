@@ -1,19 +1,17 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { guarded } from '../_lib/errors.js';
+import { validUrl } from '../_lib/validate.js';
 
 /**
  * POST /api/webhooks/printful — receives shipping updates from Printful
  * (Dashboard -> Settings -> Webhooks -> package_shipped).
  *
- * Verified against PRINTFUL_WEBHOOK_SECRET when set, via the header Printful
- * documents for this (X-Printful-Signature, an HMAC-SHA256 of the raw body
- * using the secret shown next to the webhook in the dashboard). Without a
- * secret configured, events are still accepted but unauthenticated — the
- * worst an attacker can do with a forged event is mark a real order id as
- * shipped, which is a cosmetic status and not a money-moving one, so this
- * degrades gracefully rather than refusing to run.
+ * Verified against PRINTFUL_WEBHOOK_SECRET via X-Printful-Signature
+ * (HMAC-SHA256 of the raw body). The secret is required in production so a
+ * forged event cannot mark orders shipped or inject a tracking URL.
  */
 export const config = { api: { bodyParser: false } };
 
@@ -26,11 +24,17 @@ function readRawBody(req: VercelRequest): Promise<Buffer> {
     });
 }
 
-async function verifySignature(raw: Buffer, header: string | undefined, secret: string): Promise<boolean> {
+function verifySignature(raw: Buffer, header: string | undefined, secret: string): boolean {
     if (!header) return false;
-    const { createHmac } = await import('node:crypto');
     const expected = createHmac('sha256', secret).update(raw).digest('hex');
-    return header === expected;
+    const left = Buffer.from(header);
+    const right = Buffer.from(expected);
+    if (left.length !== right.length) return false;
+    return timingSafeEqual(left, right);
+}
+
+function isProduction(): boolean {
+    return process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -39,9 +43,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         const raw = await readRawBody(req);
         const secret = process.env.PRINTFUL_WEBHOOK_SECRET;
-        if (secret) {
+        if (!secret) {
+            if (isProduction()) {
+                error(res, 501, 'Printful webhook secret is not configured');
+                return;
+            }
+        } else {
             const signature = req.headers['x-printful-signature'];
-            const ok = await verifySignature(raw, typeof signature === 'string' ? signature : undefined, secret);
+            const ok = verifySignature(raw, typeof signature === 'string' ? signature : undefined, secret);
             if (!ok) {
                 error(res, 400, 'Invalid Printful signature');
                 return;
@@ -63,11 +72,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const order = event.data?.order;
             const shipment = order?.shipments?.[0];
             const orderId = order?.external_id;
+            const trackingUrl = shipment?.tracking_url && validUrl(shipment.tracking_url)
+                ? shipment.tracking_url
+                : null;
             if (orderId) {
                 await getPool().query(
                     `UPDATE orders SET status = 'shipped', tracking_number = $2, tracking_url = $3
                      WHERE id = $1 AND printful_order_id IS NOT NULL`,
-                    [orderId, shipment?.tracking_number || null, shipment?.tracking_url || null],
+                    [orderId, shipment?.tracking_number || null, trackingUrl],
                 );
             }
         }

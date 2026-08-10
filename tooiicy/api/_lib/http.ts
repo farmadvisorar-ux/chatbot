@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export function json(res: VercelResponse, status: number, data: unknown): void {
@@ -23,9 +24,21 @@ export function clientKey(req: VercelRequest): string {
     return ip || req.socket?.remoteAddress || 'unknown';
 }
 
+/** Constant-time string compare so bearer-token checks don't leak length/prefix timing. */
+export function safeEqual(a: string, b: string): boolean {
+    const left = Buffer.from(a);
+    const right = Buffer.from(b);
+    if (left.length !== right.length) {
+        timingSafeEqual(left, Buffer.alloc(left.length));
+        return false;
+    }
+    return timingSafeEqual(left, right);
+}
+
 /** True when the bearer token matches ADMIN_SECRET. False (never throws) if ADMIN_SECRET isn't configured. */
 export function isAdmin(req: VercelRequest): boolean {
     const secret = process.env.ADMIN_SECRET;
     if (!secret) return false;
-    return req.headers.authorization?.replace(/^Bearer\s+/i, '') === secret;
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '';
+    return safeEqual(token, secret);
 }
