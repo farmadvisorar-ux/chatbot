@@ -7,16 +7,22 @@ from itertools import chain, zip_longest
 from datetime import datetime, timezone, timedelta
 from bot import setup_agent, query_llm, check_open_ai_key
 from prompts import PROMPT_EXAMPLES
-from api import check_open_weather_key
+from api import check_open_weather_key, OpenWeatherMapQuery
 
-
-# setup chatbot
-agent, tools = setup_agent(model="gpt-4o-mini", temperature=0.5, verbose=False)
 
 # check API keys
 open_ai_is_valid = check_open_ai_key()
 open_weather_is_valid = check_open_weather_key()
 starting_mode = "offline" if not open_ai_is_valid or not open_weather_is_valid else "online"
+
+# ChatOpenAI rejects construction without a key, so initialize it only when
+# online chat can actually be used. Keep a weather tool available for the
+# forecast cards while the application is in its documented offline mode.
+if open_ai_is_valid:
+    agent, tools = setup_agent(model="gpt-4o-mini", temperature=0.5, verbose=False)
+else:
+    agent = None
+    tools = [OpenWeatherMapQuery()]
 
 
 def header(name: str, mode: str) -> dbc.Row:
@@ -287,7 +293,7 @@ def update_weather_cards(answer_history, n_clicks):
     weather_data = wrapper.weather
 
     # Check if location data is available
-    if (location_data is not None) and (answer_history != []):
+    if isinstance(location_data, dict) and answer_history:
         location = location_data["name"]
         if location_data.get("state") is not None:
             location += f", {location_data['state']}"
@@ -296,7 +302,7 @@ def update_weather_cards(answer_history, n_clicks):
         location = "No location set."
 
     # Return empty cards if no data is available
-    if (n_clicks is None) or (weather_data is None):
+    if (n_clicks is None) or not isinstance(weather_data, dict):
         cards = [weather_card(day) for day in dates]
         return cards, location
 

@@ -6,6 +6,8 @@ from prompts import CURRENT_TEMPLATE, FUTURE_TEMPLATE
 
 load_dotenv()
 
+REQUEST_TIMEOUT_SECONDS = 10
+
 
 class OpenWeatherMapAPIWrapper:
     """Wrapper class for OpenWeatherMap API."""
@@ -34,12 +36,21 @@ class OpenWeatherMapAPIWrapper:
         }
 
         # request location information
-        response = requests.get("https://api.openweathermap.org/geo/1.0/direct", params=params)
+        try:
+            response = requests.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params=params,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as error:
+            return f"Network error: {error}"
 
         # handle response
         response = self.handle_response(response)
         if isinstance(response, str):
-            return f"Could not get location because of following error: {response}"
+            return response
+        if not isinstance(response, list) or not response or not isinstance(response[0], dict):
+            return "No matching location found"
         loc = response[0]
         _ = loc.pop("local_names", None)
         return loc
@@ -47,10 +58,16 @@ class OpenWeatherMapAPIWrapper:
     def get_weather(self, city_name: str, country: str = None, state: str = None) -> str:
         """Get weather information from OpenWeatherMap API."""
 
+        # Clear previous results first. A failed lookup must not leave an old
+        # location and forecast visible in the UI.
+        self.location = None
+        self.weather = None
+
         # get location information
-        self.location = self.get_location(city_name, country, state)
-        if isinstance(self.location, str):
-            return f"Could not get location because of following error: {self.location}"
+        location = self.get_location(city_name, country, state)
+        if isinstance(location, str):
+            return f"Could not get location because of following error: {location}"
+        self.location = location
 
         # prepare request parameters
         params = {
@@ -62,12 +79,22 @@ class OpenWeatherMapAPIWrapper:
         }
 
         # request weather information
-        self.weather = requests.get("https://api.openweathermap.org/data/3.0/onecall", params=params)
+        try:
+            response = requests.get(
+                "https://api.openweathermap.org/data/3.0/onecall",
+                params=params,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as error:
+            return f"Could not get weather because of following error: Network error: {error}"
 
         # handle response
-        self.weather = self.handle_response(self.weather)
-        if isinstance(self.weather, str):
-            return f"Could not get weather because of following error: {self.weather}"
+        weather = self.handle_response(response)
+        if isinstance(weather, str):
+            return f"Could not get weather because of following error: {weather}"
+        if not isinstance(weather, dict):
+            return "Could not get weather because the API returned an unexpected response"
+        self.weather = weather
 
         # format templates and return output
         return self.get_output()
@@ -77,7 +104,7 @@ class OpenWeatherMapAPIWrapper:
 
         # prepare location string
         loc = self.location["name"]
-        if self.location["country"] == "US":
+        if self.location["country"] == "US" and self.location.get("state"):
             loc += f", {self.location['state']}"
         loc += f", {self.location['country']}"
 
@@ -87,11 +114,11 @@ class OpenWeatherMapAPIWrapper:
 
         # extract rain data
         rain = current.get("rain", 0)
-        rain = rain if isinstance(rain, int) else rain.get("1h", 0)
+        rain = rain if isinstance(rain, (int, float)) else rain.get("1h", 0)
 
         # extract snow data
         snow = current.get("snow", 0)
-        snow = snow if isinstance(snow, int) else snow.get("1h", 0)
+        snow = snow if isinstance(snow, (int, float)) else snow.get("1h", 0)
 
         # format current weather information template
         weather_current = self.current_template.format(
@@ -138,11 +165,14 @@ class OpenWeatherMapAPIWrapper:
         return icon_ids
 
     @staticmethod
-    def handle_response(response) -> dict | str:
+    def handle_response(response) -> dict | list | str:
         """Handle response from OpenWeatherMap API."""
         match response.status_code:
             case 200:
-                return response.json()
+                try:
+                    return response.json()
+                except ValueError:
+                    return "Invalid response from weather service"
             case 400:
                 return "400 Bad Request"
             case 401:
