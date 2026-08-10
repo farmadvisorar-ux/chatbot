@@ -3,7 +3,7 @@
  * so these check that it fails closed: forged signatures, tokens minted for
  * another repository, and wrong audiences must all be rejected.
  *
- * Run with:  node --test tests/
+ * Run with:  node --experimental-strip-types --test tests/
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
