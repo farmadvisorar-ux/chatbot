@@ -130,6 +130,10 @@ made a successful API call.
 If you encounter any server related issues (Error code: 5XX), please check the server status on the
 [Render Status Page](https://status.render.com) for any ongoing incidents and try again later.
 
+If the live site shows **“This service has been suspended by its owner.”**, open the
+[Render Dashboard](https://dashboard.render.com), select `iu-weather-chatbot`, and click **Resume**.
+After resuming, redeploy so the service picks up `render.yaml` (`gunicorn app:server`).
+
 
 ## License
 
