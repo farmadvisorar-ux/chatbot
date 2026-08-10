@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@clerk/backend": "^3.16.1",
-    "@clerk/clerk-js": "^6.27.1",
+    "@clerk/clerk-js": "^5.127.2",
     "jose": "^6.2.4",
     "lucide": "^0.469.0",
     "pg": "^8.13.1",
@@ -28,7 +28,7 @@
   "devDependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@types/pg": "^8.11.10",
-    "@vercel/node": "^3.2.24",
+    "@vercel/node": "^3.0.1",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",

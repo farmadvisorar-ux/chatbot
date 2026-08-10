@@ -72,7 +72,7 @@ function renderHeaderControls(): void {
             mountPoint.appendChild(accountLink);
             const userButtonSlot = document.createElement('div');
             mountPoint.appendChild(userButtonSlot);
-            clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
+            clerk.mountUserButton(userButtonSlot, { redirectUrl: window.location.href });
             continue;
         }
         renderSignedOutControls(mountPoint, () => clerk?.openSignIn({}), () => clerk?.openSignUp({}));
