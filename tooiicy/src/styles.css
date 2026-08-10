@@ -277,7 +277,8 @@ a { color: inherit; }
     align-items: center;
     justify-content: center;
     padding: 20px;
-    z-index: 40;
+    /* Must sit above .scrim (40) or the product modal is unclickable. */
+    z-index: 50;
 }
 
 .overlay.open { display: flex; }
@@ -372,7 +373,7 @@ a { color: inherit; }
     box-shadow: var(--shadow);
     transform: translateX(100%);
     transition: transform 0.2s ease;
-    z-index: 50;
+    z-index: 55;
     display: flex;
     flex-direction: column;
 }
@@ -425,7 +426,28 @@ a { color: inherit; }
 
 .drawer-footer { border-top: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 
-.drawer-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; }
+.drawer-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.drawer-total #cart-total {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    text-align: right;
+}
+
+.cart-total-breakdown {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+}
 
 .email-input {
     background: var(--surface-2);
@@ -441,7 +463,7 @@ a { color: inherit; }
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 45;
+    z-index: 40;
     display: none;
 }
 

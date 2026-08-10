@@ -1,6 +1,6 @@
 import { api, ApiError } from './api-client';
 import { escapeHtml } from './escape-html';
-import { addToCart, cartCount, cartTotalCents, getCart, removeFromCart, setQuantity, type CartItem } from './cart';
+import { addToCart, cartCount, cartTotalCents, getCart, removeFromCart, setQuantity, shippingEstimateCents, type CartItem } from './cart';
 
 type Variant = { id: string; name: string; priceCents: number; imageUrl: string | null; inStock: boolean };
 type Product = { id: string; slug: string; name: string; description: string; imageUrl: string | null; variants: Variant[] };
@@ -97,10 +97,17 @@ function renderGrid(): void {
     });
 }
 
+function updateComingSoon(hasProducts: boolean): void {
+    const section = document.querySelector<HTMLElement>('#coming-soon');
+    if (!section) return;
+    section.hidden = hasProducts;
+}
+
 async function loadProducts(): Promise<void> {
     try {
         const { data } = await api.get<{ products: Product[] }>('/api/products');
         products = data.products;
+        updateComingSoon(products.length > 0);
         renderGrid();
     } catch (err) {
         showNotice(noticeSlot, err instanceof ApiError ? err.message : 'Could not load the shop. Try refreshing.');
@@ -230,7 +237,11 @@ function renderCart(): void {
         });
     }
 
-    cartTotalEl.textContent = money(cartTotalCents());
+    const subtotal = cartTotalCents();
+    const shipping = items.length > 0 ? shippingEstimateCents() : 0;
+    cartTotalEl.innerHTML = items.length === 0
+        ? money(0)
+        : `<span class="cart-total-breakdown">Subtotal ${escapeHtml(money(subtotal))} · Shipping ${escapeHtml(money(shipping))}</span><strong>${escapeHtml(money(subtotal + shipping))}</strong>`;
 }
 
 function openCart(): void {
@@ -258,10 +269,13 @@ cartCheckoutBtn?.addEventListener('click', async () => {
     cartCheckoutBtn.disabled = true;
     cartCheckoutBtn.textContent = 'Redirecting…';
     try {
-        const { data } = await api.post<{ url: string }>('/api/checkout', {
+        const { data } = await api.post<{ url: string | null }>('/api/checkout', {
             items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
             email: cartEmailInput?.value || undefined,
         });
+        if (!data.url) {
+            throw new Error('Checkout did not return a payment link.');
+        }
         window.location.href = data.url;
     } catch (err) {
         showNotice(cartNotice, err instanceof ApiError ? err.message : 'Checkout failed. Try again.');
@@ -272,14 +286,28 @@ cartCheckoutBtn?.addEventListener('click', async () => {
 
 /* ---------------- social links ---------------- */
 
+function safeHttpUrl(url: string): string | null {
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+        return parsed.href;
+    } catch {
+        return null;
+    }
+}
+
 function renderSocialLinks(links: SocialLink[]): void {
     const linkHtml = links
-        .map(link => `
-            <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="social-link" title="${escapeHtml(link.platform)}">
+        .map(link => {
+            const href = safeHttpUrl(link.url);
+            if (!href) return '';
+            return `
+            <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-link" title="${escapeHtml(link.platform)}">
                 <span class="social-icon">${getSocialIcon(link.platform)}</span>
                 <span class="social-text">${escapeHtml(link.platform)}</span>
             </a>
-        `)
+        `;
+        })
         .join('');
 
     if (socialLinksContainer) {

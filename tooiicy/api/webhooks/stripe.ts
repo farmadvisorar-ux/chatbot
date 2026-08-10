@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type Stripe from 'stripe';
-import { getPool } from '../_lib/db.js';
+import { getPool, isDatabaseConfigured } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { getStripe } from '../_lib/stripe.js';
 import { submitToPrintful } from '../_lib/fulfillment.js';
@@ -16,6 +16,23 @@ function readRawBody(req: VercelRequest): Promise<Buffer> {
         req.on('end', () => resolve(Buffer.concat(chunks)));
         req.on('error', reject);
     });
+}
+
+type ShippingDetails = { name?: string | null; address?: Stripe.Address | null } | null | undefined;
+
+/**
+ * Stripe moved Checkout Session shipping from top-level `shipping_details`
+ * into `collected_information.shipping_details` (API ≥ 2025-03-31). Read the
+ * new path first, then fall back for any older webhook API versions still
+ * pinned on a Stripe account.
+ */
+function sessionShipping(session: Stripe.Checkout.Session): ShippingDetails {
+    const collected = (session as Stripe.Checkout.Session & {
+        collected_information?: { shipping_details?: ShippingDetails };
+    }).collected_information?.shipping_details;
+    if (collected) return collected;
+
+    return (session as Stripe.Checkout.Session & { shipping_details?: ShippingDetails }).shipping_details;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -43,33 +60,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
-    if (event.type === 'checkout.session.completed') {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const orderId = session.metadata?.orderId;
-        const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
-        const shippingDetails = (session as unknown as {
-            shipping_details?: { name?: string | null; address?: Stripe.Address | null } | null;
-        }).shipping_details;
+    if (!isDatabaseConfigured()) {
+        error(res, 501, 'The store is not set up yet');
+        return;
+    }
 
-        if (orderId && session.payment_status === 'paid') {
-            const pool = getPool();
-            // Guarded on status so a redelivered event can't submit the same
-            // order to Printful twice.
-            const { rowCount } = await pool.query(
-                `UPDATE orders
-                 SET status = 'paid', stripe_payment_intent_id = $2, paid_at = now(),
-                     email = COALESCE(email, $3), shipping_name = $4, shipping_address = $5
-                 WHERE id = $1 AND status = 'awaiting_payment'`,
-                [
-                    orderId,
-                    paymentIntentId,
-                    session.customer_details?.email || null,
-                    shippingDetails?.name || null,
-                    shippingDetails?.address ? JSON.stringify(shippingDetails.address) : null,
-                ],
-            );
-            if (rowCount) await submitToPrintful(pool, orderId);
+    const pool = getPool();
+
+    try {
+        if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+            const session = event.data.object as Stripe.Checkout.Session;
+            const orderId = session.metadata?.orderId;
+            const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+            const shippingDetails = sessionShipping(session);
+            const paid = session.payment_status === 'paid' || event.type === 'checkout.session.async_payment_succeeded';
+
+            if (orderId && paid) {
+                // Guarded on status so a redelivered event can't submit the same
+                // order to Printful twice.
+                const { rowCount } = await pool.query(
+                    `UPDATE orders
+                     SET status = 'paid', stripe_payment_intent_id = $2, paid_at = now(),
+                         email = COALESCE(email, $3), shipping_name = $4, shipping_address = $5
+                     WHERE id = $1 AND status IN ('awaiting_payment', 'cancelled')`,
+                    [
+                        orderId,
+                        paymentIntentId,
+                        session.customer_details?.email || null,
+                        shippingDetails?.name || null,
+                        shippingDetails?.address ? JSON.stringify(shippingDetails.address) : null,
+                    ],
+                );
+                if (rowCount) await submitToPrintful(pool, orderId);
+            }
         }
+
+        if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+            const session = event.data.object as Stripe.Checkout.Session;
+            const orderId = session.metadata?.orderId;
+            if (orderId) {
+                await pool.query(
+                    `UPDATE orders SET status = 'cancelled'
+                     WHERE id = $1 AND status = 'awaiting_payment'`,
+                    [orderId],
+                );
+            }
+        }
+    } catch (err) {
+        console.error('[webhooks/stripe]', err);
+        error(res, 500, 'Webhook handler failed');
+        return;
     }
 
     json(res, 200, { received: true });

@@ -1,19 +1,18 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { guarded } from '../_lib/errors.js';
+import { fromPrintfulExternalId } from '../_lib/printful.js';
+import { validUrl } from '../_lib/validate.js';
 
 /**
  * POST /api/webhooks/printful — receives shipping updates from Printful
  * (Dashboard -> Settings -> Webhooks -> package_shipped).
  *
- * Verified against PRINTFUL_WEBHOOK_SECRET when set, via the header Printful
- * documents for this (X-Printful-Signature, an HMAC-SHA256 of the raw body
- * using the secret shown next to the webhook in the dashboard). Without a
- * secret configured, events are still accepted but unauthenticated — the
- * worst an attacker can do with a forged event is mark a real order id as
- * shipped, which is a cosmetic status and not a money-moving one, so this
- * degrades gracefully rather than refusing to run.
+ * Verified against PRINTFUL_WEBHOOK_SECRET when set. Accepts either
+ * X-Printful-Signature or X-Pf-Webhook-Signature. In production a secret is
+ * required — unsigned events must not mark orders shipped.
  */
 export const config = { api: { bodyParser: false } };
 
@@ -26,11 +25,40 @@ function readRawBody(req: VercelRequest): Promise<Buffer> {
     });
 }
 
-async function verifySignature(raw: Buffer, header: string | undefined, secret: string): Promise<boolean> {
+function hmacHex(secret: Buffer, raw: Buffer): string {
+    return createHmac('sha256', secret).update(raw).digest('hex');
+}
+
+function signaturesMatch(header: string, expectedHex: string): boolean {
+    const provided = Buffer.from(header.trim().toLowerCase());
+    const expected = Buffer.from(expectedHex.toLowerCase());
+    if (provided.length !== expected.length) return false;
+    return timingSafeEqual(provided, expected);
+}
+
+function verifySignature(raw: Buffer, header: string | undefined, secret: string): boolean {
     if (!header) return false;
-    const { createHmac } = await import('node:crypto');
-    const expected = createHmac('sha256', secret).update(raw).digest('hex');
-    return header === expected;
+
+    // Try the secret as UTF-8 text (classic Printful dashboard copy).
+    if (signaturesMatch(header, hmacHex(Buffer.from(secret, 'utf8'), raw))) return true;
+
+    // Some Printful webhook docs show the secret as hex-encoded bytes.
+    if (/^[0-9a-f]+$/i.test(secret) && secret.length % 2 === 0) {
+        try {
+            if (signaturesMatch(header, hmacHex(Buffer.from(secret, 'hex'), raw))) return true;
+        } catch {
+            // ignore invalid hex
+        }
+    }
+    return false;
+}
+
+function readSignatureHeader(req: VercelRequest): string | undefined {
+    const primary = req.headers['x-printful-signature'];
+    const alt = req.headers['x-pf-webhook-signature'];
+    if (typeof primary === 'string') return primary;
+    if (typeof alt === 'string') return alt;
+    return undefined;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -38,10 +66,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         if (!requireMethod(req, res, ['POST'])) return;
 
         const raw = await readRawBody(req);
-        const secret = process.env.PRINTFUL_WEBHOOK_SECRET;
-        if (secret) {
-            const signature = req.headers['x-printful-signature'];
-            const ok = await verifySignature(raw, typeof signature === 'string' ? signature : undefined, secret);
+        const secret = process.env.PRINTFUL_WEBHOOK_SECRET?.trim();
+        const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+
+        if (!secret) {
+            if (isProduction) {
+                error(res, 501, 'Printful webhook secret is not configured');
+                return;
+            }
+        } else {
+            const ok = verifySignature(raw, readSignatureHeader(req), secret);
             if (!ok) {
                 error(res, 400, 'Invalid Printful signature');
                 return;
@@ -50,7 +84,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         let event: {
             type?: string;
-            data?: { order?: { id?: number; external_id?: string; shipments?: { tracking_number?: string; tracking_url?: string }[] } };
+            data?: {
+                order?: {
+                    id?: number;
+                    external_id?: string;
+                    shipments?: { tracking_number?: string; tracking_url?: string }[];
+                };
+                shipment?: { tracking_number?: string; tracking_url?: string };
+            };
         };
         try {
             event = JSON.parse(raw.toString('utf8'));
@@ -61,13 +102,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         if (event.type === 'package_shipped' && isDatabaseConfigured()) {
             const order = event.data?.order;
-            const shipment = order?.shipments?.[0];
-            const orderId = order?.external_id;
-            if (orderId) {
+            const shipment = event.data?.shipment || order?.shipments?.[0];
+            const externalId = order?.external_id;
+            if (externalId) {
+                const orderId = fromPrintfulExternalId(externalId);
+                const trackingUrl = shipment?.tracking_url && validUrl(shipment.tracking_url)
+                    ? shipment.tracking_url
+                    : null;
                 await getPool().query(
                     `UPDATE orders SET status = 'shipped', tracking_number = $2, tracking_url = $3
-                     WHERE id = $1 AND printful_order_id IS NOT NULL`,
-                    [orderId, shipment?.tracking_number || null, shipment?.tracking_url || null],
+                     WHERE id = $1 AND printful_order_id IS NOT NULL
+                       AND status IN ('submitted_to_printful', 'fulfillment_error', 'paid', 'shipped')`,
+                    [orderId, shipment?.tracking_number || null, trackingUrl],
                 );
             }
         }

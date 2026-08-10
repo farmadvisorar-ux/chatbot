@@ -30,9 +30,10 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS products_active ON products (active, sort_order);
 
 -- One row per purchasable size/color. printful_variant_id is what actually
--- gets fulfilled — it is the id Printful's Orders API expects, looked up from
--- Printful's catalog when the admin adds the product. Two variants of the
--- same product can't point at the same Printful variant, since that would
+-- gets fulfilled — by default the Printful *sync* variant id from a store
+-- product (design already attached). Set PRINTFUL_USE_CATALOG_VARIANTS=true
+-- only when these ids are blank catalog variant ids instead. Two variants of
+-- the same product can't point at the same Printful variant, since that would
 -- make it ambiguous which one a paid order was for.
 CREATE TABLE IF NOT EXISTS product_variants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -20,3 +20,21 @@ export const clampQuantity = (value: number): number => {
 
 export const subtotalCents = (items: PricedItem[]): number =>
     items.reduce((sum, item) => sum + item.unitPriceCents * item.quantity, 0);
+
+/** Merge lines that share a key, clamping each merged quantity. */
+export function mergeQuantitiesByKey<T extends { quantity: number }>(
+    items: T[],
+    keyOf: (item: T) => string,
+): T[] {
+    const merged = new Map<string, T>();
+    for (const item of items) {
+        const key = keyOf(item);
+        const existing = merged.get(key);
+        if (!existing) {
+            merged.set(key, { ...item, quantity: clampQuantity(item.quantity) });
+            continue;
+        }
+        existing.quantity = clampQuantity(existing.quantity + item.quantity);
+    }
+    return [...merged.values()];
+}

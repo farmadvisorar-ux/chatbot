@@ -14,19 +14,32 @@ import { createPrintfulOrder, type PrintfulRecipient } from './printful.js';
  */
 export async function submitToPrintful(pool: pg.Pool, orderId: string): Promise<void> {
     const { rows: orderRows } = await pool.query<{
+        status: string;
+        printfulOrderId: string | null;
         shippingName: string | null;
         shippingAddress: { line1?: string; line2?: string; city?: string; state?: string; postal_code?: string; country?: string } | null;
         email: string | null;
     }>(
-        `SELECT shipping_name AS "shippingName", shipping_address AS "shippingAddress", email
+        `SELECT status, printful_order_id AS "printfulOrderId",
+                shipping_name AS "shippingName", shipping_address AS "shippingAddress", email
          FROM orders WHERE id = $1`,
         [orderId],
     );
     const order = orderRows[0];
-    const address = order?.shippingAddress;
-    if (!order || !address?.line1 || !address.city || !address.postal_code || !address.country) {
+    if (!order) return;
+
+    // Already accepted by Printful — never overwrite a successful submit with
+    // a concurrent retry's failure.
+    if (order.printfulOrderId || order.status === 'submitted_to_printful' || order.status === 'shipped') {
+        return;
+    }
+
+    const address = order.shippingAddress;
+    if (!address?.line1 || !address.city || !address.postal_code || !address.country) {
         await pool.query(
-            `UPDATE orders SET status = 'fulfillment_error', fulfillment_error = $2 WHERE id = $1`,
+            `UPDATE orders SET status = 'fulfillment_error', fulfillment_error = $2
+             WHERE id = $1 AND printful_order_id IS NULL
+               AND status IN ('paid', 'fulfillment_error')`,
             [orderId, 'No shipping address was collected'],
         );
         return;
@@ -51,17 +64,20 @@ export async function submitToPrintful(pool: pg.Pool, orderId: string): Promise<
     try {
         const printfulOrder = await createPrintfulOrder(
             recipient,
-            items.map(item => ({ variant_id: Number(item.printfulVariantId), quantity: item.quantity })),
+            items.map(item => ({ id: Number(item.printfulVariantId), quantity: item.quantity })),
             orderId,
         );
         await pool.query(
-            `UPDATE orders SET status = 'submitted_to_printful', printful_order_id = $2, fulfillment_error = NULL WHERE id = $1`,
+            `UPDATE orders SET status = 'submitted_to_printful', printful_order_id = $2, fulfillment_error = NULL
+             WHERE id = $1 AND printful_order_id IS NULL`,
             [orderId, printfulOrder.id],
         );
     } catch (err) {
         console.error('[fulfillment] Printful submission failed', err);
         await pool.query(
-            `UPDATE orders SET status = 'fulfillment_error', fulfillment_error = $2 WHERE id = $1`,
+            `UPDATE orders SET status = 'fulfillment_error', fulfillment_error = $2
+             WHERE id = $1 AND printful_order_id IS NULL
+               AND status IN ('paid', 'fulfillment_error')`,
             [orderId, err instanceof Error ? err.message : 'Unknown error'],
         );
     }

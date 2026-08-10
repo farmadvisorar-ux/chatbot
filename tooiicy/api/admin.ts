@@ -1,10 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
-import { json, error, requireMethod, isAdmin } from './_lib/http.js';
+import { json, error, requireMethod, isAdmin, clientKey } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
 import { SCHEMA_SQL } from './_lib/schema.js';
-import { clean, isUuid, asPositiveInt } from './_lib/validate.js';
+import { clean, isUuid, asPositiveInt, validUrl } from './_lib/validate.js';
 import { submitToPrintful } from './_lib/fulfillment.js';
+import { checkRateLimit } from './_lib/rateLimit.js';
 
 const ORDER_STATUSES = ['awaiting_payment', 'paid', 'submitted_to_printful', 'fulfillment_error', 'shipped', 'cancelled'];
 
@@ -33,16 +34,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             error(res, 501, 'Admin access is not configured');
             return;
         }
-        if (!isAdmin(req)) {
-            error(res, 401, 'Unauthorized');
-            return;
-        }
         if (!isDatabaseConfigured()) {
             error(res, 501, 'The database is not configured on this deployment yet.');
             return;
         }
 
         const pool = getPool();
+        if (!isAdmin(req)) {
+            // Only failed auth attempts count against the limit so a flood of
+            // wrong keys can't lock out a signed-in operator's legitimate use.
+            const allowed = await checkRateLimit(pool, 'admin-auth', clientKey(req), 30, 10);
+            if (!allowed) {
+                error(res, 429, 'Too many failed sign-in attempts. Try again in a few minutes.');
+                return;
+            }
+            error(res, 401, 'Unauthorized');
+            return;
+        }
+
         const body = (req.body ?? {}) as Record<string, unknown>;
         const action = req.method === 'POST' ? clean(body.action, 40) : '';
 
@@ -91,6 +100,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 json(res, 200, { ok: true, productId });
             } catch (err) {
                 await client.query('ROLLBACK');
+                if ((err as { code?: string } | null)?.code === '23505') {
+                    error(res, 409, 'A product with that slug (or a duplicate Printful variant) already exists.');
+                    return;
+                }
                 throw err;
             } finally {
                 client.release();
@@ -136,12 +149,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'A variant needs a product id, a Printful variant id, a name, and a price.');
                 return;
             }
-            const { rowCount } = await pool.query(
-                `INSERT INTO product_variants (product_id, printful_variant_id, name, price_cents, image_url)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [productId, variant.printfulVariantId, variant.name, variant.priceCents, variant.imageUrl || null],
-            );
-            json(res, rowCount ? 200 : 500, { ok: !!rowCount });
+            try {
+                const { rowCount } = await pool.query(
+                    `INSERT INTO product_variants (product_id, printful_variant_id, name, price_cents, image_url)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [productId, variant.printfulVariantId, variant.name, variant.priceCents, variant.imageUrl || null],
+                );
+                json(res, rowCount ? 200 : 500, { ok: !!rowCount });
+            } catch (err) {
+                if ((err as { code?: string } | null)?.code === '23505') {
+                    error(res, 409, 'That Printful variant is already on this product.');
+                    return;
+                }
+                throw err;
+            }
             return;
         }
 
@@ -223,6 +244,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'A social link needs a platform and a URL');
                 return;
             }
+            if (!validUrl(url)) {
+                error(res, 400, 'Social links must be http(s) URLs');
+                return;
+            }
             const { rows } = await pool.query<{ id: string }>(
                 `INSERT INTO social_links (platform, url) VALUES ($1, $2) RETURNING id`,
                 [platform, url],
@@ -237,6 +262,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'Missing or invalid social link id');
                 return;
             }
+            const nextUrl = typeof body.url === 'string' ? clean(body.url, 500) : null;
+            if (nextUrl !== null && nextUrl !== '' && !validUrl(nextUrl)) {
+                error(res, 400, 'Social links must be http(s) URLs');
+                return;
+            }
             const { rowCount } = await pool.query(
                 `UPDATE social_links SET
                     platform = COALESCE($2, platform),
@@ -247,7 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 [
                     id,
                     typeof body.platform === 'string' ? clean(body.platform, 40) : null,
-                    typeof body.url === 'string' ? clean(body.url, 500) : null,
+                    nextUrl,
                     typeof body.active === 'boolean' ? body.active : null,
                     typeof body.sortOrder === 'number' ? Math.trunc(body.sortOrder) : null,
                 ],
@@ -294,7 +324,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                             shipping_address AS "shippingAddress", printful_order_id AS "printfulOrderId",
                             tracking_number AS "trackingNumber", tracking_url AS "trackingUrl",
                             fulfillment_error AS "fulfillmentError", paid_at AS "paidAt", created_at AS "createdAt"
-                     FROM orders WHERE status <> 'awaiting_payment' ORDER BY created_at DESC LIMIT 200`,
+                     FROM orders ORDER BY created_at DESC LIMIT 200`,
                 ),
                 pool.query(
                     `SELECT id, platform, url, active, sort_order AS "sortOrder", created_at AS "createdAt"

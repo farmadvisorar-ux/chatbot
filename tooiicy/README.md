@@ -29,10 +29,11 @@ printing and shipping.
 `/admin.html`, gated by `ADMIN_SECRET` (bearer token, no per-user roles):
 
 - **Products** — add a product with one or more variants. Each variant needs
-  the *Printful catalog variant id* it fulfills as — look this up in
-  Printful's product catalog (or an existing store product) before adding it
-  here; nothing here talks to Printful's catalog automatically. Price,
-  stock, and visibility are all editable after creation.
+  the *Printful sync variant id* from your store product (the id that already
+  has the design file attached). Nothing here talks to Printful's catalog
+  automatically. Price, stock, and visibility are all editable after creation.
+  Set `PRINTFUL_USE_CATALOG_VARIANTS=true` only if you intentionally fulfill
+  blank catalog SKUs instead of store sync variants.
 - **Orders** — see what was ordered, the shipping address, and current
   status. Retry fulfillment on anything stuck in `fulfillment_error` once the
   underlying problem (usually a missing address field, or Printful being
@@ -45,18 +46,23 @@ printing and shipping.
 npm install
 cp .env.example .env   # fill in DATABASE_URL, STRIPE_SECRET_KEY, PRINTFUL_API_KEY, ADMIN_SECRET at minimum
 npm run migrate         # creates the schema; npm run migrate:http works instead if your network blocks port 5432
-npm run dev
+npx vercel dev          # serves /api/* and the Vite frontend together
 ```
 
+`npm run dev` starts Vite alone and does **not** serve `/api/*`. Use
+`npx vercel dev` (or a Vercel preview) whenever you need checkout, admin, or
+webhooks locally.
+
 Stripe webhooks need a public URL to reach — during local development, run
-`stripe listen --forward-to localhost:5173/api/webhooks/stripe` (or test
-against a Vercel preview deployment, which already has one).
+`stripe listen --forward-to localhost:3000/api/webhooks/stripe` against
+`vercel dev` (or test against a Vercel preview deployment).
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Vite dev server |
+| `npm run dev` | Vite frontend only (no `/api`) |
+| `npx vercel dev` | Local full stack (frontend + serverless APIs) |
 | `npm run build` | Production build (`dist/`) |
 | `npm run typecheck` | Type-checks both `src/` and `api/` |
 | `npm test` | Runs `tests/*.test.mjs` |
