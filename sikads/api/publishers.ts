@@ -50,10 +50,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         // Signing up twice returns the original slot key instead of erroring, so a
         // publisher who lost the snippet can get it back by repeating the form
         // rather than being told their email is taken.
+        // A rejected publisher who fixes their site and re-applies should get
+        // another review rather than staying permanently locked out while the
+        // conflict path silently refreshes site_url under status=rejected.
         const { rows } = await pool.query(
             `INSERT INTO publishers (email, site_url, slot_key)
              VALUES ($1, $2, 'sk_' || encode(gen_random_bytes(8), 'hex'))
-             ON CONFLICT (email) DO UPDATE SET site_url = EXCLUDED.site_url
+             ON CONFLICT (email) DO UPDATE SET
+                 site_url = EXCLUDED.site_url,
+                 status = CASE
+                     WHEN publishers.status = 'rejected' THEN 'pending_review'
+                     ELSE publishers.status
+                 END
              RETURNING slot_key, status`,
             [email, siteUrl],
         );

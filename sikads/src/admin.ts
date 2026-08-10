@@ -14,7 +14,7 @@ type Publisher = {
 };
 // pg returns bigint as a string to avoid silently truncating past 2^53, so
 // every total that came from a bigint column arrives here as text.
-type Revenue = { grossCents: string | number; campaigns: number; owedMicrocents: string | number };
+type Revenue = { grossCents: string | number; campaigns: number; owedMicrocents: string | number; earnedMicrocents: string | number };
 
 const STORAGE_KEY = 'sikads_admin_key';
 const $ = <T extends HTMLElement>(sel: string): T => document.querySelector<T>(sel)!;
@@ -57,10 +57,14 @@ function renderStats(revenue: Revenue, queue: Campaign[], publishers: Publisher[
         + publishers.filter(p => p.status === 'pending_review').length;
     const gross = Number(revenue.grossCents);
     const owedCents = Math.floor(Number(revenue.owedMicrocents) / 1000);
+    // Platform take is gross minus lifetime publisher earnings — not unpaid
+    // liability. Using owed alone made "yours to keep" jump after Mark as paid
+    // even though no new cash arrived.
+    const earnedCents = Math.floor(Number(revenue.earnedMicrocents) / 1000);
     statsEl.innerHTML = [
         ['Gross taken', money(gross)],
         ['Owed to publishers', money(owedCents)],
-        ['Yours to keep', money(gross - owedCents)],
+        ['Yours to keep', money(gross - earnedCents)],
         ['Campaigns', String(revenue.campaigns)],
         ['Live now', String(queue.filter(c => c.status === 'live').length)],
         ['Awaiting review', String(pending)],

@@ -69,11 +69,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 pool.query(
                     `SELECT
                          (SELECT COALESCE(sum(budget_cents), 0)::bigint FROM ad_campaigns
-                          WHERE status IN ('pending_review', 'live', 'exhausted')) AS "grossCents",
+                          WHERE paid_at IS NOT NULL) AS "grossCents",
                          (SELECT count(*)::int FROM ad_campaigns
-                          WHERE status IN ('pending_review', 'live', 'exhausted')) AS "campaigns",
+                          WHERE paid_at IS NOT NULL) AS "campaigns",
                          (SELECT COALESCE(sum(earnings_microcents - paid_microcents), 0)::bigint
-                          FROM publishers) AS "owedMicrocents"`,
+                          FROM publishers) AS "owedMicrocents",
+                         (SELECT COALESCE(sum(earnings_microcents), 0)::bigint
+                          FROM publishers) AS "earnedMicrocents"`,
                 ),
                 pool.query(
                     `SELECT id, email, site_url AS "siteUrl", slot_key AS "slotKey", status,

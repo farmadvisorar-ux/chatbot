@@ -25,6 +25,8 @@ import { guarded } from './_lib/errors.js';
  *
  * `slotKey` is optional: an empty one is an ad served on Sikads' own pages,
  * where there is no publisher to pay and the whole price is platform revenue.
+ * A non-empty key must belong to an active publisher or the request is a no-op —
+ * otherwise pending/forged keys burn budget without anyone earning.
  */
 async function handleServe(req: VercelRequest, res: VercelResponse): Promise<void> {
     const slotKey = clean(typeof req.query.slot === 'string' ? req.query.slot : '', 64);
@@ -44,11 +46,31 @@ async function handleServe(req: VercelRequest, res: VercelResponse): Promise<voi
     // just the ad that is about to be shown to that page's visitor.
     res.setHeader('Access-Control-Allow-Origin', '*');
 
-    const { rows } = await getPool().query(
+    const pool = getPool();
+
+    // Cap how fast any one network can burn paid inventory. Soft limit only —
+    // the active-slot gate below is what stops anonymous /api/ads scraping from
+    // spending campaigns that never reach a real publisher page.
+    if (!(await checkRateLimit(pool, 'ad-serve', clientKey(req), 60, 1))) {
+        json(res, 200, { ad: null });
+        return;
+    }
+
+    // A non-empty slot that is not an active publisher must not spend a view:
+    // pending keys, typos, and forged sk_ values used to decrement inventory
+    // while crediting nobody. Empty slot = first-party serve on sikads.com.
+    const { rows } = await pool.query(
         `WITH candidate AS (
-             SELECT id FROM ad_campaigns
-             WHERE status = 'live' AND views_remaining > 0
-             ORDER BY -ln(GREATEST(random(), 0.0000001)) / cpm_cents ASC
+             SELECT c.id FROM ad_campaigns c
+             WHERE c.status = 'live' AND c.views_remaining > 0
+               AND (
+                   $1 = ''
+                   OR EXISTS (
+                       SELECT 1 FROM publishers p
+                       WHERE p.slot_key = $1 AND p.status = 'active'
+                   )
+               )
+             ORDER BY -ln(GREATEST(random(), 0.0000001)) / c.cpm_cents ASC
              LIMIT 1
          ),
          spent AS (
@@ -57,6 +79,7 @@ async function handleServe(req: VercelRequest, res: VercelResponse): Promise<voi
                  status = CASE WHEN views_remaining - 1 <= 0 THEN 'exhausted' ELSE status END
              FROM candidate
              WHERE ad_campaigns.id = candidate.id
+               AND ad_campaigns.views_remaining > 0
              RETURNING ad_campaigns.id, ad_campaigns.headline, ad_campaigns.url, ad_campaigns.cpm_cents
          ),
          credited AS (
@@ -142,32 +165,51 @@ async function handleCheckout(req: VercelRequest, res: VercelResponse): Promise<
         return;
     }
 
-    const session = await stripe.checkout.sessions.create({
-        mode: 'payment',
-        customer_email: email,
-        line_items: [{
-            quantity: 1,
-            price_data: {
-                currency: 'usd',
-                unit_amount: budgetCents,
-                product_data: {
-                    name: `Sikads campaign — ${views.toLocaleString()} views at $${(cpmCents / 100).toFixed(2)}/1,000`,
-                    description: headline,
+    let session;
+    try {
+        session = await stripe.checkout.sessions.create({
+            mode: 'payment',
+            // Card-only so we never leave a paid campaign stuck in awaiting_payment
+            // waiting for checkout.session.async_payment_succeeded that we do not
+            // handle. Delayed bank methods would otherwise take money without
+            // ever flipping the row to pending_review.
+            payment_method_types: ['card'],
+            customer_email: email,
+            line_items: [{
+                quantity: 1,
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: budgetCents,
+                    product_data: {
+                        name: `Sikads campaign — ${views.toLocaleString()} views at $${(cpmCents / 100).toFixed(2)}/1,000`,
+                        description: headline,
+                    },
                 },
-            },
-        }],
-        // adCampaignId travels with the session so the webhook can match the
-        // payment back to our row without trusting anything from the browser.
-        metadata: { adCampaignId: adId },
-        // Without this the charge inherits the Stripe account's own descriptor,
-        // so an advertiser who bought a Sikads ad sees an unrelated business
-        // name on their card statement — the classic trigger for a "I don't
-        // recognise this charge" dispute. The suffix appends to the account
-        // prefix, giving e.g. "ADJUSTER* SIKADS".
-        payment_intent_data: { statement_descriptor_suffix: 'SIKADS' },
-        success_url: `${siteOrigin()}/?ad=success`,
-        cancel_url: `${siteOrigin()}/?ad=cancelled`,
-    });
+            }],
+            // adCampaignId travels with the session so the webhook can match the
+            // payment back to our row without trusting anything from the browser.
+            metadata: { adCampaignId: adId },
+            // Without this the charge inherits the Stripe account's own descriptor,
+            // so an advertiser who bought a Sikads ad sees an unrelated business
+            // name on their card statement — the classic trigger for a "I don't
+            // recognise this charge" dispute. The suffix appends to the account
+            // prefix, giving e.g. "ADJUSTER* SIKADS".
+            payment_intent_data: { statement_descriptor_suffix: 'SIKADS' },
+            success_url: `${siteOrigin()}/?ad=success`,
+            cancel_url: `${siteOrigin()}/?ad=cancelled`,
+        }, {
+            // Same campaign row must not open two Checkout Sessions if the client
+            // double-submits; Stripe returns the first session on retry.
+            idempotencyKey: `sikads-ad-${adId}`,
+        });
+    } catch {
+        await pool.query(
+            `DELETE FROM ad_campaigns WHERE id = $1 AND status = 'awaiting_payment'`,
+            [adId],
+        );
+        json(res, 502, { error: 'Could not start checkout. Try again in a moment.' });
+        return;
+    }
 
     await pool.query('UPDATE ad_campaigns SET stripe_session_id = $2 WHERE id = $1', [adId, session.id]);
 

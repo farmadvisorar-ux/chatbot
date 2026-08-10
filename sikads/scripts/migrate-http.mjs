@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { neon } from '@neondatabase/serverless';
+import { splitSchemaStatements } from './split-schema.mjs';
 
 /**
  * Applies db/schema.sql over Neon's HTTP endpoint instead of a Postgres
@@ -36,19 +37,13 @@ console.log(`Using ${found}`);
 
 const sql = neon(process.env[found]);
 const schema = readFileSync(join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
-
-// Split on statement terminators that end a line, which keeps the CHECK
-// constraints and function bodies in schema.sql intact.
-const statements = schema
-    .split(/;\s*\n/)
-    .map(statement => statement.trim())
-    .filter(statement => statement.length > 0 && !statement.startsWith('--'));
+const statements = splitSchemaStatements(schema);
 
 try {
     await sql.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
     for (const statement of statements) {
         await sql.query(statement);
-        const firstLine = statement.split('\n').find(line => line.trim() && !line.trim().startsWith('--')) || '';
+        const firstLine = statement.split('\n').find(line => line.trim()) || '';
         console.log('  applied:', firstLine.trim().slice(0, 72));
     }
     const rows = await sql.query(

@@ -91,8 +91,11 @@ below — `npm run migrate:http` is the fallback for a blocked port 5432.
 2. **Vercel** — import the repo with **Root Directory** set to `sikads`.
 3. **Stripe** — one **secret key**, plus a webhook endpoint at
    `https://<your-domain>/api/webhooks/stripe` subscribed to
-   `checkout.session.completed`. An existing Stripe account is fine; only the
-   webhook endpoint has to be new, since Stripe scopes signing secrets per URL.
+   `checkout.session.completed` (and optionally
+   `checkout.session.async_payment_succeeded`). Checkout itself is card-only,
+   so the async event is defence in depth. An existing Stripe account is fine;
+   only the webhook endpoint has to be new, since Stripe scopes signing secrets
+   per URL.
 4. **Env vars** — `DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
    `ADMIN_SECRET` (any long random string), `PUBLIC_SITE_URL`.
 5. **Domain** — add `sikads.com` in the Vercel project's Domains settings and

@@ -380,8 +380,8 @@ pubForm?.addEventListener('submit', async event => {
 const NOTICES: Record<'success' | 'cancelled', { tone: 'success' | 'neutral'; title: string; body: string }> = {
     success: {
         tone: 'success',
-        title: 'Payment received.',
-        body: 'Your campaign is in the review queue — it joins the board as soon as it is approved.',
+        title: 'Checkout complete.',
+        body: 'Stripe is confirming the payment. Once it clears, your campaign enters the review queue and joins the board after approval.',
     },
     cancelled: {
         tone: 'neutral',
