@@ -5,9 +5,7 @@ import { guarded } from './_lib/errors.js';
 import { getStripe, siteOrigin } from './_lib/stripe.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
 import { isUuid, clean, validEmail } from './_lib/validate.js';
-import { clampQuantity, subtotalCents, MAX_LINE_ITEMS } from './_lib/cart.js';
-
-type CartLine = { variantId: string; quantity: number };
+import { clampQuantity, mergeCartLines, shippingFlatCents, subtotalCents, MAX_LINE_ITEMS } from './_lib/cart.js';
 
 /**
  * POST /api/checkout {items: [{variantId, quantity}], email?}
@@ -46,13 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
-        const lines: CartLine[] = [];
+        const rawLines = [];
         for (const entry of rawItems) {
             const variantId = (entry as { variantId?: unknown } | null)?.variantId;
             const quantity = (entry as { quantity?: unknown } | null)?.quantity;
             if (!isUuid(variantId)) continue;
-            lines.push({ variantId, quantity: clampQuantity(Number(quantity)) });
+            rawLines.push({ variantId, quantity: clampQuantity(Number(quantity)) });
         }
+        const lines = mergeCartLines(rawLines);
         if (lines.length === 0) {
             error(res, 400, 'Your cart is empty');
             return;
@@ -98,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             return;
         }
 
-        const shippingCents = Math.max(0, Math.trunc(Number(process.env.SHIPPING_FLAT_CENTS) || 500));
+        const shippingCents = shippingFlatCents();
         const subtotal = subtotalCents(orderItems);
         const total = subtotal + shippingCents;
 

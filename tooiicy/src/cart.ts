@@ -9,6 +9,7 @@ export type CartItem = {
 
 const STORAGE_KEY = 'tooiicy_cart_v1';
 const MAX_QUANTITY = 10;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The cart lives in localStorage, not a server session — there is no account
@@ -16,11 +17,34 @@ const MAX_QUANTITY = 10;
  * they picked between page loads. The server never trusts these prices; it
  * re-looks-up every unit price from product_variants at checkout time.
  */
+function sanitizeItem(raw: unknown): CartItem | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const item = raw as Partial<CartItem>;
+    if (typeof item.variantId !== 'string' || !UUID_RE.test(item.variantId)) return null;
+    if (typeof item.productName !== 'string' || typeof item.variantName !== 'string') return null;
+    const priceCents = Number(item.priceCents);
+    const quantity = Math.trunc(Number(item.quantity));
+    if (!Number.isFinite(priceCents) || priceCents <= 0) return null;
+    if (!Number.isFinite(quantity) || quantity <= 0) return null;
+    return {
+        variantId: item.variantId,
+        productName: item.productName,
+        variantName: item.variantName,
+        priceCents: Math.round(priceCents),
+        imageUrl: typeof item.imageUrl === 'string' ? item.imageUrl : null,
+        quantity: Math.min(MAX_QUANTITY, Math.max(1, quantity)),
+    };
+}
+
 function readCart(): CartItem[] {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        const cleaned = parsed.map(sanitizeItem).filter((item): item is CartItem => item !== null);
+        // Drop corrupted rows so totals never become NaN.
+        if (cleaned.length !== parsed.length) writeCart(cleaned);
+        return cleaned;
     } catch {
         return [];
     }
@@ -46,10 +70,11 @@ export function cartTotalCents(): number {
 export function addToCart(item: Omit<CartItem, 'quantity'>, quantity = 1): void {
     const items = readCart();
     const existing = items.find(i => i.variantId === item.variantId);
+    const qty = Math.min(MAX_QUANTITY, Math.max(1, Math.trunc(quantity) || 1));
     if (existing) {
-        existing.quantity = Math.min(MAX_QUANTITY, existing.quantity + quantity);
+        existing.quantity = Math.min(MAX_QUANTITY, existing.quantity + qty);
     } else {
-        items.push({ ...item, quantity: Math.min(MAX_QUANTITY, Math.max(1, quantity)) });
+        items.push({ ...item, quantity: qty });
     }
     writeCart(items);
 }
@@ -62,7 +87,7 @@ export function setQuantity(variantId: string, quantity: number): void {
         writeCart(items.filter(i => i.variantId !== variantId));
         return;
     }
-    existing.quantity = Math.min(MAX_QUANTITY, quantity);
+    existing.quantity = Math.min(MAX_QUANTITY, Math.max(1, Math.trunc(quantity) || 1));
     writeCart(items);
 }
 

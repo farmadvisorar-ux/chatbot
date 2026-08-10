@@ -21,7 +21,7 @@ export const clamp = (value: number, min: number, max: number): number =>
 export const isUuid = (value: unknown): value is string =>
     typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-/** A Printful catalog variant id: a positive integer, sent to us as a number or a numeric string from an admin form. */
+/** A Printful sync variant id: a positive integer, sent to us as a number or a numeric string from an admin form. */
 export const asPositiveInt = (value: unknown): number | null => {
     const n = typeof value === 'string' ? Number(value) : value;
     return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : null;

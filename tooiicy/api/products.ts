@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { shippingFlatCents } from './_lib/cart.js';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, requireMethod } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
@@ -13,8 +14,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     await guarded('products', res, async () => {
         if (!requireMethod(req, res, ['GET'])) return;
 
+        const shippingCents = shippingFlatCents();
+
         if (!isDatabaseConfigured()) {
-            json(res, 200, { products: [] });
+            json(res, 200, { products: [], shippingCents });
             return;
         }
 
@@ -27,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         );
 
         if (products.length === 0) {
-            json(res, 200, { products: [] });
+            json(res, 200, { products: [], shippingCents });
             return;
         }
 
@@ -48,6 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
 
         json(res, 200, {
+            shippingCents,
             products: products.map(product => ({
                 ...product,
                 variants: (byProduct.get(product.id) ?? []).map(({ productId: _productId, ...rest }) => rest),

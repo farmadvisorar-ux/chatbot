@@ -29,10 +29,10 @@ printing and shipping.
 `/admin.html`, gated by `ADMIN_SECRET` (bearer token, no per-user roles):
 
 - **Products** — add a product with one or more variants. Each variant needs
-  the *Printful catalog variant id* it fulfills as — look this up in
-  Printful's product catalog (or an existing store product) before adding it
-  here; nothing here talks to Printful's catalog automatically. Price,
-  stock, and visibility are all editable after creation.
+  the *Printful sync variant id* from a product already in your Printful
+  store (Dashboard → Stores → product → variant). Catalog-only variant ids
+  will not fulfill without print files. Price, stock, and visibility are all
+  editable after creation.
 - **Orders** — see what was ordered, the shipping address, and current
   status. Retry fulfillment on anything stuck in `fulfillment_error` once the
   underlying problem (usually a missing address field, or Printful being
@@ -45,18 +45,21 @@ printing and shipping.
 npm install
 cp .env.example .env   # fill in DATABASE_URL, STRIPE_SECRET_KEY, PRINTFUL_API_KEY, ADMIN_SECRET at minimum
 npm run migrate         # creates the schema; npm run migrate:http works instead if your network blocks port 5432
-npm run dev
+npx vercel dev          # serves /api/* and the Vite frontend together
 ```
 
-Stripe webhooks need a public URL to reach — during local development, run
-`stripe listen --forward-to localhost:5173/api/webhooks/stripe` (or test
-against a Vercel preview deployment, which already has one).
+`npm run dev` only starts Vite (static pages). Local checkout and Stripe
+webhooks need the serverless `/api` routes — use `npx vercel dev`, then
+`stripe listen --forward-to localhost:3000/api/webhooks/stripe` (or whatever
+port `vercel dev` prints). Preview deployments on Vercel already expose the
+API, so those work without a local proxy.
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Vite dev server |
+| `npm run dev` | Vite only (static pages — no `/api`) |
+| `npx vercel dev` | Full local stack (API + frontend) |
 | `npm run build` | Production build (`dist/`) |
 | `npm run typecheck` | Type-checks both `src/` and `api/` |
 | `npm test` | Runs `tests/*.test.mjs` |

@@ -277,7 +277,7 @@ a { color: inherit; }
     align-items: center;
     justify-content: center;
     padding: 20px;
-    z-index: 40;
+    z-index: 60;
 }
 
 .overlay.open { display: flex; }
@@ -423,9 +423,22 @@ a { color: inherit; }
     padding: 0;
 }
 
-.drawer-footer { border-top: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.drawer-footer {
+    border-top: 1px solid var(--border);
+    padding: 20px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 
-.drawer-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; }
+.drawer-totals { display: flex; flex-direction: column; gap: 6px; }
+
+.drawer-total { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; color: var(--muted); }
+
+.drawer-grand { font-weight: 800; font-size: 16px; color: var(--text); }
+
+.drawer-shipping { font-weight: 500; }
 
 .email-input {
     background: var(--surface-2);

@@ -16,9 +16,23 @@ export type PrintfulRecipient = {
     email?: string;
 };
 
-export type PrintfulOrderItem = { variant_id: number; quantity: number };
+/**
+ * Store sync variant id (from Printful Dashboard → store product → variant),
+ * not a bare catalog variant id. Catalog variants need print files; sync
+ * variants already carry the design from the store product.
+ */
+export type PrintfulOrderItem = { sync_variant_id: number; quantity: number };
 
 export class PrintfulError extends Error {}
+
+/**
+ * Printful caps external_id at 32 characters. A hyphenated UUID is 36, so
+ * strip the hyphens (32 hex chars) before sending — otherwise every create
+ * order call is rejected and paid checkouts never fulfill.
+ */
+export function toPrintfulExternalId(orderId: string): string {
+    return orderId.replace(/-/g, '');
+}
 
 /**
  * Submits a fulfillment order to Printful. `externalId` is our order id —
@@ -29,7 +43,8 @@ export class PrintfulError extends Error {}
  * confirm defaults to true (ships straight to production) unless
  * PRINTFUL_AUTO_CONFIRM=false, in which case the order lands as a draft in
  * the Printful dashboard for a human to approve — useful while still
- * trusting the pipeline.
+ * trusting the pipeline. Printful expects confirm as a query param, not in
+ * the JSON body.
  */
 export async function createPrintfulOrder(
     recipient: PrintfulRecipient,
@@ -39,9 +54,13 @@ export async function createPrintfulOrder(
     const apiKey = getPrintfulKey();
     if (!apiKey) throw new PrintfulError('PRINTFUL_API_KEY is not configured');
 
+    const params = new URLSearchParams();
     const storeId = process.env.PRINTFUL_STORE_ID;
-    const url = `${PRINTFUL_API_BASE}/orders${storeId ? `?store_id=${encodeURIComponent(storeId)}` : ''}`;
-    const confirm = process.env.PRINTFUL_AUTO_CONFIRM !== 'false';
+    if (storeId) params.set('store_id', storeId);
+    if (process.env.PRINTFUL_AUTO_CONFIRM !== 'false') params.set('confirm', '1');
+
+    const query = params.toString();
+    const url = `${PRINTFUL_API_BASE}/orders${query ? `?${query}` : ''}`;
 
     const response = await fetch(url, {
         method: 'POST',
@@ -49,7 +68,11 @@ export async function createPrintfulOrder(
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ external_id: externalId, recipient, items, confirm }),
+        body: JSON.stringify({
+            external_id: toPrintfulExternalId(externalId),
+            recipient,
+            items,
+        }),
     });
 
     const payload = (await response.json().catch(() => null)) as

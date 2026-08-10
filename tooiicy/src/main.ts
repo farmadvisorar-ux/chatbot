@@ -19,6 +19,8 @@ const drawer = $('#cart-drawer');
 const cartOpenBtn = $('#cart-open');
 const cartCloseBtn = $('#cart-close');
 const cartItemsEl = $('#cart-items');
+const cartSubtotalEl = $('#cart-subtotal');
+const cartShippingEl = $('#cart-shipping');
 const cartTotalEl = $('#cart-total');
 const cartCountEl = $('#cart-count');
 const cartCheckoutBtn = $<HTMLButtonElement>('#cart-checkout');
@@ -42,6 +44,16 @@ function getSocialIcon(platform: string): string {
     return platformIcons[platform] || '🔗';
 }
 
+/** Only allow http(s) hrefs — escapeHtml alone does not stop javascript: URLs. */
+function safeHttpUrl(value: string): string | null {
+    try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+    } catch {
+        return null;
+    }
+}
+
 const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
@@ -63,14 +75,16 @@ function priceLabel(product: Product): string {
 }
 
 function mediaHtml(imageUrl: string | null, label: string): string {
-    return imageUrl
-        ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(label)}" loading="lazy">`
+    const safeSrc = imageUrl ? safeHttpUrl(imageUrl) : null;
+    return safeSrc
+        ? `<img src="${escapeHtml(safeSrc)}" alt="${escapeHtml(label)}" loading="lazy">`
         : `<div class="placeholder-art">${escapeHtml(label)}</div>`;
 }
 
 /* ---------------- product grid ---------------- */
 
 let products: Product[] = [];
+let shippingCents = 500;
 
 function renderGrid(): void {
     if (!grid) return;
@@ -99,9 +113,13 @@ function renderGrid(): void {
 
 async function loadProducts(): Promise<void> {
     try {
-        const { data } = await api.get<{ products: Product[] }>('/api/products');
-        products = data.products;
+        const { data } = await api.get<{ products: Product[]; shippingCents?: number }>('/api/products');
+        products = Array.isArray(data.products) ? data.products : [];
+        if (typeof data.shippingCents === 'number' && Number.isFinite(data.shippingCents)) {
+            shippingCents = Math.max(0, Math.trunc(data.shippingCents));
+        }
         renderGrid();
+        renderCart();
     } catch (err) {
         showNotice(noticeSlot, err instanceof ApiError ? err.message : 'Could not load the shop. Try refreshing.');
     }
@@ -112,7 +130,7 @@ async function loadProducts(): Promise<void> {
 let modalQuantity = 1;
 
 function openProductModal(product: Product): void {
-    if (!modal || !overlay || !scrim) return;
+    if (!modal || !overlay) return;
     modalQuantity = 1;
     const inStockVariants = product.variants.filter(v => v.inStock);
 
@@ -180,17 +198,20 @@ function openProductModal(product: Product): void {
 
     $('#modal-close')?.addEventListener('click', closeModal);
 
+    // Overlay has its own backdrop — do not open the cart scrim (it sat above
+    // the modal and stole every click).
     overlay.classList.add('open');
-    scrim.classList.add('open');
 }
 
 function closeModal(): void {
     overlay?.classList.remove('open');
-    if (!drawer?.classList.contains('open')) scrim?.classList.remove('open');
 }
 
+overlay?.addEventListener('click', event => {
+    if (event.target === overlay) closeModal();
+});
+
 scrim?.addEventListener('click', () => {
-    closeModal();
     closeCart();
 });
 
@@ -200,7 +221,7 @@ function renderCart(): void {
     const items = getCart();
     if (cartCountEl) cartCountEl.textContent = String(cartCount());
 
-    if (!cartItemsEl || !cartTotalEl) return;
+    if (!cartItemsEl) return;
     if (items.length === 0) {
         cartItemsEl.innerHTML = `<div class="empty-state">Your cart is empty.</div>`;
     } else {
@@ -230,7 +251,11 @@ function renderCart(): void {
         });
     }
 
-    cartTotalEl.textContent = money(cartTotalCents());
+    const subtotal = cartTotalCents();
+    const shipping = items.length > 0 ? shippingCents : 0;
+    if (cartSubtotalEl) cartSubtotalEl.textContent = money(subtotal);
+    if (cartShippingEl) cartShippingEl.textContent = money(shipping);
+    if (cartTotalEl) cartTotalEl.textContent = money(subtotal + shipping);
 }
 
 function openCart(): void {
@@ -240,7 +265,7 @@ function openCart(): void {
 
 function closeCart(): void {
     drawer?.classList.remove('open');
-    if (!overlay?.classList.contains('open')) scrim?.classList.remove('open');
+    scrim?.classList.remove('open');
 }
 
 cartOpenBtn?.addEventListener('click', openCart);
@@ -258,10 +283,11 @@ cartCheckoutBtn?.addEventListener('click', async () => {
     cartCheckoutBtn.disabled = true;
     cartCheckoutBtn.textContent = 'Redirecting…';
     try {
-        const { data } = await api.post<{ url: string }>('/api/checkout', {
+        const { data } = await api.post<{ url: string | null }>('/api/checkout', {
             items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
             email: cartEmailInput?.value || undefined,
         });
+        if (!data?.url) throw new Error('Checkout did not return a payment URL');
         window.location.href = data.url;
     } catch (err) {
         showNotice(cartNotice, err instanceof ApiError ? err.message : 'Checkout failed. Try again.');
@@ -274,12 +300,16 @@ cartCheckoutBtn?.addEventListener('click', async () => {
 
 function renderSocialLinks(links: SocialLink[]): void {
     const linkHtml = links
-        .map(link => `
-            <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="social-link" title="${escapeHtml(link.platform)}">
+        .map(link => {
+            const href = safeHttpUrl(link.url);
+            if (!href) return '';
+            return `
+            <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="social-link" title="${escapeHtml(link.platform)}">
                 <span class="social-icon">${getSocialIcon(link.platform)}</span>
                 <span class="social-text">${escapeHtml(link.platform)}</span>
             </a>
-        `)
+        `;
+        })
         .join('');
 
     if (socialLinksContainer) {
@@ -293,8 +323,8 @@ function renderSocialLinks(links: SocialLink[]): void {
 async function loadSocialLinks(): Promise<void> {
     try {
         const { data } = await api.get<{ socialLinks: SocialLink[] }>('/api/social-links');
-        renderSocialLinks(data.socialLinks);
-    } catch (err) {
+        renderSocialLinks(Array.isArray(data.socialLinks) ? data.socialLinks : []);
+    } catch {
         // Silently fail if social links can't load
     }
 }

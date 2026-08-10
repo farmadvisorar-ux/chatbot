@@ -3,7 +3,7 @@ import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, error, requireMethod, isAdmin } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
 import { SCHEMA_SQL } from './_lib/schema.js';
-import { clean, isUuid, asPositiveInt } from './_lib/validate.js';
+import { clean, isUuid, asPositiveInt, validUrl } from './_lib/validate.js';
 import { submitToPrintful } from './_lib/fulfillment.js';
 
 const ORDER_STATUSES = ['awaiting_payment', 'paid', 'submitted_to_printful', 'fulfillment_error', 'shipped', 'cancelled'];
@@ -223,6 +223,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'A social link needs a platform and a URL');
                 return;
             }
+            if (!validUrl(url)) {
+                error(res, 400, 'Social link URL must be an http(s) address');
+                return;
+            }
             const { rows } = await pool.query<{ id: string }>(
                 `INSERT INTO social_links (platform, url) VALUES ($1, $2) RETURNING id`,
                 [platform, url],
@@ -237,6 +241,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 error(res, 400, 'Missing or invalid social link id');
                 return;
             }
+            const nextUrl = typeof body.url === 'string' ? clean(body.url, 500) : null;
+            if (nextUrl && !validUrl(nextUrl)) {
+                error(res, 400, 'Social link URL must be an http(s) address');
+                return;
+            }
             const { rowCount } = await pool.query(
                 `UPDATE social_links SET
                     platform = COALESCE($2, platform),
@@ -247,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 [
                     id,
                     typeof body.platform === 'string' ? clean(body.platform, 40) : null,
-                    typeof body.url === 'string' ? clean(body.url, 500) : null,
+                    nextUrl,
                     typeof body.active === 'boolean' ? body.active : null,
                     typeof body.sortOrder === 'number' ? Math.trunc(body.sortOrder) : null,
                 ],

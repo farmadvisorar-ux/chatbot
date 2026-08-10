@@ -97,7 +97,7 @@ function renderOrders(): void {
           ${order.fulfillmentError ? `<br><span style="color:var(--danger)">Error: ${escapeHtml(order.fulfillmentError)}</span>` : ''}
         </p>
         <div class="order-items">
-          ${order.items.map(item => `<div><span>${escapeHtml(item.name)} × ${escapeHtml(item.quantity)}</span><span>${escapeHtml(money(item.unitPriceCents * item.quantity))}</span></div>`).join('')}
+          ${(order.items ?? []).map(item => `<div><span>${escapeHtml(item.name)} × ${escapeHtml(item.quantity)}</span><span>${escapeHtml(money(item.unitPriceCents * item.quantity))}</span></div>`).join('')}
           <div><b>Total</b><b>${escapeHtml(money(order.totalCents))}</b></div>
         </div>
         <div class="row">
@@ -211,7 +211,7 @@ async function onProductClick(event: Event): Promise<void> {
     }
 
     if (button.dataset.action === 'add-variant') {
-        const printfulVariantId = Number(prompt('Printful variant id'));
+        const printfulVariantId = Number(prompt('Printful sync variant id (from your store product)'));
         const name = prompt('Variant name (e.g. "Black / M")');
         const priceInput = prompt('Price in dollars');
         if (!printfulVariantId || !name || !priceInput) return;
@@ -308,7 +308,7 @@ function addVariantRow(): void {
     const row = document.createElement('div');
     row.className = 'pf-variant-row';
     row.innerHTML = `
-        <input type="number" min="1" placeholder="Printful variant id" data-field="printfulVariantId" required>
+        <input type="number" min="1" placeholder="Printful sync variant id" data-field="printfulVariantId" required>
         <input type="text" placeholder="Name (e.g. Black / M)" data-field="name" required>
         <input type="number" min="0.01" step="0.01" placeholder="Price ($)" data-field="priceDollars" required>
     `;
@@ -379,9 +379,11 @@ async function trySignIn(key: string, remember: boolean): Promise<void> {
     try {
         await loadAll();
         if (remember) localStorage.setItem(STORAGE_KEY, key);
+        else localStorage.removeItem(STORAGE_KEY);
         showApp();
     } catch (err) {
         adminKey = '';
+        localStorage.removeItem(STORAGE_KEY);
         loginStatus.textContent = err instanceof Error ? err.message : 'Sign-in failed';
         loginStatus.className = 'status error';
     }

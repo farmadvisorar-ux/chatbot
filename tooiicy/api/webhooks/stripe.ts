@@ -18,6 +18,24 @@ function readRawBody(req: VercelRequest): Promise<Buffer> {
     });
 }
 
+type ShippingDetails = { name?: string | null; address?: Stripe.Address | null } | null | undefined;
+
+/**
+ * Stripe moved Checkout shipping off the top-level `shipping_details` field
+ * (removed in API 2025-03-31.basil) onto `collected_information.shipping_details`.
+ * Read the new path first and fall back for older event payloads.
+ */
+function sessionShipping(session: Stripe.Checkout.Session): ShippingDetails {
+    const collected = (session as Stripe.Checkout.Session & {
+        collected_information?: { shipping_details?: ShippingDetails };
+    }).collected_information?.shipping_details;
+    if (collected) return collected;
+
+    return (session as Stripe.Checkout.Session & {
+        shipping_details?: ShippingDetails;
+    }).shipping_details;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['POST'])) return;
 
@@ -43,16 +61,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
+    const pool = getPool();
+
     if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderId = session.metadata?.orderId;
         const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
-        const shippingDetails = (session as unknown as {
-            shipping_details?: { name?: string | null; address?: Stripe.Address | null } | null;
-        }).shipping_details;
+        const shippingDetails = sessionShipping(session);
 
         if (orderId && session.payment_status === 'paid') {
-            const pool = getPool();
             // Guarded on status so a redelivered event can't submit the same
             // order to Printful twice.
             const { rowCount } = await pool.query(
@@ -69,6 +86,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 ],
             );
             if (rowCount) await submitToPrintful(pool, orderId);
+        }
+    }
+
+    if (event.type === 'checkout.session.expired') {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const orderId = session.metadata?.orderId;
+        if (orderId) {
+            await pool.query(
+                `UPDATE orders SET status = 'cancelled'
+                 WHERE id = $1 AND status = 'awaiting_payment'`,
+                [orderId],
+            );
         }
     }
 

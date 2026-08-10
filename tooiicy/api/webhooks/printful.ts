@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { timingSafeEqual } from 'node:crypto';
 import { getPool, isDatabaseConfigured } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { guarded } from '../_lib/errors.js';
@@ -30,8 +31,13 @@ async function verifySignature(raw: Buffer, header: string | undefined, secret: 
     if (!header) return false;
     const { createHmac } = await import('node:crypto');
     const expected = createHmac('sha256', secret).update(raw).digest('hex');
-    return header === expected;
+    const a = Buffer.from(expected);
+    const b = Buffer.from(header);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
 }
+
+type Shipment = { tracking_number?: string; tracking_url?: string };
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     await guarded('webhooks/printful', res, async () => {
@@ -50,7 +56,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         let event: {
             type?: string;
-            data?: { order?: { id?: number; external_id?: string; shipments?: { tracking_number?: string; tracking_url?: string }[] } };
+            data?: {
+                shipment?: Shipment;
+                order?: { id?: number; external_id?: string; shipments?: Shipment[] };
+            };
         };
         try {
             event = JSON.parse(raw.toString('utf8'));
@@ -61,13 +70,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
         if (event.type === 'package_shipped' && isDatabaseConfigured()) {
             const order = event.data?.order;
-            const shipment = order?.shipments?.[0];
-            const orderId = order?.external_id;
-            if (orderId) {
+            // Official payloads put tracking on data.shipment; older samples
+            // nested it under order.shipments[0]. Prefer the documented path.
+            const shipment = event.data?.shipment ?? order?.shipments?.[0];
+            const externalId = order?.external_id || null;
+            const printfulOrderId = typeof order?.id === 'number' ? order.id : null;
+
+            if (externalId || printfulOrderId !== null) {
+                // external_id may be our hyphenless UUID (Printful's 32-char
+                // limit) or the original hyphenated form.
                 await getPool().query(
-                    `UPDATE orders SET status = 'shipped', tracking_number = $2, tracking_url = $3
-                     WHERE id = $1 AND printful_order_id IS NOT NULL`,
-                    [orderId, shipment?.tracking_number || null, shipment?.tracking_url || null],
+                    `UPDATE orders
+                     SET status = 'shipped', tracking_number = $3, tracking_url = $4
+                     WHERE printful_order_id IS NOT NULL
+                       AND (
+                         ($1::text IS NOT NULL AND (id::text = $1 OR replace(id::text, '-', '') = $1))
+                         OR ($2::bigint IS NOT NULL AND printful_order_id = $2)
+                       )`,
+                    [
+                        externalId,
+                        printfulOrderId,
+                        shipment?.tracking_number || null,
+                        shipment?.tracking_url || null,
+                    ],
                 );
             }
         }

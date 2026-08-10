@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { clampQuantity, subtotalCents, MAX_QUANTITY_PER_ITEM } from '../api/_lib/cart.ts';
+import { clampQuantity, mergeCartLines, subtotalCents, MAX_QUANTITY_PER_ITEM } from '../api/_lib/cart.ts';
+import { toPrintfulExternalId } from '../api/_lib/printful.ts';
 
 /**
  * This covers the arithmetic that decides what a real customer is charged at
@@ -35,4 +36,21 @@ test('subtotal never goes negative for any in-range inputs', () => {
             assert.equal(total, price * qty);
         }
     }
+});
+
+test('duplicate variant lines are merged before the per-item cap applies', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const merged = mergeCartLines([
+        { variantId: id, quantity: 10 },
+        { variantId: id, quantity: 10 },
+    ]);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].quantity, MAX_QUANTITY_PER_ITEM);
+});
+
+test('Printful external ids stay within the 32-character limit', () => {
+    const orderId = '550e8400-e29b-41d4-a716-446655440000';
+    const external = toPrintfulExternalId(orderId);
+    assert.equal(external.length, 32);
+    assert.equal(external, '550e8400e29b41d4a716446655440000');
 });
