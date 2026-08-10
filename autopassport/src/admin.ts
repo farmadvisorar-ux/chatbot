@@ -1,5 +1,6 @@
 import './admin.css';
 import { escapeHtml } from './escape-html';
+import { safeHref, safeImageSrc } from './safe-url';
 
 type Submission = {
     id: string; developerEmail: string; name: string; tagline: string; category: string;
@@ -24,6 +25,7 @@ const loginForm = $<HTMLFormElement>('#login-form');
 const keyInput = $<HTMLInputElement>('#admin-key');
 const rememberInput = $<HTMLInputElement>('#remember');
 const loginStatus = $('#login-status');
+const appStatus = $('#app-status');
 const queueList = $('#queue-list');
 const statsEl = $('#stats');
 
@@ -33,16 +35,11 @@ const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 const day = (value: string | null): string => value ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
 
-// The submit API already rejects non-http(s) storeUrl values before a row
-// can exist, but an admin-facing link is worth checking again here rather
-// than trusting that no other path into this table will ever appear.
-const safeHref = (url: string): string => {
-    try {
-        return ['http:', 'https:'].includes(new URL(url).protocol) ? url : '#';
-    } catch {
-        return '#';
+class AdminApiError extends Error {
+    constructor(readonly status: number, message: string) {
+        super(message);
     }
-};
+}
 
 async function callAdmin<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(path, {
@@ -53,7 +50,12 @@ async function callAdmin<T>(path: string, init?: RequestInit): Promise<T> {
         },
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error((payload as { error?: string } | null)?.error || `Request failed (${response.status})`);
+    if (!response.ok) {
+        throw new AdminApiError(
+            response.status,
+            (payload as { error?: string } | null)?.error || `Request failed (${response.status})`,
+        );
+    }
     return payload as T;
 }
 
@@ -66,10 +68,13 @@ function renderStats(revenue: Revenue): void {
 }
 
 function renderQueue(items: Submission[]): void {
-    queueList.innerHTML = items.length ? items.map(item => `
+    queueList.innerHTML = items.length ? items.map(item => {
+        const icon = safeImageSrc(item.iconUrl);
+        const initial = escapeHtml(item.name.charAt(0).toUpperCase() || 'A');
+        return `
       <article class="item${item.status === 'pending_review' ? ' is-pending' : ''}" data-id="${escapeHtml(item.id)}">
         <div class="item-head">
-          <img class="icon-thumb" src="${escapeHtml(item.iconUrl)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <span class="icon-thumb" aria-hidden="true">${initial}${icon ? `<img data-admin-icon src="${escapeHtml(icon)}" alt="" loading="lazy">` : ''}</span>
           <h3>${escapeHtml(item.name)}</h3>
           <span class="badge ${item.status}">${item.status.replace('_', ' ')}</span>
         </div>
@@ -85,7 +90,12 @@ function renderQueue(items: Submission[]): void {
           <button type="button" data-action="approve">Approve — stamp & list</button>
           <button type="button" class="ghost danger" data-action="reject">Reject</button>
         </div>` : ''}
-      </article>`).join('') : `<div class="empty">Nothing to review yet.</div>`;
+      </article>`;
+    }).join('') : `<div class="empty">Nothing to review yet.</div>`;
+
+    queueList.querySelectorAll<HTMLImageElement>('img[data-admin-icon]').forEach(image => {
+        image.addEventListener('error', () => image.remove(), { once: true });
+    });
 }
 
 async function loadQueue(): Promise<void> {
@@ -99,13 +109,26 @@ function showApp(): void {
     appSection.hidden = false;
 }
 
+function signOut(message = ''): void {
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
+    adminKey = '';
+    appSection.hidden = true;
+    loginSection.hidden = false;
+    keyInput.value = '';
+    loginStatus.textContent = message;
+    loginStatus.className = message ? 'status error' : 'status';
+}
+
 async function trySignIn(key: string, remember: boolean): Promise<void> {
     adminKey = key;
     loginStatus.textContent = 'Checking…';
     loginStatus.className = 'status';
     try {
         await loadQueue();
-        if (remember) localStorage.setItem(STORAGE_KEY, key);
+        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
+        (remember ? localStorage : sessionStorage).setItem(STORAGE_KEY, key);
         showApp();
     } catch (err) {
         adminKey = '';
@@ -119,15 +142,28 @@ loginForm.addEventListener('submit', event => {
     trySignIn(keyInput.value.trim(), rememberInput.checked);
 });
 
-$('#refresh').addEventListener('click', () => { loadQueue().catch(() => undefined); });
-
-$('#signout').addEventListener('click', () => {
-    localStorage.removeItem(STORAGE_KEY);
-    adminKey = '';
-    appSection.hidden = true;
-    loginSection.hidden = false;
-    keyInput.value = '';
+$('#refresh').addEventListener('click', async event => {
+    const button = event.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    appStatus.textContent = 'Refreshing…';
+    appStatus.className = 'status';
+    try {
+        await loadQueue();
+        appStatus.textContent = 'Up to date.';
+        appStatus.className = 'status success';
+    } catch (err) {
+        if (err instanceof AdminApiError && err.status === 401) {
+            signOut('Your admin session expired. Sign in again.');
+            return;
+        }
+        appStatus.textContent = err instanceof Error ? err.message : 'Refresh failed';
+        appStatus.className = 'status error';
+    } finally {
+        button.disabled = false;
+    }
 });
+
+$('#signout').addEventListener('click', () => signOut());
 
 async function onReviewClick(event: Event): Promise<void> {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');
@@ -135,18 +171,31 @@ async function onReviewClick(event: Event): Promise<void> {
     const id = button.closest<HTMLElement>('[data-id]')?.dataset.id;
     const action = button.dataset.action;
     if (!id || (action !== 'approve' && action !== 'reject')) return;
+    if (action === 'reject' && !window.confirm('Reject this paid submission? This cannot be undone from the admin screen.')) return;
 
-    button.disabled = true;
+    const rowButtons = button.closest<HTMLElement>('[data-id]')?.querySelectorAll<HTMLButtonElement>('button') || [];
+    rowButtons.forEach(item => { item.disabled = true; });
+    appStatus.textContent = action === 'approve' ? 'Publishing stamp…' : 'Rejecting submission…';
+    appStatus.className = 'status';
     try {
         await callAdmin('/api/admin', { method: 'POST', body: JSON.stringify({ action, id }) });
         await loadQueue();
+        appStatus.textContent = action === 'approve' ? 'App stamped and published.' : 'Submission rejected.';
+        appStatus.className = 'status success';
     } catch (err) {
-        button.disabled = false;
-        alert(err instanceof Error ? err.message : 'Action failed');
+        rowButtons.forEach(item => { item.disabled = false; });
+        if (err instanceof AdminApiError && err.status === 401) {
+            signOut('Your admin session expired. Sign in again.');
+            return;
+        }
+        appStatus.textContent = err instanceof Error ? err.message : 'Action failed';
+        appStatus.className = 'status error';
     }
 }
 
 queueList.addEventListener('click', onReviewClick);
 
-const saved = localStorage.getItem(STORAGE_KEY);
-if (saved) trySignIn(saved, true);
+const persistentKey = localStorage.getItem(STORAGE_KEY);
+const saved = persistentKey || sessionStorage.getItem(STORAGE_KEY);
+rememberInput.checked = Boolean(persistentKey);
+if (saved) trySignIn(saved, Boolean(persistentKey));

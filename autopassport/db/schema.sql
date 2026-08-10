@@ -34,3 +34,4 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS rate_limit_events_lookup ON rate_limit_events (bucket, client_key, created_at);
+CREATE INDEX IF NOT EXISTS rate_limit_events_cleanup ON rate_limit_events (created_at);

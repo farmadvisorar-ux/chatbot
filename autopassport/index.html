@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AutoPassport — the stamp for apps that actually work on your dash</title>
     <meta name="description" content="Android Auto quietly blocks most of what's on your phone. AutoPassport is the public, human-reviewed list of apps confirmed to run on a car's screen — navigation, music, phone and messaging.">
+    <meta name="theme-color" content="#0a1220">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="AutoPassport — apps verified on a real car display">
+    <meta property="og:description" content="Browse the public, human-reviewed list of apps confirmed to work on Android Auto.">
     <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
@@ -115,15 +119,15 @@
             <h2 class="big">Stamped apps, by category.</h2>
             <div class="browse-controls">
                 <div class="tabs" id="tabs" role="tablist">
-                    <button type="button" class="tab active" data-category="">All</button>
-                    <button type="button" class="tab" data-category="navigation">Navigation</button>
-                    <button type="button" class="tab" data-category="music">Music &amp; Audio</button>
-                    <button type="button" class="tab" data-category="phone_messaging">Phone &amp; Messaging</button>
-                    <button type="button" class="tab" data-category="other">Other</button>
+                    <button type="button" role="tab" aria-selected="true" aria-controls="app-grid" class="tab active" data-category="">All</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="app-grid" class="tab" data-category="navigation">Navigation</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="app-grid" class="tab" data-category="music">Music &amp; Audio</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="app-grid" class="tab" data-category="phone_messaging">Phone &amp; Messaging</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="app-grid" class="tab" data-category="other">Other</button>
                 </div>
                 <input id="search" class="search" type="search" placeholder="Search stamped apps…" aria-label="Search stamped apps">
             </div>
-            <div id="app-grid" class="app-grid"><p class="grid-empty">Loading…</p></div>
+            <div id="app-grid" class="app-grid" role="tabpanel" aria-live="polite"><p class="grid-empty">Loading…</p></div>
         </section>
 
         <section class="lane certify" id="certify">
@@ -135,7 +139,7 @@
                 </div>
                 <form id="submit-form">
                     <div class="grid-2">
-                        <label>App name<input name="name" type="text" required maxlength="80" placeholder="Roadtrip Radio"></label>
+                        <label>App name<input name="name" type="text" required maxlength="80" autocomplete="organization" placeholder="Roadtrip Radio"></label>
                         <label>Category
                             <select name="category" required>
                                 <option value="" disabled selected>Choose one</option>
@@ -149,10 +153,10 @@
                     <label>One-line pitch<input name="tagline" type="text" required maxlength="140" placeholder="What it does, in one line"></label>
                     <label>What happens on the dash<textarea name="description" required maxlength="600" rows="3" placeholder="What a driver actually sees and taps once it's running on the car's screen"></textarea></label>
                     <div class="grid-2">
-                        <label>Icon URL<input name="iconUrl" type="url" required placeholder="https://…/icon.png"></label>
-                        <label>Store or download link<input name="storeUrl" type="url" required placeholder="https://play.google.com/…"></label>
+                        <label>Icon URL<input name="iconUrl" type="url" required pattern="https://.*" title="Use a secure URL beginning with https://" autocomplete="url" placeholder="https://…/icon.png"></label>
+                        <label>Store or download link<input name="storeUrl" type="url" required autocomplete="url" placeholder="https://play.google.com/…"></label>
                     </div>
-                    <label>Your email<input name="email" type="email" required placeholder="you@yourapp.com"></label>
+                    <label>Your email<input name="email" type="email" required autocomplete="email" placeholder="you@yourapp.com"></label>
                     <div class="readout"><b class="num" id="fee-readout">$49.00</b><span>one-time — review plus a stamped listing</span></div>
                     <button class="btn btn-certify" type="submit">Continue to payment →</button>
                     <p class="hint">Paid submissions are held for review before anything goes live. A stamp can be revoked if an app stops working from the dash.</p>

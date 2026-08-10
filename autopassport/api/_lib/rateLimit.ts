@@ -1,8 +1,9 @@
 import type pg from 'pg';
 
 /**
- * Best-effort per-IP rate limit backed by Postgres (serverless functions
- * have no shared memory between instances, so in-process counters don't work).
+ * Per-IP rate limit backed by Postgres. The transaction-scoped advisory lock
+ * prevents simultaneous serverless invocations from all observing the same
+ * count and slipping through together.
  */
 export async function checkRateLimit(
     pool: pg.Pool,
@@ -11,21 +12,34 @@ export async function checkRateLimit(
     limit: number,
     windowMinutes: number,
 ): Promise<boolean> {
-    const { rows } = await pool.query<{ count: string }>(
-        `SELECT count(*) FROM rate_limit_events
-         WHERE bucket = $1 AND client_key = $2 AND created_at > now() - ($3 || ' minutes')::interval`,
-        [bucket, key, windowMinutes],
-    );
-    if (Number(rows[0]?.count ?? 0) >= limit) return false;
-    await pool.query('INSERT INTO rate_limit_events (bucket, client_key) VALUES ($1, $2)', [bucket, key]);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [bucket, key]);
 
-    // Nothing ever deletes old rows otherwise, so this table grows forever.
-    // A random 1-in-50 chance of sweeping everything past a generous 1-day
-    // window (every window used in this app is well under an hour) bounds
-    // its size without needing a cron job or slowing down every request.
-    if (Math.random() < 0.02) {
-        await pool.query(`DELETE FROM rate_limit_events WHERE created_at < now() - interval '1 day'`);
+        const { rows } = await client.query<{ count: string }>(
+            `SELECT count(*) FROM rate_limit_events
+             WHERE bucket = $1 AND client_key = $2
+               AND created_at > now() - make_interval(mins => $3)`,
+            [bucket, key, windowMinutes],
+        );
+        const allowed = Number(rows[0]?.count ?? 0) < limit;
+        if (allowed) {
+            await client.query(
+                'INSERT INTO rate_limit_events (bucket, client_key) VALUES ($1, $2)',
+                [bucket, key],
+            );
+        }
+
+        // The timestamp index keeps this inexpensive and prevents a small
+        // abuse-control table from growing forever without a separate cron.
+        await client.query(`DELETE FROM rate_limit_events WHERE created_at < now() - interval '1 day'`);
+        await client.query('COMMIT');
+        return allowed;
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+    } finally {
+        client.release();
     }
-
-    return true;
 }

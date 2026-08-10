@@ -13,3 +13,12 @@ export const validUrl = (value: string): boolean => {
         return false;
     }
 };
+
+export const validHttpsUrl = (value: string): boolean => {
+    if (value.length > 2048) return false;
+    try {
+        return new URL(value).protocol === 'https:';
+    } catch {
+        return false;
+    }
+};

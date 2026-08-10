@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, requireMethod, clientKey } from './_lib/http.js';
-import { clean, validEmail, validUrl } from './_lib/validate.js';
+import { clean, validEmail, validHttpsUrl, validUrl } from './_lib/validate.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
 import { getStripe, siteOrigin } from './_lib/stripe.js';
 import { CERTIFICATION_FEE_CENTS, isCategory } from './_lib/pricing.js';
@@ -109,8 +109,8 @@ async function handleSubmit(req: VercelRequest, res: VercelResponse): Promise<vo
         json(res, 400, { error: 'Enter a valid email' });
         return;
     }
-    if (!validUrl(iconUrl)) {
-        json(res, 400, { error: 'Enter a valid icon URL, starting with http:// or https://' });
+    if (!validHttpsUrl(iconUrl)) {
+        json(res, 400, { error: 'Enter a secure icon URL, starting with https://' });
         return;
     }
     if (!validUrl(storeUrl)) {

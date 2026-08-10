@@ -6,15 +6,26 @@ export class ApiError extends Error {
     }
 }
 
-async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, authToken?: string): Promise<{ data: T }> {
+type RequestOptions = {
+    authToken?: string;
+    signal?: AbortSignal;
+};
+
+async function request<T>(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    options: RequestOptions = {},
+): Promise<{ data: T }> {
     const headers: Record<string, string> = {};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    if (options.authToken) headers['Authorization'] = `Bearer ${options.authToken}`;
 
     const response = await fetch(path, {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: options.signal,
     });
     let payload: unknown = null;
     try {
@@ -30,6 +41,6 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, 
 }
 
 export const api = {
-    get: <T>(path: string, authToken?: string) => request<T>('GET', path, undefined, authToken),
-    post: <T>(path: string, body?: unknown, authToken?: string) => request<T>('POST', path, body, authToken),
+    get: <T>(path: string, options?: RequestOptions) => request<T>('GET', path, undefined, options),
+    post: <T>(path: string, body?: unknown, options?: RequestOptions) => request<T>('POST', path, body, options),
 };

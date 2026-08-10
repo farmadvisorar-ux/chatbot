@@ -1,8 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { timingSafeEqual } from 'node:crypto';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, error, requireMethod } from './_lib/http.js';
 import { clean } from './_lib/validate.js';
 import { CERTIFICATION_FEE_CENTS } from './_lib/pricing.js';
+
+function matchesSecret(provided: string | undefined, expected: string): boolean {
+    if (!provided) return false;
+    const providedBytes = Buffer.from(provided);
+    const expectedBytes = Buffer.from(expected);
+    return providedBytes.length === expectedBytes.length
+        && timingSafeEqual(providedBytes, expectedBytes);
+}
 
 /**
  * GET  /api/admin          -> review queue + revenue summary
@@ -19,7 +28,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         error(res, 501, 'Admin access is not configured');
         return;
     }
-    if (req.headers.authorization?.replace(/^Bearer\s+/i, '') !== secret) {
+    const provided = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    if (!matchesSecret(provided, secret)) {
         error(res, 401, 'Unauthorized');
         return;
     }

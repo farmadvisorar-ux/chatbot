@@ -1,5 +1,6 @@
 import { api, ApiError } from './api-client';
 import { escapeHtml } from './escape-html';
+import { safeHref, safeImageSrc } from './safe-url';
 
 type App = {
     id: string;
@@ -38,18 +39,6 @@ const noticeBox = $('#notice');
 
 const money = (cents: number): string =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-
-// The submit API already rejects non-http(s) storeUrl values before a row
-// can exist, but a link rendered for every visitor is worth checking again
-// here rather than trusting that no other path into this table will ever
-// appear.
-const safeHref = (url: string): string => {
-    try {
-        return ['http:', 'https:'].includes(new URL(url).protocol) ? url : '#';
-    } catch {
-        return '#';
-    }
-};
 
 /* ---------------- the dash mock: one tile stamped at a time ---------------- */
 
@@ -92,19 +81,26 @@ async function loadStats(): Promise<void> {
 
 let activeCategory = '';
 let searchTimer: number | undefined;
+let appRequest: AbortController | null = null;
 
-function renderApps(apps: App[]): void {
+function renderApps(apps: App[], query: string): void {
     if (!appGrid) return;
 
     if (!apps.length) {
         const scoped = activeCategory ? ` in ${CATEGORY_LABELS[activeCategory] || 'this category'}` : '';
-        appGrid.innerHTML = `<p class="grid-empty">No apps stamped${escapeHtml(scoped)} yet — be the first developer to get certified.</p>`;
+        const message = query
+            ? `No stamped apps match “${escapeHtml(query)}”${escapeHtml(scoped)}.`
+            : `No apps stamped${escapeHtml(scoped)} yet — be the first developer to get certified.`;
+        appGrid.innerHTML = `<p class="grid-empty">${message}</p>`;
         return;
     }
 
-    appGrid.innerHTML = apps.map(app => `<a class="app-card" href="${escapeHtml(safeHref(app.storeUrl))}" target="_blank" rel="noopener noreferrer">
+    appGrid.innerHTML = apps.map(app => {
+        const icon = safeImageSrc(app.iconUrl);
+        const initial = escapeHtml(app.name.charAt(0).toUpperCase() || 'A');
+        return `<a class="app-card" href="${escapeHtml(safeHref(app.storeUrl))}" target="_blank" rel="noopener noreferrer">
         <div class="app-card-top">
-            <img class="app-icon" src="${escapeHtml(app.iconUrl)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+            <span class="app-icon" aria-hidden="true">${initial}${icon ? `<img data-app-icon src="${escapeHtml(icon)}" alt="" loading="lazy">` : ''}</span>
             <div>
                 <p class="app-title">${escapeHtml(app.name)}</p>
                 <span class="app-badge">✓ Stamped</span>
@@ -112,33 +108,53 @@ function renderApps(apps: App[]): void {
         </div>
         <p class="app-tagline">${escapeHtml(app.tagline)}</p>
         <span class="app-cat">${escapeHtml(CATEGORY_LABELS[app.category] || app.category)}</span>
-    </a>`).join('');
+    </a>`;
+    }).join('');
+
+    appGrid.querySelectorAll<HTMLImageElement>('img[data-app-icon]').forEach(image => {
+        image.addEventListener('error', () => image.remove(), { once: true });
+    });
 }
 
 async function loadApps(): Promise<void> {
     if (!appGrid) return;
+    appRequest?.abort();
+    const request = new AbortController();
+    appRequest = request;
     appGrid.innerHTML = `<p class="grid-empty">Loading…</p>`;
 
     const params = new URLSearchParams();
     if (activeCategory) params.set('category', activeCategory);
-    const q = search?.value.trim();
+    const q = search?.value.trim() || '';
     if (q) params.set('q', q);
 
     try {
-        const response = await api.get<{ apps: App[] }>(`/api/apps?${params.toString()}`);
-        renderApps(response.data.apps || []);
-    } catch {
-        appGrid.innerHTML = `<p class="grid-empty">The directory is unreachable right now.</p>`;
+        const response = await api.get<{ apps: App[] }>(`/api/apps?${params.toString()}`, { signal: request.signal });
+        if (request.signal.aborted) return;
+        renderApps(response.data.apps || [], q);
+    } catch (err) {
+        if (request.signal.aborted) return;
+        appGrid.innerHTML = `<div class="grid-empty">The directory is unreachable right now. <button class="retry-link" type="button" data-retry-apps>Try again</button></div>`;
+    } finally {
+        if (appRequest === request) appRequest = null;
     }
 }
 
 tabs?.addEventListener('click', event => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('.tab');
     if (!button) return;
-    tabs.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    tabs.querySelectorAll<HTMLElement>('.tab').forEach(tab => {
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+    });
     button.classList.add('active');
+    button.setAttribute('aria-selected', 'true');
     activeCategory = button.dataset.category || '';
     loadApps();
+});
+
+appGrid?.addEventListener('click', event => {
+    if ((event.target as HTMLElement).closest('[data-retry-apps]')) loadApps();
 });
 
 search?.addEventListener('input', () => {
@@ -156,6 +172,7 @@ submitForm?.addEventListener('submit', async event => {
     const payload = Object.fromEntries(new FormData(submitForm).entries());
 
     if (button) { button.disabled = true; button.textContent = 'Starting checkout…'; }
+    if (submitStatus) { submitStatus.textContent = ''; submitStatus.className = 'form-status'; }
     try {
         const response = await api.post<{ checkoutUrl?: string }>('/api/apps?action=submit', payload);
         if (response.data.checkoutUrl) {

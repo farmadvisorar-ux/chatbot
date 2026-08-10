@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { getPool } from '../_lib/db.js';
 import { json, error, requireMethod } from '../_lib/http.js';
 import { getStripe } from '../_lib/stripe.js';
+import { CERTIFICATION_FEE_CENTS } from '../_lib/pricing.js';
 
 // Signature verification needs the exact bytes Stripe signed, so the parsed
 // body must be disabled here.
@@ -50,16 +51,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         const session = event.data.object as Stripe.Checkout.Session;
         const appId = session.metadata?.appId;
         const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+        const matchesCertification = session.payment_status === 'paid'
+            && session.amount_total === CERTIFICATION_FEE_CENTS
+            && session.currency === 'usd';
 
-        if (appId && session.payment_status === 'paid') {
+        if (appId && matchesCertification) {
             // Paid submissions still land in pending_review, not certified: a
             // fee only buys a review, not a stamp. Guarded on status so a
             // redelivered webhook event can't double-apply.
             await getPool().query(
                 `UPDATE apps
-                 SET status = 'pending_review', stripe_payment_intent_id = $2, paid_at = now()
-                 WHERE id = $1 AND status = 'awaiting_payment'`,
-                [appId, paymentIntentId],
+                 SET status = 'pending_review', stripe_payment_intent_id = $2,
+                     stripe_session_id = COALESCE(stripe_session_id, $3), paid_at = now()
+                 WHERE id = $1 AND status = 'awaiting_payment'
+                   AND (stripe_session_id IS NULL OR stripe_session_id = $3)`,
+                [appId, paymentIntentId, session.id],
             );
         }
     }
