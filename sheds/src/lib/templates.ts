@@ -137,20 +137,32 @@ export function summaryLine(b: Building): string {
 }
 
 /**
- * `loading="lazy"` and explicit dimensions on every image.
+ * Every photograph on the site.
  *
- * A catalogue page is ~40 photographs off a CDN. Without lazy loading the
- * browser fetches all of them before it will paint, which is most of why the
- * supplier's own listing takes as long as it does; without width and height
- * the page reflows as each one lands, moving the thing someone is about to
- * tap. The dimensions are the CDN's own, passed through.
+ * `loading="lazy"` and explicit dimensions on all of them: a catalogue page is
+ * 198 photographs, and without lazy loading the browser fetches the lot before
+ * it will paint — most of why the supplier's own listing takes as long as it
+ * does. Without width and height the page reflows as each one lands, moving
+ * whatever someone was about to tap.
+ *
+ * Two srcset rungs for a card, four for a page that shows the photograph large.
+ *
+ * A srcset is not free: it is a full URL per rung, inline, per image. The
+ * four-rung ladder cost the catalogue page 103 KB of HTML — 141 KB to 244 KB
+ * across 198 cards — to serve image files that a 300px-wide card cannot tell
+ * apart. Cards get 300 and 600 (one rung for ordinary screens, one for
+ * retina) and the building page keeps the full range, where the lead
+ * photograph really is displayed at 640px and really can use 1400.
  */
-const WIDTHS = [400, 600, 900, 1400];
+const CARD_WIDTHS = [300, 600];
+const FULL_WIDTHS = [400, 600, 900, 1400];
 
-function image(src: string, alt: string, opts: { eager?: boolean; sizes?: string } = {}): Raw {
-    // A srcset so a phone fetches the 400px file and a desktop the 900px one,
-    // rather than everyone downloading the 1.66 MB original the feed points at.
-    const srcset = WIDTHS.map((w) => `${sized(src, w)} ${w}w`).join(', ');
+function image(
+    src: string,
+    alt: string,
+    opts: { eager?: boolean; sizes?: string; widths?: number[] } = {},
+): Raw {
+    const srcset = (opts.widths ?? FULL_WIDTHS).map((w) => `${sized(src, w)} ${w}w`).join(', ');
     const sizes = opts.sizes ?? '(max-width: 860px) 100vw, 33vw';
     return html`<img src="${raw(safeUrl(sized(src, 600)))}"
         srcset="${raw(srcset.split(', ').map(safeUrlPart).join(', '))}" sizes="${raw(sizes)}"
@@ -194,7 +206,7 @@ export function buildingCard(b: Building, opts: { eager?: boolean } = {}): Raw {
    data-siding="${b.siding ?? ''}" data-edition="${b.edition ?? ''}"
    data-features="${b.features.join('|')}">
   <div class="card-shot">
-    ${b.images[0] ? image(b.images[0], `${sizeLabel(b)} ${TYPE_LABELS[b.type]}`, opts) : raw('<div class="card-noshot"></div>')}
+    ${b.images[0] ? image(b.images[0], `${sizeLabel(b)} ${TYPE_LABELS[b.type]}`, { ...opts, widths: CARD_WIDTHS, sizes: '(max-width: 860px) 100vw, 300px' }) : raw('<div class="card-noshot"></div>')}
     <span class="card-size">${b.size.sqft} sq ft</span>
   </div>
   <div class="card-body">
