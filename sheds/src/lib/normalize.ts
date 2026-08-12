@@ -360,7 +360,10 @@ export function normalizeProduct(raw: RawProduct): Building | null {
     if (!size) return null;
 
     const priceCents = priceToCents(raw.variants[0]?.price ?? 0);
-    if (priceCents <= 0) return null;
+    // Number('call for pricing') is NaN, and NaN <= 0 is false — so a bare
+    // `<= 0` check lets a building through with a NaN price, which renders as
+    // "$NaN" on a live page rather than failing anywhere a build would notice.
+    if (!Number.isSafeInteger(priceCents) || priceCents <= 0) return null;
 
     const described = parseDescription(raw.body_html);
 

@@ -347,6 +347,15 @@ select:focus-visible, textarea:focus-visible, summary:focus-visible {
 .quote button:hover { background: var(--pine-2); }
 .quote-note { font-size: .82rem; color: var(--ink-3); text-align: center; }
 .quote-status { font-size: .9rem; text-align: center; min-height: 1.2em; }
+
+/* The honeypot. Positioned off-canvas rather than display:none, because some
+   bots specifically skip fields that are display:none or hidden — and taken
+   out of the tab order and the accessibility tree so no real person, with or
+   without a screen reader, ever lands in it. */
+.hp {
+  position: absolute; left: -9999px; width: 1px; height: 1px;
+  overflow: hidden;
+}
 .quote-status.bad { color: var(--clay); }
 
 @media (prefers-color-scheme: dark) {

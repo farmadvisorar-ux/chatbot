@@ -19,6 +19,21 @@ import pg from 'pg';
 
 const MAX = { name: 120, phone: 40, email: 254, zip: 12, note: 1000, buildingId: 100 };
 
+/**
+ * A field a person never sees and never fills in.
+ *
+ * The forms carry it hidden with CSS, labelled as something a form-filling bot
+ * wants to complete. It is the cheapest control that actually works against
+ * the indiscriminate scripted submissions this endpoint will get, because it
+ * costs a real customer nothing and asks them to prove nothing — unlike a
+ * captcha, which taxes every genuine enquiry to stop a few fake ones.
+ *
+ * Filled means dropped, and dropped silently with the same thank-you a person
+ * gets: telling a bot it was detected only tells whoever wrote it what to
+ * change.
+ */
+const HONEYPOT = 'company_website';
+
 let pool: pg.Pool | null = null;
 
 function getPool(): pg.Pool | null {
@@ -29,12 +44,34 @@ function getPool(): pg.Pool | null {
     if (!pool) {
         pool = new pg.Pool({
             connectionString,
-            ssl: /@(localhost|127\.0\.0\.1)/.test(connectionString) ? false : { rejectUnauthorized: false },
+            ssl: sslFor(connectionString),
             max: 3,
             connectionTimeoutMillis: 8000,
         });
     }
     return pool;
+}
+
+/**
+ * TLS settings for the connection.
+ *
+ * Certificate verification is on. Hosted Postgres — Neon, Supabase, Vercel —
+ * serves certificates from public authorities that Node already trusts, so
+ * verification simply works, and turning it off by default (the common
+ * copy-paste) accepts any certificate from anything that answers on the port.
+ *
+ * `PGSSLMODE=no-verify` is the escape hatch for a provider behind a private
+ * CA. It has to be set deliberately, which is the point: an operator who
+ * needs it knows why, and nobody gets it by accident.
+ */
+export function sslFor(connectionString: string): { rejectUnauthorized: boolean } | false {
+    // A database on the same machine never crosses a network.
+    if (/@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(connectionString)) return false;
+    if (/[?&]sslmode=disable/.test(connectionString)) return false;
+    if (process.env.PGSSLMODE === 'no-verify' || /[?&]sslmode=no-verify/.test(connectionString)) {
+        return { rejectUnauthorized: false };
+    }
+    return { rejectUnauthorized: true };
 }
 
 const SCHEMA = `
@@ -113,6 +150,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     // Nothing at all was filled in — a bare bot POST, not a person.
     if (!lead.name && !lead.phone && !lead.email) {
         res.status(400).json({ error: 'Tell us how to reach you.' });
+        return;
+    }
+
+    // The honeypot was filled, so nothing here came from a person. Answered
+    // with the same redirect a real submission gets, and never stored.
+    if (clean(body[HONEYPOT], 200)) {
+        res.setHeader('Location', '/thanks.html');
+        res.status(303).end();
         return;
     }
 

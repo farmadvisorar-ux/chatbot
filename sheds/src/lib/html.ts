@@ -59,6 +59,29 @@ export function html(strings: TemplateStringsArray, ...values: unknown[]): Raw {
 }
 
 /**
+ * JSON made safe to sit inside a `<script>` element.
+ *
+ * `JSON.stringify` escapes for JSON, which is a different problem from
+ * escaping for HTML: it leaves `<` alone, so a value containing the literal
+ * text `</script>` closes the element and everything after it is parsed as
+ * markup. The building pages embed JSON-LD built from supplier titles and
+ * descriptions, which makes this reachable from the product feed rather than
+ * theoretical.
+ *
+ * U+2028 and U+2029 are included because they are valid in a JSON string but
+ * are line terminators to a JavaScript parser, so they break the script
+ * element in a way that is invisible in a diff.
+ */
+export function jsonForScript(value: unknown): Raw {
+    return raw(JSON.stringify(value)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029'));
+}
+
+/**
  * A URL safe to put in `href`.
  *
  * Returns '#' for anything that is not plainly http(s) or site-relative. The
@@ -68,6 +91,13 @@ export function html(strings: TemplateStringsArray, ...values: unknown[]): Raw {
  */
 export function safeUrl(url: unknown): string {
     const s = String(url ?? '').trim();
+    // Attribute-breaking characters first, and before the scheme is even
+    // considered. Callers interpolate the result through raw() straight into
+    // src="…" and href="…", so a URL that passes the scheme check while
+    // containing a quote closes the attribute and everything after it becomes
+    // markup. A real URL has none of these unencoded, so rejecting them costs
+    // nothing.
+    if (/[\s<>"'`]/.test(s)) return '#';
     if (/^https?:\/\//i.test(s)) return s;
     // Site-relative, but never protocol-relative: "//evil.example" starts
     // with a slash and looks local to a careless check, while actually

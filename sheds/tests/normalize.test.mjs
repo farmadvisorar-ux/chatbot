@@ -267,3 +267,19 @@ test('every image in the catalogue is a resizable CDN URL', () => {
     const offCdn = buildings.flatMap((b) => b.images).filter((u) => !u.startsWith('https://cdn.shopify.com/'));
     assert.deepEqual(offCdn, [], 'some images are no longer on the Shopify CDN — sized() is a no-op for those');
 });
+
+test('a price that is not a number is refused, not published as NaN', () => {
+    // Number('call for pricing') is NaN, and NaN <= 0 is false — so a bare
+    // "<= 0" check lets the building through and the page renders "$NaN".
+    const base = {
+        handle: '10x12-workshop', title: '10x12 Workshop',
+        body_html: '', tags: [], images: [{ src: 'https://cdn.shopify.com/x.jpg' }],
+    };
+    for (const price of ['call for pricing', '', 'NaN', 'Infinity', '-500']) {
+        assert.equal(
+            normalizeProduct({ ...base, variants: [{ price }] }), null,
+            `a building with price ${JSON.stringify(price)} was published`,
+        );
+    }
+    assert.ok(normalizeProduct({ ...base, variants: [{ price: '3465.00' }] }));
+});

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { esc, html, raw, join, safeUrl } from '../src/lib/html.ts';
+import { esc, html, raw, join, safeUrl, jsonForScript } from '../src/lib/html.ts';
 
 test('interpolation escapes by default', () => {
     // The whole point of the tagged template: forgetting to escape is not
@@ -59,4 +59,40 @@ test('a protocol-relative URL is refused', () => {
     // "//evil.example" inherits the page's scheme and loads fine — it looks
     // site-relative to a careless check but is not.
     assert.equal(safeUrl('//evil.example/x.js'), '#');
+});
+
+test('a URL that would break out of its attribute is refused', () => {
+    // safeUrl's result goes through raw() straight into src="…", so a URL
+    // that passes the scheme check while carrying a quote closes the
+    // attribute and everything after it becomes markup. The catalogue's image
+    // URLs come from the supplier's feed, which makes this reachable rather
+    // than hypothetical.
+    assert.equal(safeUrl('https://cdn.example/x.jpg" onerror="alert(1)'), '#');
+    assert.equal(safeUrl("https://cdn.example/x.jpg' onerror='alert(1)"), '#');
+    assert.equal(safeUrl('https://cdn.example/x.jpg><script>alert(1)</script>'), '#');
+    assert.equal(safeUrl('https://cdn.example/a b.jpg'), '#');
+    // A properly encoded URL is unaffected — this must not reject real ones.
+    assert.equal(
+        safeUrl('https://cdn.shopify.com/s/files/a%20b.jpg?v=1&width=600'),
+        'https://cdn.shopify.com/s/files/a%20b.jpg?v=1&width=600',
+    );
+});
+
+test('JSON-LD cannot close its own script element', () => {
+    // JSON.stringify escapes for JSON, not for HTML: it leaves "<" alone. The
+    // building pages build JSON-LD out of supplier titles, so a title
+    // containing </script> would end the element and run what followed.
+    const out = jsonForScript({ name: '10x12 Shed</script><script>alert(1)</script>' }).toString();
+    assert.ok(!out.includes('</script>'), 'the JSON-LD can close its own element');
+    assert.ok(!out.includes('<'), 'a raw < survived into the script element');
+    // Still valid JSON, and still the same string once parsed — escaping must
+    // not corrupt the data it is protecting.
+    assert.equal(JSON.parse(out).name, '10x12 Shed</script><script>alert(1)</script>');
+});
+
+test('JSON-LD escapes the line separators that break a script parser', () => {
+    // Valid inside a JSON string, but line terminators to a JavaScript parser.
+    const out = jsonForScript({ a: ' ', b: ' ' }).toString();
+    assert.ok(!out.includes(' ') && !out.includes(' '));
+    assert.equal(JSON.parse(out).a, ' ');
 });

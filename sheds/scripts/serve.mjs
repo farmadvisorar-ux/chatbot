@@ -21,9 +21,18 @@ const TYPES = {
 };
 
 createServer(async (req, res) => {
-    // normalize() collapses "..", so a request for /../../etc/passwd cannot
-    // escape dist/ — the one thing a file server must not get wrong.
-    const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    // decodeURIComponent throws on a malformed escape such as "/%". Inside an
+    // async handler that rejection is unhandled and takes the server down, so
+    // a stray link in a page under test would end the dev session.
+    let path;
+    try {
+        // normalize() collapses "..", so a request for /../../etc/passwd
+        // cannot escape dist/ — the one thing a file server must not get wrong.
+        path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname));
+    } catch {
+        res.writeHead(400).end('bad request');
+        return;
+    }
     let file = join(dist, path);
     if (!file.startsWith(dist)) { res.writeHead(403).end('forbidden'); return; }
 

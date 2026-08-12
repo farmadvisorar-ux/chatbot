@@ -11,7 +11,7 @@
  * The one place JavaScript is used is filtering the catalogue, and even there
  * the unfiltered list is in the HTML first, so the page works without it.
  */
-import { html, raw, join, esc, safeUrl, type Raw } from './html.ts';
+import { html, raw, join, esc, safeUrl, jsonForScript, type Raw } from './html.ts';
 import { DEALER, formatPrice } from './dealer.ts';
 import { TYPE_LABELS, EDITION_LABELS, SIDING_LABELS, sized, type Building } from './normalize.ts';
 
@@ -22,8 +22,8 @@ export interface PageOptions {
     path: string;
     /** Absolute image URL for link previews. */
     image?: string;
-    /** JSON-LD, already serialised. */
-    schema?: string;
+    /** JSON-LD, as an object. Serialised and escaped at render time. */
+    schema?: unknown;
     bodyClass?: string;
     script?: string;
 }
@@ -53,7 +53,7 @@ ${options.image ? `<meta property="og:image" content="${esc(safeUrl(options.imag
 <meta name="theme-color" content="#1d3a2e">
 <link rel="stylesheet" href="/site.css">
 <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
-${options.schema ? `<script type="application/ld+json">${options.schema}</script>` : ''}
+${options.schema ? `<script type="application/ld+json">${jsonForScript(options.schema)}</script>` : ''}
 </head>
 <body${options.bodyClass ? ` class="${esc(options.bodyClass)}"` : ''}>
 ${header()}
@@ -231,6 +231,9 @@ export function quoteForm(building: Building | null): Raw {
   <h2>${building ? 'Ask about this building' : 'Ask us anything'}</h2>
   ${building ? html`<input type="hidden" name="buildingId" value="${building.id}">` : raw('')}
   ${building ? html`<p class="quote-ref">${sizeLabel(building)} ${TYPE_LABELS[building.type]} · ${formatPrice(building.priceCents)}</p>` : raw('')}
+  <div class="hp" aria-hidden="true">
+    <label>Company website<input name="company_website" tabindex="-1" autocomplete="off"></label>
+  </div>
   <label>Your name<input name="name" required autocomplete="name" maxlength="120"></label>
   <label>Phone<input name="phone" type="tel" required autocomplete="tel" maxlength="40"></label>
   <label>Email<input name="email" type="email" required autocomplete="email" maxlength="254"></label>
@@ -252,7 +255,7 @@ export function buildingPage(b: Building, related: Building[]): string {
     // Product schema so the price and availability can show in search results
     // directly. For a dealer competing with the manufacturer on the same
     // stock, the rich result is often the whole difference in click-through.
-    const schema = JSON.stringify({
+    const schema = {
         '@context': 'https://schema.org',
         '@type': 'Product',
         name,
@@ -268,7 +271,7 @@ export function buildingPage(b: Building, related: Building[]): string {
             seller: { '@type': 'Organization', name: DEALER.name },
             url: `${DEALER.siteUrl}/b/${b.id}.html`,
         },
-    });
+    };
 
     const body = html`
 <main id="main">

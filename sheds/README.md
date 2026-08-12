@@ -117,6 +117,35 @@ unit standing on the supplier's lot, and another dealer can sell the same one.
 "In stock now" on each page is true of the supplier's inventory at the time of
 the last refresh — worth confirming before promising a specific building.
 
+## Abuse and privacy, as they actually stand
+
+`/api/quote` is a public endpoint that writes to a database, and two things
+about it are deliberate rather than overlooked.
+
+**A honeypot, and no rate limit.** The forms carry a `company_website` field
+that is positioned off-canvas, taken out of the tab order and out of the
+accessibility tree. Filled in, the submission is dropped and answered with the
+same thank-you a person gets — telling a bot it was caught only tells whoever
+wrote it what to change. That stops the indiscriminate scripted submissions,
+which is nearly all of them, at zero cost to a real customer, unlike a captcha
+that taxes every genuine enquiry to stop a few fake ones.
+
+There is **no rate limit**, and that is a real gap rather than a solved
+problem. A per-instance counter on serverless barely limits anything, and the
+shared store that would do it properly is not worth adding before the first
+real submission. If the form starts attracting volume, this is the thing to
+add. Malformed-looking leads are stored with `suspect = true` rather than
+rejected: someone who mistypes their email still left a phone number, and
+bouncing them protects a database column at the cost of a customer.
+
+**Leads reach the function log when there is no database.** With
+`DATABASE_URL` unset, or when the insert fails, the whole lead — name, phone,
+email, ZIP — is written to the log, because the alternative is that a
+customer's enquiry disappears. A log is not a good lead store: anyone with log
+access can read it, and retention is the platform's rather than the dealer's.
+Connecting a database closes it, and that is the fix rather than a quieter
+log.
+
 ## What is not built
 
 - **No payments.** The forms request a callback. Nobody buys a $9,000 building
