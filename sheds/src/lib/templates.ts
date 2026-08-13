@@ -50,7 +50,9 @@ export function page(options: PageOptions, body: Raw): string {
 <meta property="og:type" content="website">
 ${options.image ? `<meta property="og:image" content="${esc(safeUrl(options.image))}">` : ''}
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#1d3a2e">
+<meta name="theme-color" content="#17160f">
+<link rel="preload" href="/fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/site.css">
 <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
 ${options.schema ? `<script type="application/ld+json">${jsonForScript(options.schema)}</script>` : ''}
@@ -206,10 +208,10 @@ export function buildingCard(b: Building, opts: { eager?: boolean } = {}): Raw {
    data-siding="${b.siding ?? ''}" data-edition="${b.edition ?? ''}"
    data-features="${b.features.join('|')}">
   <div class="card-shot">
-    ${b.images[0] ? image(b.images[0], `${sizeLabel(b)} ${TYPE_LABELS[b.type]}`, { ...opts, widths: CARD_WIDTHS, sizes: '(max-width: 860px) 100vw, 300px' }) : raw('<div class="card-noshot"></div>')}
-    <span class="card-size">${b.size.sqft} sq ft</span>
+    ${b.images[0] ? image(b.images[0], `${sizeLabel(b)} ${TYPE_LABELS[b.type]}`, { ...opts, widths: CARD_WIDTHS, sizes: '(max-width: 900px) 100vw, 340px' }) : raw('')}
   </div>
   <div class="card-body">
+    <p class="card-meta"><span>${b.size.sqft} sq ft</span>${b.sidingColor ? html`<span>${b.sidingColor}</span>` : raw('')}</p>
     <h3 class="card-title">${sizeLabel(b)} ${TYPE_LABELS[b.type]}</h3>
     <p class="card-sum">${cardFacets(b)}</p>
     <p class="card-price">${formatPrice(b.priceCents)}</p>
@@ -336,7 +338,8 @@ export function catalogPage(buildings: Building[], facets: CatalogFacets): strin
     const body = html`
 <main id="main">
   <section class="wrap page-head">
-    <h1>Buildings in stock</h1>
+    <p class="eyebrow">The lot</p>
+    <h1>Buildings in stock.</h1>
     <p class="lede">Every building below is already built and ready to deliver. ${buildings.length} of them, priced as they stand.</p>
   </section>
 
@@ -440,35 +443,41 @@ export interface CatalogFacets {
 export function homePage(buildings: Building[], facets: CatalogFacets): string {
     const featured = pickFeatured(buildings);
     const cheapest = facets.priceCents.min;
+    // The dealer's chosen hero, falling back to the automatic pick if that
+    // building has sold and left the catalogue.
+    const hero = buildings.find((b) => b.id === DEALER.heroBuildingId) ?? featured[0];
 
     const body = html`
 <main id="main">
   <section class="hero">
+    <div class="hero-shot">
+      ${hero?.images[0] ? image(hero.images[0], `${sizeLabel(hero)} ${TYPE_LABELS[hero.type]}`, { eager: true, sizes: '100vw' }) : raw('')}
+    </div>
+    <div class="hero-veil"></div>
     <div class="wrap hero-inner">
-      <div class="hero-copy">
-        <p class="eyebrow">${DEALER.supplier.blurb}</p>
-        <h1>Sheds that are<br>already built.</h1>
-        <p class="lede">No twelve-week wait and no configurator that ends in "call for pricing". ${buildings.length} buildings on the lot right now, every price on the page, delivered and set up on your ground.</p>
-        <div class="hero-actions">
-          <a class="btn" href="/buildings.html">See what's in stock →</a>
-          <a class="btn btn-quiet" href="${raw(telHref())}">${DEALER.phone}</a>
-        </div>
-        <dl class="stats">
-          <div><dt>In stock</dt><dd>${buildings.length}</dd></div>
-          <div><dt>From</dt><dd>${formatPrice(cheapest)}</dd></div>
-          <div><dt>Sizes</dt><dd>${facets.widths[0]}–${facets.widths[facets.widths.length - 1]} ft wide</dd></div>
-        </dl>
-      </div>
-      <div class="hero-shot">
-        ${featured[0]?.images[0] ? image(featured[0].images[0], `${sizeLabel(featured[0])} ${TYPE_LABELS[featured[0].type]}`, { eager: true, sizes: '(max-width: 900px) 100vw, 560px' }) : raw('')}
+      <p class="eyebrow">${DEALER.supplier.blurb}</p>
+      <h1>Sheds that are already built.</h1>
+      <p class="lede">No twelve-week wait and no configurator that ends in "call for pricing". ${buildings.length} buildings standing on the lot, every price on the page, delivered and set on your ground.</p>
+      <div class="hero-actions">
+        <a class="btn" href="/buildings.html">See what's in stock</a>
+        <a class="btn btn-quiet" href="${raw(telHref())}">${DEALER.phone}</a>
       </div>
     </div>
   </section>
 
+  <div class="wrap">
+    <dl class="stats">
+      <div><dt>In stock</dt><dd>${buildings.length}</dd></div>
+      <div><dt>From</dt><dd>${formatPrice(cheapest)}</dd></div>
+      <div><dt>Widths</dt><dd>${facets.widths[0]}–${facets.widths[facets.widths.length - 1]} ft</dd></div>
+      <div><dt>Lead time</dt><dd>None</dd></div>
+    </dl>
+  </div>
+
   <section class="wrap band">
     <div class="band-head">
-      <h2 class="band-title">Every kind we carry</h2>
-      <a class="band-link" href="/buildings.html">All ${buildings.length} →</a>
+      <div><p class="eyebrow">The range</p><h2 class="band-title">Every kind we carry.</h2></div>
+      <a class="link" href="/buildings.html">All ${buildings.length}</a>
     </div>
     <div class="types">
       ${facets.types.slice(0, 8).map((t) => html`
@@ -481,15 +490,16 @@ export function homePage(buildings: Building[], facets: CatalogFacets): string {
 
   <section class="wrap band">
     <div class="band-head">
-      <h2 class="band-title">On the lot now</h2>
-      <a class="band-link" href="/buildings.html">See all →</a>
+      <div><p class="eyebrow">Ready to deliver</p><h2 class="band-title">On the lot now.</h2></div>
+      <a class="link" href="/buildings.html">See all</a>
     </div>
     <div class="grid">${featured.map((b) => buildingCard(b))}</div>
   </section>
 
   <section class="band-alt">
     <div class="wrap">
-      <h2 class="band-title">How buying one works</h2>
+      <p class="eyebrow">The process</p>
+      <h2 class="band-title">How buying one works.</h2>
       <ol class="steps">
         <li><span class="step-n">1</span><h3>Pick one that exists</h3><p>Everything on this site is a building standing on a lot, photographed as it is. What you see is the one that arrives.</p></li>
         <li><span class="step-n">2</span><h3>We check your ground</h3><p>A quick call about access and level. Most yards are fine; we tell you straight if yours needs blocks or stone first.</p></li>
@@ -505,7 +515,7 @@ export function homePage(buildings: Building[], facets: CatalogFacets): string {
         title: `${DEALER.name} — Amish-built sheds, garages and workshops in stock`,
         description: `${buildings.length} Amish-built buildings in stock and ready to deliver, from ${formatPrice(cheapest)}. Every price on the page.`,
         path: '/',
-        image: featured[0]?.images[0],
+        image: hero?.images[0],
         bodyClass: 'home',
     }, body);
 }

@@ -13,8 +13,18 @@
  * an obvious blank, because it ships.
  */
 export const DEALER = {
-    /** TODO: the dealer's trading name. */
-    name: 'Your Shed Company',
+    /**
+     * TODO: replace with the real trading name.
+     *
+     * "Fieldhouse" is a working name, not a decision — it is here because
+     * "Your Shed Company" appeared in the wordmark, the page titles, the
+     * footer and every link preview, and a placeholder that reads as a
+     * placeholder makes the whole site look unfinished in a way that has
+     * nothing to do with the design. One word, no hyphen, sets well in the
+     * display face, and does not tie the business to one product line the
+     * way "Sheds" would. Change it here and it changes everywhere.
+     */
+    name: 'Fieldhouse',
     /** TODO: the dealer's own domain. */
     siteUrl: 'https://example.com',
 
@@ -30,6 +40,24 @@ export const DEALER = {
     territory: [] as string[],
 
     hours: 'Mon–Sat, 8am–6pm',
+
+    /**
+     * Which building's photograph fills the homepage.
+     *
+     * Named explicitly because this is the one image on the site that has to
+     * be chosen by a human looking at it. Picking it by rule — the priciest,
+     * the newest — put a $84,000 garage on the homepage photographed on a
+     * muddy lot with wheelie bins and a snow pile in shot, which is a fine
+     * record of a building and a terrible advertisement.
+     *
+     * The current choice is the only photograph in the feed taken in an
+     * actual garden: lawn, mature trees, clipped hedges, no warehouse and no
+     * gravel. Everything else is yard inventory shot for the record.
+     *
+     * Set to null to fall back to the automatic pick. Re-check it after every
+     * catalogue refresh — if this building sells, its photographs go with it.
+     */
+    heroBuildingId: '10x22-greenhouse-sun-shade-edition-1' as string | null,
 
     /**
      * The supplier whose buildings this dealer sells.

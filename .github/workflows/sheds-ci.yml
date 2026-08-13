@@ -55,9 +55,20 @@ jobs:
           # Roughly 25% over what each currently is, so ordinary growth passes
           # and a srcset ladder or a framework sneaking in does not.
           check index.html 20000
-          check buildings.html 250000
-          check site.css 24000
+          check buildings.html 260000
+          check site.css 30000
           check filters.js 8000
+          # Two self-hosted variable faces, latin-subset. This is the one place
+          # the speed budget was deliberately spent, so it is also the one most
+          # worth a ceiling: adding a weight or forgetting to subset a face
+          # doubles it without changing anything visible in review.
+          fonts=$(cat dist/fonts/*.woff2 | wc -c)
+          if [ "$fonts" -gt 140000 ]; then
+            echo "::error::fonts total $fonts bytes, over the 140000 byte budget"
+            fail=1
+          else
+            echo "ok  fonts  $fonts / 140000 bytes"
+          fi
           # Every building page, not just a sampled one — a template change
           # that bloats one bloats all 198.
           biggest=$(find dist/b -name '*.html' -printf '%s\n' | sort -rn | head -1)
