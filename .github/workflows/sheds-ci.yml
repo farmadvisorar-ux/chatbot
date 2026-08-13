@@ -36,6 +36,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # data/catalog.json is generated and committed, so a reproducible build
+      # leaves it untouched. It did not: a wall-clock timestamp in it meant
+      # every build dirtied the tree and every commit carried a meaningless
+      # diff, which buried the one reason to commit the file — that its diff
+      # is the record of what the supplier changed.
+      - name: The build is reproducible
+        run: git diff --exit-code -- data/catalog.json
+
       # The build reports its own page weights, but nothing enforces them, and
       # the entire premise of this site is that it is smaller than the one it
       # replaces. A regression here is the product breaking, not a nicety:
