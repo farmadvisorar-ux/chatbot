@@ -20,6 +20,7 @@ eggs/
 .eggs/
 lib/
 !wayback-downloader/src/lib/
+!dareal-tyte/src/lib/
 lib64/
 parts/
 sdist/

@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAREALTYTE — Wayback Recovery &amp; Instant Deployment Engine</title>
+<meta name="description" content="DAREALTYTE recovers a domain's historical website from the Wayback Machine, sanitizes it, and deploys it live in one click — powered by Vercel.">
+<link rel="canonical" href="https://darealtyte.com/">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#050609">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/favicon.svg">
+
+<!-- Open Graph: Facebook, LinkedIn, Slack, Discord, WhatsApp, iMessage, Signal, Telegram.
+     og:image must be an absolute URL — relative paths silently render no preview. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DAREALTYTE">
+<meta property="og:url" content="https://darealtyte.com/">
+<meta property="og:title" content="DAREALTYTE — Wayback Recovery &amp; Instant Deployment Engine">
+<meta property="og:description" content="Recover a domain's historical website from the Wayback Machine, sanitize it, and deploy it live in one click.">
+<meta property="og:image" content="https://darealtyte.com/og.png">
+<meta property="og:image:secure_url" content="https://darealtyte.com/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="DAREALTYTE — bring dead domains back to life instantly.">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter/X: summary_large_image gives the full-width card, not a thumbnail. -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DAREALTYTE — Wayback Recovery &amp; Instant Deployment Engine">
+<meta name="twitter:description" content="Recover a domain's historical website from the Wayback Machine, sanitize it, and deploy it live in one click.">
+<meta name="twitter:image" content="https://darealtyte.com/og.png">
+<meta name="twitter:image:alt" content="DAREALTYTE — bring dead domains back to life instantly.">
+
+<!-- Fallback for scrapers that read neither OG nor Twitter tags (some RSS readers, older link previewers). -->
+<meta itemprop="image" content="https://darealtyte.com/og.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+    :root {
+        color-scheme: dark;
+        --bg: #050609;
+        --bg-soft: #0a0c12;
+        --surface: #10121a;
+        --surface-2: #151824;
+        --border: #22252f;
+        --border-strong: #313644;
+        --text: #f6f7fb;
+        --muted: #8d93a6;
+        --muted-2: #5f6579;
+        --accent: #6c7bff;
+        --accent-2: #9b6cff;
+        --accent-soft: rgba(108,123,255,0.14);
+        --ok: #2fd191;
+        --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+    ::selection { background: var(--accent); color: white; }
+
+    /* Nav */
+    nav.top {
+        position: sticky; top: 0; z-index: 20;
+        backdrop-filter: blur(14px);
+        background: rgba(5,6,9,0.72);
+        border-bottom: 1px solid var(--border);
+    }
+    nav.top .bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; }
+    .logo { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+    .logo .mark {
+        width: 26px; height: 26px; border-radius: 8px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: 800; color: white;
+    }
+    .nav-links { display: flex; align-items: center; gap: 28px; font-size: 0.89rem; color: var(--muted); font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta { display: flex; align-items: center; gap: 14px; }
+    .menu-toggle {
+        display: none;
+        background: none; border: 1px solid var(--border); border-radius: 8px;
+        width: 38px; height: 38px; color: var(--text); cursor: pointer;
+        align-items: center; justify-content: center;
+    }
+    .btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 9px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.87rem;
+        border: 1px solid var(--border-strong);
+        white-space: nowrap;
+    }
+    .btn:hover { border-color: var(--muted-2); }
+    .btn.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        border: none;
+        color: white;
+        box-shadow: 0 8px 24px -8px rgba(108,123,255,0.6);
+    }
+    .btn.large { padding: 14px 26px; font-size: 0.96rem; }
+    .btn.block { display: flex; width: 100%; justify-content: center; }
+    .icon { width: 1em; height: 1em; }
+
+    @media (max-width: 780px) {
+        .nav-links { position: fixed; inset: 65px 16px auto 16px; flex-direction: column; align-items: stretch;
+            background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px;
+            gap: 4px; display: none; }
+        .nav-links.open { display: flex; }
+        .nav-links a { padding: 10px 6px; border-radius: 8px; }
+        .nav-links a:hover { background: var(--surface-2); }
+        .menu-toggle { display: flex; }
+    }
+
+    /* Hero */
+    .hero { position: relative; overflow: hidden; padding: 88px 0 40px; }
+    .hero::before {
+        content: "";
+        position: absolute; inset: -35% -10% auto -10%; height: 620px;
+        background:
+            radial-gradient(circle at 22% 25%, rgba(108,123,255,0.30), transparent 55%),
+            radial-gradient(circle at 78% 40%, rgba(155,108,255,0.22), transparent 50%);
+        filter: blur(50px);
+        z-index: -1;
+    }
+    .hero-inner { text-align: center; max-width: 760px; margin: 0 auto; }
+    .eyebrow {
+        display: inline-flex; align-items: center; gap: 8px;
+        font-size: 0.76rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid rgba(108,123,255,0.35);
+        padding: 7px 14px; border-radius: 999px;
+        margin-bottom: 26px;
+    }
+    .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(47,209,145,0.2); }
+    h1.hero-title { font-size: clamp(2.3rem, 5.4vw, 3.9rem); line-height: 1.06; font-weight: 800; margin: 0 0 20px; letter-spacing: -0.025em; }
+    h1.hero-title .grad {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .hero p.sub { color: var(--muted); font-size: 1.12rem; margin: 0 0 36px; line-height: 1.6; }
+    .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .hero-note { color: var(--muted-2); font-size: 0.82rem; }
+
+    /* Trust bar */
+    .trust-bar { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 22px 0; margin-top: 56px; }
+    .trust-bar .row { display: flex; justify-content: center; gap: 48px; flex-wrap: wrap; }
+    .trust-item { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 0.85rem; font-weight: 500; }
+    .trust-item .icon { color: var(--accent); }
+
+    /* Pipeline visual */
+    .pipeline { padding: 72px 0 20px; }
+    .pipeline-card {
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, var(--surface), var(--bg-soft));
+        border-radius: 22px;
+        padding: 36px;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 24px;
+    }
+    @media (max-width: 720px) { .pipeline-card { grid-template-columns: 1fr; } .pipeline-arrow { transform: rotate(90deg); } }
+    .browser-frame {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .browser-chrome { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .browser-chrome .dots { display: flex; gap: 5px; }
+    .browser-chrome .dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); }
+    .browser-chrome .url {
+        flex: 1; font-size: 0.72rem; color: var(--muted-2); background: var(--surface-2);
+        border-radius: 6px; padding: 4px 10px; text-align: center;
+    }
+    .browser-body { padding: 18px; }
+    .skeleton { height: 10px; border-radius: 4px; margin-bottom: 9px; position: relative; overflow: hidden; }
+    .browser-frame.dead .skeleton { background: var(--surface-2); }
+    .browser-frame.dead { filter: grayscale(1); opacity: 0.55; animation: dead-pulse 3.6s ease-in-out infinite; }
+    .browser-frame.dead .browser-body { position: relative; }
+    .browser-frame.dead::after {
+        content: "404 · DOMAIN EXPIRED";
+        position: absolute; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
+        color: var(--muted-2); top: 46px; left: 50%; transform: translateX(-50%);
+        animation: dead-flicker 5s ease-in-out infinite;
+    }
+    .browser-frame.live .skeleton:nth-child(1) { background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 60%; height: 14px; }
+    .browser-frame.live .skeleton:nth-child(2) { background: var(--surface-2); width: 90%; }
+    .browser-frame.live .skeleton:nth-child(3) { background: var(--surface-2); width: 80%; }
+    .browser-frame.live .skeleton::after {
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+        background-size: 60% 100%; background-repeat: no-repeat;
+        animation: shimmer 2.4s ease-in-out infinite;
+    }
+    .browser-frame.live .thumb-row { display: flex; gap: 8px; margin-top: 12px; }
+    .browser-frame.live .thumb {
+        flex: 1; height: 38px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border);
+        transform-origin: bottom; animation: thumb-pop 2.6s ease-in-out infinite;
+    }
+    .browser-frame.live .thumb:nth-child(2) { animation-delay: 0.2s; }
+    .browser-frame.live .thumb:nth-child(3) { animation-delay: 0.4s; }
+    .pipeline-arrow { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); }
+    .pipeline-arrow .icon { width: 26px; height: 26px; color: var(--accent); animation: arrow-nudge 1.6s ease-in-out infinite; }
+    .pipeline-arrow span { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+    .frame-label { text-align: center; font-size: 0.78rem; color: var(--muted-2); margin-top: 10px; font-weight: 500; }
+
+    @keyframes dead-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.32; } }
+    @keyframes dead-flicker { 0%, 90%, 100% { opacity: 1; } 93% { opacity: 0.3; } 96% { opacity: 1; } }
+    @keyframes shimmer { 0% { background-position: -60% 0; } 100% { background-position: 160% 0; } }
+    @keyframes thumb-pop { 0%, 100% { opacity: 0.45; transform: scaleY(0.72); } 50% { opacity: 1; transform: scaleY(1); } }
+    @keyframes arrow-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+
+    @media (prefers-reduced-motion: reduce) {
+        .browser-frame.dead, .browser-frame.dead::after, .browser-frame.live .skeleton::after,
+        .browser-frame.live .thumb, .pipeline-arrow .icon { animation: none !important; }
+    }
+
+    /* Explainer video */
+    .video-section { padding: 72px 0 20px; }
+    .video-frame {
+        max-width: 860px; margin: 0 auto;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 20px;
+        padding: 12px;
+    }
+    .video-frame video {
+        display: block;
+        width: 100%;
+        border-radius: 12px;
+        background: #000;
+    }
+
+    /* Sections */
+    section { padding: 96px 0; border-top: 1px solid var(--border); }
+    .section-head { max-width: 640px; margin: 0 auto 52px; text-align: center; }
+    .section-head .kicker { color: var(--accent); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }
+    .section-head h2 { font-size: 2.1rem; margin: 0 0 12px; letter-spacing: -0.02em; }
+    .section-head p { color: var(--muted); margin: 0; font-size: 1.04rem; }
+
+    .icon-tile {
+        width: 44px; height: 44px; border-radius: 12px;
+        background: var(--accent-soft);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--accent);
+        margin-bottom: 18px;
+    }
+    .icon-tile .icon { width: 22px; height: 22px; }
+
+    /* Feature grid */
+    .what-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    @media (max-width: 980px) { .what-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .what-grid { grid-template-columns: 1fr; } }
+    .feature {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 26px;
+        transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .feature:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+    .feature h3 { margin: 0 0 8px; font-size: 1.02rem; }
+    .feature p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.55; }
+
+    /* Acronym cards */
+    .acronym-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: center; }
+    @media (max-width: 760px) { .acronym-grid { grid-template-columns: 1fr; } .acronym-connector { transform: rotate(90deg); margin: 4px auto; } }
+    .acronym-card {
+        background: linear-gradient(180deg, var(--surface-2), var(--surface));
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 32px;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .acronym-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+    .acronym-card .short {
+        font-size: 2.3rem; font-weight: 800; letter-spacing: 0.03em;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+        margin: 0 0 4px;
+    }
+    .acronym-card .role { font-size: 0.82rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 18px; font-weight: 600; }
+    .letter-breakdown { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .letter-breakdown li { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 0.83rem; }
+    .letter-breakdown b { color: var(--accent); }
+    .acronym-card .desc { color: var(--muted); margin: 0; font-size: 0.92rem; line-height: 1.55; }
+    .acronym-connector { color: var(--muted-2); }
+    .acronym-connector .icon { width: 24px; height: 24px; }
+
+    /* Steps */
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; position: relative; }
+    @media (max-width: 880px) { .steps { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
+    .step { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px 22px; position: relative; }
+    .step .num-icon {
+        width: 40px; height: 40px; border-radius: 11px;
+        background: var(--accent-soft); color: var(--accent);
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 16px; font-weight: 700; font-size: 0.85rem;
+    }
+    .step .num-icon .icon { width: 20px; height: 20px; }
+    .step h3 { margin: 0 0 8px; font-size: 1.02rem; }
+    .step p { margin: 0; color: var(--muted); font-size: 0.89rem; line-height: 1.5; }
+
+    /* Pricing */
+    .pricing-card {
+        max-width: 460px; margin: 0 auto;
+        background: linear-gradient(180deg, var(--surface-2), var(--surface));
+        border: 1px solid var(--border-strong);
+        border-radius: 22px;
+        padding: 40px;
+        text-align: center;
+        position: relative;
+    }
+    .pricing-card .plan-name { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+    .pricing-card .price { font-size: 3.4rem; font-weight: 800; letter-spacing: -0.02em; }
+    .pricing-card .price sup { font-size: 1.2rem; vertical-align: super; margin-right: 2px; color: var(--muted); }
+    .pricing-card .price-note { color: var(--muted); font-size: 0.9rem; margin: 6px 0 28px; }
+    .pricing-list { list-style: none; margin: 0 0 30px; padding: 0; text-align: left; display: flex; flex-direction: column; gap: 13px; }
+    .pricing-list li { display: flex; gap: 10px; font-size: 0.92rem; color: var(--text); }
+    .pricing-list .icon { color: var(--ok); flex-shrink: 0; margin-top: 2px; width: 18px; height: 18px; }
+    .pricing-fine { color: var(--muted-2); font-size: 0.78rem; margin-top: 16px; }
+
+    /* FAQ */
+    .faq { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    details {
+        background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+        padding: 4px 22px;
+    }
+    details[open] { border-color: var(--border-strong); }
+    summary {
+        cursor: pointer; padding: 18px 0; font-weight: 600; font-size: 0.98rem;
+        list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary .chev { color: var(--muted); transition: transform 0.15s ease; flex-shrink: 0; }
+    details[open] summary .chev { transform: rotate(180deg); }
+    .faq p { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; line-height: 1.6; }
+
+    /* Final CTA */
+    .cta-band { text-align: center; background: radial-gradient(circle at 50% 0%, rgba(108,123,255,0.14), transparent 62%); }
+    .cta-band h2 { font-size: 2rem; margin: 0 0 14px; }
+    .cta-band p { color: var(--muted); max-width: 520px; margin: 0 auto 32px; }
+
+    /* Share */
+    .share { border-top: 1px solid var(--border); padding: 44px 0; }
+    .share-inner { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+    .share-label { color: var(--muted); font-size: 0.88rem; font-weight: 500; margin-right: 4px; }
+    .share-btn {
+        width: 40px; height: 40px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid var(--border); border-radius: 10px;
+        color: var(--muted);
+        transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        background: none; cursor: pointer; padding: 0;
+    }
+    .share-btn:hover { color: var(--text); border-color: var(--border-strong); transform: translateY(-2px); }
+    .share-btn svg { width: 18px; height: 18px; }
+    .share-copied { color: var(--ok); font-size: 0.85rem; font-weight: 600; min-width: 62px; text-align: left; }
+
+    footer { border-top: 1px solid var(--border); padding: 56px 0 32px; }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px; margin-bottom: 40px; }
+    @media (max-width: 700px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+    .footer-grid h4 { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-2); margin: 0 0 14px; }
+    .footer-grid ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .footer-grid a, .footer-grid p { color: var(--muted); font-size: 0.88rem; }
+    .footer-grid a:hover { color: var(--text); }
+    .footer-bottom { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--border); padding-top: 24px; }
+    .footer-bottom .muted { color: var(--muted-2); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<nav class="top">
+    <div class="wrap bar">
+        <div class="logo"><span class="mark">D</span>DAREALTYTE</div>
+        <div class="nav-links" id="navLinks">
+            <a href="#demo">Demo</a>
+            <a href="#engine">The engine</a>
+            <a href="#how">How it works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#faq">FAQ</a>
+        </div>
+        <div class="nav-cta">
+            <a href="/admin.html" class="btn primary">Operator console</a>
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu" aria-expanded="false">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<header class="hero">
+    <div class="wrap hero-inner">
+        <span class="eyebrow"><span class="dot"></span> Wayback recovery · one-click deployment</span>
+        <h1 class="hero-title">Bring dead domains<br><span class="grad">back to life instantly.</span></h1>
+        <p class="sub">
+            Point DAREALTYTE at any expired or dormant domain. It pulls the
+            site's historical snapshot straight out of the Internet Archive's
+            Wayback Machine, cleans it up, and pushes it live — preserving the
+            layout, styling, and content history that made the domain worth
+            buying in the first place.
+        </p>
+        <div class="hero-actions">
+            <a href="#pricing" class="btn primary large">
+                Get started
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+            <a href="#engine" class="btn large">See how the engine works</a>
+        </div>
+        <p class="hero-note">No credit card required to look around. $18 one-time, 6 months of access when you're ready to launch.</p>
+    </div>
+</header>
+
+<div class="trust-bar">
+    <div class="wrap row">
+        <div class="trust-item">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M12 3v9"/><path d="M8 8l4 4 4-4"/></svg>
+            Sourced from the Internet Archive Wayback Machine
+        </div>
+        <div class="trust-item">
+            <svg class="icon" viewBox="0 0 76 65" fill="#fff" aria-label="Vercel logomark"><path d="M37.5274 0L75.0548 65H0L37.5274 0Z"/></svg>
+            Deployed on Vercel's production infrastructure
+        </div>
+        <div class="trust-item">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+            HTTPS by default on every deployment
+        </div>
+    </div>
+</div>
+
+<section class="video-section" id="demo">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Watch it work</p>
+            <h2>See DAREALTYTE in action</h2>
+            <p>A quick walkthrough of pulling a domain out of the archive and shipping it live.</p>
+        </div>
+        <div class="video-frame">
+            <video controls preload="metadata" playsinline>
+                <source src="/explainer.mp4" type="video/mp4">
+                Your browser doesn't support embedded video. <a href="/explainer.mp4">Download the explainer</a> instead.
+            </video>
+        </div>
+    </div>
+</section>
+
+<section class="pipeline">
+    <div class="wrap">
+        <div class="pipeline-card">
+            <div>
+                <div class="browser-frame dead">
+                    <div class="browser-chrome"><div class="dots"><span></span><span></span><span></span></div><div class="url">oldbusiness.com</div></div>
+                    <div class="browser-body">
+                        <div class="skeleton" style="width:70%"></div>
+                        <div class="skeleton" style="width:95%"></div>
+                        <div class="skeleton" style="width:85%"></div>
+                        <div class="skeleton" style="width:40%"></div>
+                    </div>
+                </div>
+                <p class="frame-label">Before — archived, offline</p>
+            </div>
+            <div class="pipeline-arrow">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                <span>DAREALTYTE</span>
+            </div>
+            <div>
+                <div class="browser-frame live">
+                    <div class="browser-chrome"><div class="dots"><span></span><span></span><span></span></div><div class="url">oldbusiness.com</div></div>
+                    <div class="browser-body">
+                        <div class="skeleton"></div>
+                        <div class="skeleton"></div>
+                        <div class="skeleton"></div>
+                        <div class="thumb-row"><div class="thumb"></div><div class="thumb"></div><div class="thumb"></div></div>
+                    </div>
+                </div>
+                <p class="frame-label">After — live in production</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="what">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Capabilities</p>
+            <h2>What DAREALTYTE actually does</h2>
+            <p>Two problems, one pipeline: pulling a site out of the archive, and getting it back online without the mess that usually comes with it.</p>
+        </div>
+        <div class="what-grid">
+            <div class="feature">
+                <div class="icon-tile"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M12 3v9"/><path d="M8 8l4 4 4-4"/></svg></div>
+                <h3>Full historical reconstruction</h3>
+                <p>Retrieves the archived HTML, CSS, images, and scripts for a domain at a given point in time — not just a single page.</p>
+            </div>
+            <div class="feature">
+                <div class="icon-tile"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></svg></div>
+                <h3>Automatic cleanup</h3>
+                <p>Strips the Wayback Machine's injected toolbar, rewrites archived asset URLs, and neutralizes known spam link patterns.</p>
+            </div>
+            <div class="feature">
+                <div class="icon-tile"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-1 4-2 5l-3 3-3-3c-1-1-2-3-2-5 0-4 2-8 5-10z"/><circle cx="12" cy="10" r="2"/></svg></div>
+                <h3>One-click production deployment</h3>
+                <p>The cleaned result ships straight to a live Vercel deployment — no manual file wrangling, no separate hosting setup.</p>
+            </div>
+            <div class="feature">
+                <div class="icon-tile"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18"/><path d="M12 3c-3 3-3 15 0 18"/></svg></div>
+                <h3>Custom domain mapping</h3>
+                <p>Attach your own domain to the freshly deployed project and verify its DNS configuration from the same pipeline.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="engine">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Under the hood</p>
+            <h2>The engine behind the name</h2>
+            <p>DAREALTYTE is two systems working in sequence: one retrieves, the other deploys.</p>
+        </div>
+        <div class="acronym-grid">
+            <div class="acronym-card">
+                <p class="short">D.A.R.E.A.L.</p>
+                <p class="role">The archive retrieval agent</p>
+                <ul class="letter-breakdown">
+                    <li><b>D</b>igital</li><li><b>A</b>rchive</li><li><b>R</b>etrieval</li>
+                    <li><b>E</b>ngineering</li><li><b>A</b>nd</li><li><b>L</b>auncher</li>
+                </ul>
+                <p class="desc">The retrieval half of the pipeline. It queries the Wayback Machine for a domain's historical snapshot and reconstructs the original page's structure and asset references.</p>
+            </div>
+            <div class="acronym-connector">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </div>
+            <div class="acronym-card">
+                <p class="short">T.Y.T.E.</p>
+                <p class="role">The deployment host</p>
+                <ul class="letter-breakdown">
+                    <li><b>T</b>ransmission</li><li><b>Y</b>ield</li><li><b>T</b>racking</li><li><b>E</b>ngine</li>
+                </ul>
+                <p class="desc">The moment a snapshot is reconstructed, T.Y.T.E. takes over: cleaning up broken references, packaging the result, and pushing it live to production.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="how">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Process</p>
+            <h2>How it works</h2>
+            <p>Four steps from an expired domain to a live, deployed site.</p>
+        </div>
+        <div class="steps">
+            <div class="step">
+                <div class="num-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M12 3v9"/><path d="M8 8l4 4 4-4"/></svg></div>
+                <h3>1. Retrieve</h3>
+                <p>D.A.R.E.A.L. pulls the historical snapshot for your domain from the Wayback Machine.</p>
+            </div>
+            <div class="step">
+                <div class="num-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/></svg></div>
+                <h3>2. Sanitize</h3>
+                <p>T.Y.T.E. strips archive toolbar injections, rewrites asset URLs, and neutralizes known spam link patterns.</p>
+            </div>
+            <div class="step">
+                <div class="num-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c3 2 5 6 5 10 0 2-1 4-2 5l-3 3-3-3c-1-1-2-3-2-5 0-4 2-8 5-10z"/><circle cx="12" cy="10" r="2"/></svg></div>
+                <h3>3. Deploy</h3>
+                <p>The cleaned site ships to a new production deployment on Vercel.</p>
+            </div>
+            <div class="step">
+                <div class="num-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18"/><path d="M12 3c-3 3-3 15 0 18"/></svg></div>
+                <h3>4. Map your domain</h3>
+                <p>Attach your own domain to the deployment and verify DNS is configured correctly.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="pricing">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Pricing</p>
+            <h2>Simple, one-time access</h2>
+            <p>No subscription, no auto-renewal. Pay once, use it for six months.</p>
+        </div>
+        <div class="pricing-card">
+            <p class="plan-name">Operator access</p>
+            <div class="price"><sup>$</sup>18</div>
+            <p class="price-note">one-time payment · 6 months of access</p>
+            <ul class="pricing-list">
+                <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 11-11"/></svg> Unlimited snapshot recovery &amp; preview</li>
+                <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 11-11"/></svg> One-click Vercel deployment</li>
+                <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 11-11"/></svg> Custom domain mapping &amp; DNS verification</li>
+                <li><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5 11-11"/></svg> Access expires automatically after 6 months — no surprise renewal charge</li>
+            </ul>
+            <a href="/admin.html" class="btn primary block large">Get started</a>
+            <p class="pricing-fine">You own whatever you deploy. DAREALTYTE doesn't claim rights to recovered content — make sure you have the rights to whatever domain you recover.</p>
+        </div>
+    </div>
+</section>
+
+<section id="faq">
+    <div class="wrap">
+        <div class="section-head">
+            <p class="kicker">Questions</p>
+            <h2>Frequently asked</h2>
+        </div>
+        <div class="faq">
+            <details>
+                <summary>Does the sanitizer guarantee the recovered site is completely safe?<svg class="icon chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></summary>
+                <p>No. It's a best-effort cleanup pass — it strips the Wayback Machine's own injected toolbar, rewrites archived asset URLs back to their original host, and neutralizes a blocklist of known spam link patterns. It does not detect obfuscated JavaScript or every possible issue in third-party content. Review what gets deployed before pointing a real domain at it.</p>
+            </details>
+            <details>
+                <summary>What happens after my 6 months of access ends?<svg class="icon chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></summary>
+                <p>Access simply expires — there's no auto-renewal and you won't be charged again automatically. Sites you've already deployed to Vercel keep running under your own Vercel account; only access to run new recoveries/deployments through DAREALTYTE stops until you pay again.</p>
+            </details>
+            <details>
+                <summary>Do I need my own Vercel account?<svg class="icon chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></summary>
+                <p>Deployments go out through Vercel's production infrastructure. DAREALTYTE is an independent tool built on top of Vercel's platform and isn't affiliated with or endorsed by Vercel Inc.</p>
+            </details>
+            <details>
+                <summary>Can I recover any domain, even one I don't own?<svg class="icon chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></summary>
+                <p>Technically the tool doesn't verify ownership, but you're responsible for having the rights to whatever domain and content you recover and deploy. Don't use it to republish someone else's still-owned site or content.</p>
+            </details>
+        </div>
+    </div>
+</section>
+
+<section class="cta-band">
+    <div class="wrap">
+        <h2>Ready to bring a domain back?</h2>
+        <p>Head to the operator console, drop in a domain, and see what's still sitting in the archive.</p>
+        <a href="/admin.html" class="btn primary large">Open the operator console</a>
+    </div>
+</section>
+
+<div class="share">
+    <div class="wrap share-inner">
+        <span class="share-label">Share DAREALTYTE</span>
+
+        <a class="share-btn" id="shareX" href="#" target="_blank" rel="noopener noreferrer" aria-label="Share on X" title="Share on X">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+
+        <a class="share-btn" id="shareLinkedIn" href="#" target="_blank" rel="noopener noreferrer" aria-label="Share on LinkedIn" title="Share on LinkedIn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13M7.12 20.45H3.55V9h3.57zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0"/></svg>
+        </a>
+
+        <a class="share-btn" id="shareFacebook" href="#" target="_blank" rel="noopener noreferrer" aria-label="Share on Facebook" title="Share on Facebook">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07"/></svg>
+        </a>
+
+        <a class="share-btn" id="shareReddit" href="#" target="_blank" rel="noopener noreferrer" aria-label="Share on Reddit" title="Share on Reddit">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 3.31 1.34 6.31 3.51 8.48l-2.3 2.3A.75.75 0 0 0 1.74 24H12c6.63 0 12-5.37 12-12S18.63 0 12 0m6.67 12.66c.02.16.03.33.03.5 0 2.6-3.03 4.71-6.76 4.71s-6.76-2.11-6.76-4.71c0-.17.01-.34.03-.51a1.72 1.72 0 1 1 2.02-2.74 8.3 8.3 0 0 1 4.5-1.42l.85-4 3.11.66a1.29 1.29 0 1 1 .17 1.02l-2.5-.53-.72 3.4a8.3 8.3 0 0 1 4.13 1.4 1.72 1.72 0 1 1 1.9 2.22M8.7 13.9a1.29 1.29 0 1 0 0-2.58 1.29 1.29 0 0 0 0 2.58m6.6 0a1.29 1.29 0 1 0 0-2.58 1.29 1.29 0 0 0 0 2.58m-.44 2.09a.53.53 0 0 0-.75 0 3.6 3.6 0 0 1-2.11.6 3.6 3.6 0 0 1-2.11-.6.53.53 0 0 0-.75.75c.83.83 2.2 1.02 2.86 1.02s2.03-.19 2.86-1.02a.53.53 0 0 0 0-.75"/></svg>
+        </a>
+
+        <a class="share-btn" id="shareWhatsApp" href="#" target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp" title="Share on WhatsApp">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97s-.47-.15-.67.15-.77.97-.94 1.17-.35.22-.65.07a8.1 8.1 0 0 1-2.39-1.47 9 9 0 0 1-1.65-2.06c-.17-.3-.02-.46.13-.61s.3-.35.45-.52.2-.3.3-.5.05-.37-.02-.52-.67-1.62-.92-2.21c-.24-.58-.49-.5-.67-.51h-.57a1.1 1.1 0 0 0-.8.37 3.35 3.35 0 0 0-1.04 2.48 5.8 5.8 0 0 0 1.22 3.09 13.3 13.3 0 0 0 5.09 4.5c.71.3 1.26.49 1.7.63a4.1 4.1 0 0 0 1.87.12 3.07 3.07 0 0 0 2.01-1.42 2.5 2.5 0 0 0 .17-1.42c-.07-.12-.27-.2-.57-.35M12.05 21.8h-.01a9.9 9.9 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.9-9.88a9.82 9.82 0 0 1 9.88 9.89c0 5.45-4.44 9.88-9.89 9.88M20.5 3.49A11.8 11.8 0 0 0 12.05 0C5.5 0 .17 5.33.17 11.88c0 2.09.55 4.14 1.59 5.94L.07 24l6.33-1.66a11.9 11.9 0 0 0 5.65 1.44h.01c6.55 0 11.88-5.33 11.88-11.88A11.8 11.8 0 0 0 20.5 3.5"/></svg>
+        </a>
+
+        <a class="share-btn" id="shareEmail" href="#" aria-label="Share by email" title="Share by email">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg>
+        </a>
+
+        <button class="share-btn" id="shareCopy" type="button" aria-label="Copy link" title="Copy link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        </button>
+
+        <span class="share-copied" id="shareCopied" role="status" aria-live="polite"></span>
+    </div>
+</div>
+
+<footer>
+    <div class="wrap">
+        <div class="footer-grid">
+            <div>
+                <div class="logo"><span class="mark">D</span>DAREALTYTE</div>
+                <p style="margin-top:14px; max-width: 280px;">Wayback Machine recovery and one-click deployment engine.</p>
+            </div>
+            <div>
+                <h4>Product</h4>
+                <ul>
+                    <li><a href="#engine">The engine</a></li>
+                    <li><a href="#how">How it works</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Resources</h4>
+                <ul>
+                    <li><a href="#faq">FAQ</a></li>
+                    <li><a href="/admin.html">Operator console</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="/terms.html">Terms &amp; disclaimers</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span class="muted">© 2026 DAREALTYTE. Not affiliated with Vercel Inc. or the Internet Archive.</span>
+            <a href="/admin.html" class="muted">Operator console →</a>
+        </div>
+        <p class="muted" style="font-size: 0.72rem; margin-top: 14px; max-width: 640px;">
+            Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc.
+        </p>
+    </div>
+</footer>
+
+<script type="module" src="./src/home.ts"></script>
+</body>
+</html>
