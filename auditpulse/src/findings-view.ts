@@ -1,4 +1,5 @@
 import { escapeHtml } from './escape-html.js';
+import { icons } from './icons.js';
 
 export interface FindingRow {
     id?: string;
@@ -75,7 +76,7 @@ export function executiveSummaryHtml(grade: string, score: number, findings: Fin
 
 export function severityGlossaryHtml(): string {
     return `<details class="glossary">
-        <summary>What do these severities mean? <span class="chevron">▶</span></summary>
+        <summary>What do these severities mean? <span class="chevron">${icons.chevron}</span></summary>
         <div class="glossary-body">
             ${SEVERITY_ORDER.map(sev => `
                 <div class="glossary-row">
@@ -110,7 +111,7 @@ function findingHtml(f: FindingRow, index: number, showFixAction: boolean): stri
                 <h4>${escapeHtml(f.title)}</h4>
                 <p class="finding-impact">${escapeHtml(f.impact)}</p>
             </div>
-            <span class="chevron">▶</span>
+            <span class="chevron">${icons.chevron}</span>
         </div>
         <div class="finding-body">
             <div class="label">Technical details</div>

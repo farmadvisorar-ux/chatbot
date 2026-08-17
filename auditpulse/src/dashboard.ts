@@ -3,6 +3,7 @@ import { initAuth, resolveSession, requireSignIn } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
 import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
 import { escapeHtml } from './escape-html.js';
+import { icons, renderIcons } from './icons.js';
 
 initAuth();
 
@@ -126,11 +127,26 @@ function renderSparkline(canvas: HTMLCanvasElement, scores: number[]): void {
     });
 
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#35e0a1';
+
+    // Fill under the line so a two-point trend still reads as a chart
+    // rather than a stray diagonal rule.
+    const fill = ctx.createLinearGradient(0, 0, 0, h);
+    fill.addColorStop(0, 'rgba(53,224,161,.28)');
+    fill.addColorStop(1, 'rgba(53,224,161,0)');
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], h);
+    for (const [x, y] of points) ctx.lineTo(x, y);
+    ctx.lineTo(points[points.length - 1][0], h);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+
     ctx.beginPath();
     ctx.moveTo(points[0][0], points[0][1]);
     for (const [x, y] of points.slice(1)) ctx.lineTo(x, y);
     ctx.strokeStyle = accent;
     ctx.lineWidth = 1.75;
+    ctx.lineJoin = 'round';
     ctx.stroke();
 
     const [lastX, lastY] = points[points.length - 1];
@@ -190,22 +206,29 @@ function renderStatTiles(): void {
     const weekMs = 7 * 86_400_000;
     const dueSoon = targets.filter(t => t.next_rescan_at && new Date(t.next_rescan_at).getTime() - Date.now() < weekMs).length;
 
-    statTilesEl.innerHTML = `
-        <div class="stat-tile"><div class="stat-value">${targets.length}</div><div class="stat-label">Site${targets.length === 1 ? '' : 's'}</div></div>
-        <div class="stat-tile"><div class="stat-value">${verified}/${targets.length}</div><div class="stat-label">Verified</div></div>
-        <div class="stat-tile ${openSevere ? 'stat-tile-warn' : ''}"><div class="stat-value">${openSevere}</div><div class="stat-label">Critical + high findings</div></div>
-        <div class="stat-tile"><div class="stat-value">${dueSoon}</div><div class="stat-label">Due for re-audit (7d)</div></div>
-    `;
+    const tile = (icon: string, head: string, value: string, label: string, cls = '') => `
+        <div class="stat-tile ${cls}">
+            <div class="stat-tile-head">${icon}${head}</div>
+            <div class="stat-value">${value}</div>
+            <div class="stat-label">${label}</div>
+        </div>`;
+
+    statTilesEl.innerHTML = [
+        tile(icons.globe, 'Sites', String(targets.length), `${targets.length === 1 ? 'site' : 'sites'} monitored`),
+        tile(icons.shield, 'Verified', `${verified}/${targets.length}`, verified === targets.length ? 'all ownership proven' : `${targets.length - verified} awaiting proof`, verified === targets.length ? 'stat-tile-ok' : ''),
+        tile(icons.alert, 'Needs fixing', String(openSevere), 'critical + high findings', openSevere ? 'stat-tile-warn' : 'stat-tile-ok'),
+        tile(icons.clock, 'Upcoming', String(dueSoon), 're-audits due in 7 days'),
+    ].join('');
 }
 
 function renderTargetList(): void {
     const list = sortedFilteredTargets();
     if (!targets.length) {
-        targetListEl.innerHTML = '<div class="empty">No sites yet. Add one to get started.</div>';
+        targetListEl.innerHTML = '<div class="empty"><div class="empty-title">No sites yet</div>Add your first website to run an audit.</div>';
         return;
     }
     if (!list.length) {
-        targetListEl.innerHTML = '<div class="empty">No sites match your search.</div>';
+        targetListEl.innerHTML = '<div class="empty"><div class="empty-title">No matches</div>No sites match that search.</div>';
         return;
     }
     targetListEl.innerHTML = list.map(t => `
@@ -218,8 +241,8 @@ function renderTargetList(): void {
                 ${smallGradeBadge(t.latest_grade)}
             </div>
             <div class="target-item-bottom">
-                <span class="badge-pill ${t.verified ? 'badge-verified' : 'badge-pending'}">${t.verified ? 'Verified' : 'Unverified'}</span>
-                ${t.github_repo ? '<span class="badge-pill badge-verified" title="GitHub connected">⚡ Fix-ready</span>' : ''}
+                <span class="badge-pill ${t.verified ? 'badge-verified' : 'badge-pending'}">${t.verified ? icons.check : icons.alert}${t.verified ? 'Verified' : 'Unverified'}</span>
+                ${t.github_repo ? `<span class="badge-pill badge-fix" title="GitHub connected">${icons.bolt}Fix-ready</span>` : ''}
                 <span class="meta">${t.latest_scanned_at ? `scanned ${fmtRelative(t.latest_scanned_at)}` : 'never scanned'}</span>
             </div>
         </div>`).join('');
@@ -257,10 +280,12 @@ function renderOverview(): void {
     const attention = [...targets].sort((a, b) => concernScore(b) - concernScore(a)).slice(0, 5);
     const attentionHtml = attention.map(t => `
         <div class="attention-row" data-id="${t.id}">
-            ${t.latest_grade ? smallGradeBadge(t.latest_grade) : `<div class="grade-badge grade-badge-sm" style="color:var(--muted)">${t.verified ? '?' : '!'}</div>`}
+            ${t.latest_grade
+                ? smallGradeBadge(t.latest_grade)
+                : `<div class="grade-badge grade-badge-sm" style="color:var(--medium);border-color:rgba(255,204,77,.35);background:rgba(255,204,77,.08)">${t.verified ? icons.clock : icons.alert}</div>`}
             <div class="attention-info">
                 <strong>${escapeHtml(t.label || t.hostname)}</strong>
-                <span class="muted">${!t.verified ? 'Needs ownership verification' : !t.latest_summary ? 'Never audited yet' : `${t.latest_summary.critical} critical, ${t.latest_summary.high} high finding(s)`}</span>
+                <span class="muted">${!t.verified ? 'Needs ownership verification' : !t.latest_summary ? 'Never audited yet' : `${t.latest_summary.critical} critical, ${t.latest_summary.high} high`}</span>
             </div>
         </div>`).join('');
 
@@ -280,12 +305,12 @@ function renderOverview(): void {
 
     detailPanel.innerHTML = `
         <div class="card">
-            <h3 style="font-size:15px;margin-bottom:4px">Needs attention</h3>
-            <p class="muted" style="font-size:12px;margin:0 0 12px">Sorted by risk — unverified and unscanned sites first, then by open critical/high findings.</p>
+            <div class="card-title"><h3>Needs attention</h3></div>
+            <p class="section-note">Sorted by risk — unverified and unscanned sites first, then by open critical and high findings.</p>
             <div class="attention-list">${attentionHtml}</div>
         </div>
         <div class="card" style="margin-top:16px">
-            <h3 style="font-size:15px;margin-bottom:12px">Recent activity</h3>
+            <div class="card-title"><h3>Recent activity</h3></div>
             <div class="activity-list">${recentHtml}</div>
         </div>
     `;
@@ -345,7 +370,7 @@ async function renderDetail(): Promise<void> {
         : '';
     const setupSectionHtml = `
         <details class="setup-details" ${setupComplete ? '' : 'open'}>
-            <summary>Setup ${setupSummary}<span class="chevron">▶</span></summary>
+            <summary>Setup ${setupSummary}<span class="chevron">${icons.chevron}</span></summary>
             <div class="setup-body">
                 ${verificationBlock}
                 ${githubBlock}
@@ -375,31 +400,33 @@ async function renderDetail(): Promise<void> {
     const embedSnippet = `<a href="${verifyPageUrl}" target="_blank" rel="noopener noreferrer"><img src="${badgeSvgUrl}" alt="Secured by AuditPulse" width="168" height="58"></a>`;
     const trustBadgeHtml = target.verified && target.latest_grade ? `
         <div class="card" style="margin-top:16px">
-            <h3 style="font-size:15px">Trust badge</h3>
-            <p class="muted" style="font-size:13px;margin:6px 0 14px">Show visitors this site is independently, regularly audited. Paste this on your site — it updates automatically as new audits complete, no re-embedding needed.</p>
-            <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap">
-                <img src="${badgeSvgUrl}" alt="AuditPulse trust badge preview" width="168" height="58" style="border-radius:10px;flex-shrink:0">
-                <div style="flex:1;min-width:220px">
-                    <div class="field" style="margin-bottom:8px">
-                        <label for="badge-embed-code">Embed code</label>
-                        <textarea id="badge-embed-code" readonly rows="3" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;resize:none;width:100%">${escapeHtml(embedSnippet)}</textarea>
+            <div class="card-title"><h3>Trust badge</h3></div>
+            <p class="section-note">Show visitors this site is independently, regularly audited. Paste this anywhere on your site — it updates itself as new audits complete.</p>
+            <div class="embed-row">
+                <div class="embed-preview">
+                    <img src="${badgeSvgUrl}" alt="AuditPulse trust badge preview" width="168" height="58">
+                </div>
+                <div class="embed-fields">
+                    <label class="field" style="margin:0">
+                        <span style="font-size:var(--t-sm);font-weight:600;color:var(--ink-2)">Embed code</span>
+                        <textarea id="badge-embed-code" class="embed-code" readonly rows="4">${escapeHtml(embedSnippet)}</textarea>
+                    </label>
+                    <div class="embed-actions">
+                        <button type="button" id="copy-badge-btn" class="mini-cta ghost-button">Copy embed code</button>
+                        <a href="${verifyPageUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:var(--t-sm);font-weight:600;text-decoration:none">Preview verification page →</a>
                     </div>
-                    <button type="button" id="copy-badge-btn" class="mini-cta ghost-button">Copy embed code</button>
-                    <a href="${verifyPageUrl}" target="_blank" rel="noopener noreferrer" class="text-button" style="margin-left:4px">Preview verification page →</a>
                 </div>
             </div>
         </div>` : '';
 
     detailPanel.innerHTML = `
         <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
-                <div>
-                    <div style="display:flex;align-items:center;gap:10px">
-                        ${smallGradeBadge(target.latest_grade)}
-                        <div>
-                            <h2 style="font-size:18px">${escapeHtml(target.label || target.hostname)}</h2>
-                            <p class="muted" style="font-size:13px">${escapeHtml(target.url)}</p>
-                        </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:14px;min-width:0">
+                    ${smallGradeBadge(target.latest_grade)}
+                    <div style="min-width:0">
+                        <h2 style="font-size:var(--t-xl)">${escapeHtml(target.label || target.hostname)}</h2>
+                        <p class="muted" style="font-size:var(--t-sm);margin:2px 0 0">${escapeHtml(target.url)}</p>
                     </div>
                 </div>
                 <div style="display:flex;gap:8px">
@@ -408,16 +435,14 @@ async function renderDetail(): Promise<void> {
                 </div>
             </div>
             ${setupSectionHtml}
-            <p class="muted" style="font-size:12px;margin-top:10px">Last scanned: ${fmtDate(target.last_scanned_at)} ${target.auto_rescan && target.next_rescan_at ? `· Next auto re-audit: ${fmtDate(target.next_rescan_at)} (${fmtRelative(target.next_rescan_at, true)})` : ''}</p>
+            <p class="muted" style="font-size:var(--t-sm);margin-top:12px">Last scanned ${fmtDate(target.last_scanned_at)}${target.auto_rescan && target.next_rescan_at ? ` · next auto re-audit ${fmtRelative(target.next_rescan_at, true)}` : ''}</p>
         </div>
         ${trustBadgeHtml}
 
         <div class="card" style="margin-top:16px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-                <h3 style="font-size:15px">Scan history</h3>
-            </div>
+            <div class="card-title"><h3>Scan history</h3></div>
             ${sparklineHtml}
-            <div id="scan-list" style="margin-top:10px">${scansHtml}</div>
+            <div id="scan-list" style="margin-top:12px">${scansHtml}</div>
         </div>
         <div id="scan-detail" style="margin-top:16px"></div>
     `;
@@ -426,6 +451,7 @@ async function renderDetail(): Promise<void> {
         renderSparkline(el<HTMLCanvasElement>('score-sparkline'), completedScans.map(s => s.score!));
     }
 
+    renderIcons(detailPanel);
     el<HTMLButtonElement>('run-scan-btn')?.addEventListener('click', () => runScan(target.id));
     el<HTMLButtonElement>('delete-target-btn')?.addEventListener('click', () => deleteTarget(target.id));
     el<HTMLButtonElement>('verify-btn')?.addEventListener('click', () => checkVerification(target.id));
@@ -529,13 +555,14 @@ async function selectScan(scanId: string): Promise<void> {
             <div class="summary-row">${gradeBadgeHtml(scan.grade!, scan.score!)}</div>
             ${summaryChipsHtml(scan.summary)}
             ${executiveSummaryHtml(scan.grade!, scan.score!, findings)}
-            <div style="display:flex;gap:10px;margin:14px 0;flex-wrap:wrap">
-                <button type="button" id="email-report-btn">Email report to client</button>
-                <button type="button" class="ghost-button" id="copy-link-btn">Copy shareable link</button>
+            <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
+                <button type="button" id="email-report-btn" data-nav-icon="mail">Email report</button>
+                <button type="button" class="ghost-button" id="copy-link-btn" data-nav-icon="link">Copy shareable link</button>
             </div>
             <div id="scan-findings"></div>
         </div>`;
 
+    renderIcons(scanDetailEl);
     renderFindings(el<HTMLElement>('scan-findings'), findings, billing.fixAccess ? { onFix: handleFix } : {});
 
     el<HTMLButtonElement>('email-report-btn').addEventListener('click', () => openEmailModal(scanId));

@@ -1,4 +1,7 @@
 import type { Clerk as ClerkType } from '@clerk/clerk-js';
+import { renderIcons } from './icons.js';
+
+renderIcons();
 
 let clerk: ClerkType | null = null;
 let loadPromise: Promise<ClerkType | null> | null = null;
@@ -50,16 +53,15 @@ function renderHeaderControls(): void {
     for (const mountPoint of mountPoints()) {
         if (clerk?.user) {
             mountPoint.innerHTML = '';
-            const dashboardLink = document.createElement('a');
-            dashboardLink.href = '/dashboard.html';
-            dashboardLink.className = 'text-button';
-            dashboardLink.textContent = 'Dashboard';
-            mountPoint.appendChild(dashboardLink);
-            const accountLink = document.createElement('a');
-            accountLink.href = '/account.html';
-            accountLink.className = 'text-button';
-            accountLink.textContent = 'Account';
-            mountPoint.appendChild(accountLink);
+            // On app pages the persistent nav already links Dashboard/Account,
+            // so only the landing page needs them repeated here.
+            if (!document.querySelector('.nav-links')) {
+                const dashboardLink = document.createElement('a');
+                dashboardLink.href = '/dashboard.html';
+                dashboardLink.className = 'text-button';
+                dashboardLink.textContent = 'Dashboard';
+                mountPoint.appendChild(dashboardLink);
+            }
             const userButtonSlot = document.createElement('div');
             mountPoint.appendChild(userButtonSlot);
             clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });

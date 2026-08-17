@@ -10,9 +10,15 @@
     <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
-    <header class="topbar wrap">
-        <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
-        <div id="header-controls" data-auth-controls></div>
+    <header class="appbar">
+        <div class="wrap appbar-inner">
+            <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
+            <nav class="nav-links" aria-label="Main">
+                <a class="nav-link" href="/dashboard.html" aria-current="page" data-nav-icon="grid">Dashboard</a>
+                <a class="nav-link" href="/account.html" data-nav-icon="user">Account</a>
+            </nav>
+            <div id="header-controls" data-auth-controls></div>
+        </div>
     </header>
 
     <main class="wrap" style="padding-bottom:80px">
@@ -32,8 +38,11 @@
 
         <section id="signed-in" hidden>
             <div class="dash-header">
-                <h1>Your sites</h1>
-                <button id="add-target-btn" type="button">+ Add a site</button>
+                <div>
+                    <h1>Your sites</h1>
+                    <p class="muted">Security posture across every site you monitor.</p>
+                </div>
+                <button id="add-target-btn" type="button" data-nav-icon="plus">Add a site</button>
             </div>
             <div id="plan-banner" class="card" style="margin-top:16px;display:none"></div>
 
@@ -41,9 +50,12 @@
 
             <div class="dash-layout">
                 <div class="target-panel">
+                    <div class="panel-heading">
+                        <span>Sites</span>
+                        <button type="button" id="overview-btn" class="text-button mini-cta" title="Back to overview">Overview</button>
+                    </div>
                     <div class="target-panel-controls">
                         <input id="target-search" type="text" placeholder="Search sites…" aria-label="Search sites">
-                        <button type="button" id="overview-btn" class="ghost-button mini-cta" title="Back to overview">Overview</button>
                     </div>
                     <div id="target-list" class="target-list"></div>
                 </div>
