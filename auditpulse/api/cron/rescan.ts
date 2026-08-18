@@ -6,16 +6,15 @@ import { runScan } from '../../lib/scanner/engine.js';
 import { sendReportEmail } from '../_lib/email.js';
 import { persistScanResult } from '../_lib/persistScan.js';
 import { generateAuditPdf } from '../../lib/pdf/report.js';
-import { siteOrigin } from '../_lib/stripe.js';
+import { siteOrigin } from '../_lib/site.js';
 
 export const config = { maxDuration: 60 };
 
 const BATCH_SIZE = 5;
 
 /**
- * Vercel Cron hits this daily (see vercel.json). Finds verified targets
- * belonging to an active-subscription user whose 30-day re-audit is due,
- * re-runs the full scan, and emails the report automatically. Capped to a
+ * Vercel Cron hits this daily (see vercel.json). Finds every verified
+ * target whose 30-day re-audit is due, re-runs the full scan, and emails the report automatically. Capped to a
  * small batch per run so one invocation can't exceed the function's time
  * budget; targets not reached today are picked up on the next run since
  * next_rescan_at is only pushed forward once a scan actually completes.
@@ -39,7 +38,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
          JOIN users u ON u.id = t.user_id
          WHERE t.auto_rescan AND t.verified
            AND t.next_rescan_at IS NOT NULL AND t.next_rescan_at <= now()
-           AND u.subscription_status IN ('active', 'trialing')
          ORDER BY t.next_rescan_at ASC
          LIMIT $1`,
         [BATCH_SIZE],

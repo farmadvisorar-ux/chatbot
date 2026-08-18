@@ -21,10 +21,6 @@ interface ScanSummaryRow {
     completed_at: string | null; triggered_by: string; share_token: string;
 }
 interface ActivityRow extends ScanSummaryRow { target_id: string; target_label: string | null; hostname: string }
-interface BillingStatus {
-    subscriptionStatus: string | null; active: boolean; plan: 'audit' | 'audit_fix' | null; fixAccess: boolean;
-    currentPeriodEnd: string | null; planExpiresAt: string | null;
-}
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const signedOutSection = el<HTMLElement>('signed-out');
@@ -32,7 +28,6 @@ const loadingSection = el<HTMLElement>('loading');
 const signedInSection = el<HTMLElement>('signed-in');
 const targetListEl = el<HTMLElement>('target-list');
 const detailPanel = el<HTMLElement>('detail-panel');
-const planBanner = el<HTMLElement>('plan-banner');
 const statTilesEl = el<HTMLElement>('stat-tiles');
 const searchInput = el<HTMLInputElement>('target-search');
 const toast = el<HTMLElement>('toast');
@@ -42,7 +37,6 @@ let activity: ActivityRow[] = [];
 let selectedTargetId: string | null = null;
 let selectedScanId: string | null = null;
 let searchQuery = '';
-let billing: BillingStatus = { subscriptionStatus: null, active: false, plan: null, fixAccess: false, currentPeriodEnd: null, planExpiresAt: null };
 
 // ---------------------------------------------------------------- helpers --
 
@@ -157,25 +151,6 @@ function renderSparkline(canvas: HTMLCanvasElement, scores: number[]): void {
 }
 
 // ---------------------------------------------------------- data loading --
-
-async function loadBilling(): Promise<void> {
-    try {
-        billing = await apiFetch<BillingStatus>('/billing/status');
-    } catch {
-        billing = { subscriptionStatus: null, active: false, plan: null, fixAccess: false, currentPeriodEnd: null, planExpiresAt: null };
-    }
-    if (billing.active) {
-        if (billing.fixAccess) {
-            planBanner.style.display = 'none';
-        } else {
-            planBanner.style.display = 'block';
-            planBanner.innerHTML = `On the <strong>Audit</strong> plan. <a href="/account.html" style="color:var(--accent)">Upgrade to Audit + Fix</a> to open automatic fix pull requests for fixable findings.`;
-        }
-    } else {
-        planBanner.style.display = 'block';
-        planBanner.innerHTML = `<strong>Free trial:</strong> 1 site and 1 full audit included. <a href="/account.html" style="color:var(--accent)">Upgrade to Audit</a> for unlimited sites and audits, or <a href="/account.html" style="color:var(--accent)">Audit + Fix</a> to also auto-fix what's found.`;
-    }
-}
 
 async function loadTargets(): Promise<void> {
     const data = await apiFetch<{ targets: Target[] }>('/targets');
@@ -330,7 +305,7 @@ async function renderDetail(): Promise<void> {
     if (!selectedTargetId) return;
     const { target, scans } = await apiFetch<{ target: Target; scans: ScanSummaryRow[] }>(`/targets/${selectedTargetId}`);
 
-    const setupComplete = target.verified && (target.github_repo || !billing.fixAccess);
+    const setupComplete = target.verified && Boolean(target.github_repo);
     const verificationDone = target.verified;
     const githubDone = Boolean(target.github_repo);
 
@@ -356,7 +331,7 @@ async function renderDetail(): Promise<void> {
     ` : `
         <div class="card" style="background:var(--surface-2);margin:14px 0">
             <strong>Connect GitHub for auto-fix</strong>
-            <p class="muted" style="font-size:13px">Requires the Audit + Fix plan. Once connected, fixable findings get a "Fix with PR" button that opens a real pull request.</p>
+            <p class="muted" style="font-size:13px">Once connected, fixable findings get a "Fix with PR" button that opens a real pull request against this repo.</p>
             <div class="field"><label for="github-repo-input">Repository (owner/repo)</label><input id="github-repo-input" type="text" placeholder="your-org/your-site" autocomplete="off"></div>
             <div class="field"><label for="github-token-input">Fine-grained personal access token</label><input id="github-token-input" type="password" placeholder="github_pat_…" autocomplete="off"></div>
             <p class="muted" style="font-size:12px">Create one at github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens. Limit repository access to just this repo, with permissions Contents (Read and write) and Pull requests (Read and write).</p>
@@ -563,7 +538,7 @@ async function selectScan(scanId: string): Promise<void> {
         </div>`;
 
     renderIcons(scanDetailEl);
-    renderFindings(el<HTMLElement>('scan-findings'), findings, billing.fixAccess ? { onFix: handleFix } : {});
+    renderFindings(el<HTMLElement>('scan-findings'), findings, { onFix: handleFix });
 
     el<HTMLButtonElement>('email-report-btn').addEventListener('click', () => openEmailModal(scanId));
     el<HTMLButtonElement>('copy-link-btn').addEventListener('click', async () => {
@@ -668,6 +643,6 @@ el<HTMLButtonElement>('email-report-submit').addEventListener('click', async () 
         return;
     }
     signedInSection.hidden = false;
-    await Promise.all([loadTargets(), loadBilling(), loadActivity()]);
+    await Promise.all([loadTargets(), loadActivity()]);
     showOverview();
 })();

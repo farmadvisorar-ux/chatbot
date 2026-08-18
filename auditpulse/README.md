@@ -1,13 +1,10 @@
 # AuditPulse
 
 A vulnerability audit platform: enter a URL, get a comprehensive, interactive
-security report with severity-ranked findings and step-by-step fixes. Two
-tiers, both unlimited audits and automatic re-audits every 30 days: **Audit**
-and **Audit + Fix** (the latter additionally connects a GitHub repo per site
-and can open a real pull request that fixes what it found). Each tier is
-billable two ways: **monthly** ($7 / $14, a recurring subscription) or
-**annually** ($59.99 / $99.99, a one-time payment for 365 days of access —
-no auto-renewal).
+security report with severity-ranked findings and step-by-step fixes. It is
+**free** — every signed-in account gets unlimited sites, unlimited on-demand
+audits, automatic re-audits every 30 days, an embeddable trust badge, PDF
+certificates, and GitHub-connected pull requests that fix what was found.
 
 Built as a static Vite frontend with Vercel serverless functions and
 Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
@@ -19,10 +16,9 @@ Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
 - Scan engine: `lib/scanner/` — plain Node/TypeScript, no external scanning service
 - Database: any Postgres (Vercel Postgres, Neon, Supabase, etc.) via `DATABASE_URL`
 - Auth: [Clerk](https://clerk.com) — Google, Microsoft, email+password, email magic link
-- Billing: [Stripe](https://stripe.com) — two recurring prices, "Audit" ($7/mo) and "Audit + Fix" ($14/mo)
 - Transactional email: [Resend](https://resend.com) — report emails, welcome email
 - Scheduling: Vercel Cron (`vercel.json`) — daily automatic 30-day re-audits
-- Auto-fix: `lib/fixers/` — opens pull requests via the GitHub REST API using a per-site fine-grained PAT (Audit + Fix plan only)
+- Auto-fix: `lib/fixers/` — opens pull requests via the GitHub REST API using a per-site fine-grained PAT
 
 ## What the scanner actually does
 
@@ -70,7 +66,7 @@ mid-scan.
 **This tool is for auditing sites you own or are explicitly authorized to
 test. Do not point it at third-party sites without permission.**
 
-## What the auto-fix feature actually does (Audit + Fix plan)
+## What the auto-fix feature actually does
 
 AuditPulse only ever talks to your **live website** over HTTP — it never has
 access to your source code. So "fix it" only works for a specific, narrow
@@ -88,7 +84,7 @@ you deploy from:
 Everything else (TLS/certificate issues, DNS records, CORS logic, cookie
 flags, exposed credential files, mixed content, HTTP methods, subdomain
 exposure, open redirects) stays a **manual fix** with the same
-plain-English remediation text every plan gets — these either aren't
+plain-English remediation text — these either aren't
 file-based (DNS, TLS), require an app-logic judgment call (CORS, cookies,
 redirects), or need action outside repo content entirely (credential
 rotation). A finding only shows a "Fix with PR" button when it's one of the
@@ -96,7 +92,7 @@ three types above.
 
 **Connecting a repo**: per-site, the user pastes a **fine-grained GitHub
 Personal Access Token** scoped to just that repo, with Contents and Pull
-requests permissions set to Read and write (`api/targets/[id]/github.ts`).
+requests permissions set to Read and write (`api/targets/[id].ts`).
 The token is encrypted at rest with AES-256-GCM (`api/_lib/crypto.ts`,
 `TOKEN_ENCRYPTION_KEY`) and only decrypted in-memory when opening a fix PR.
 This is a v1: a proper GitHub App with an OAuth installation flow (no token
@@ -127,8 +123,8 @@ deployed preview to exercise `/api/*`.
    `npm run migrate:http` from a sandboxed environment with no direct
    TCP/5432 access — Neon databases only).
 4. Set `PUBLIC_SITE_URL` to your production URL (used in emailed report links
-   and Stripe redirects).
-5. Set up Clerk, Stripe, and Resend (below), then deploy. **Redeploy after
+   and the trust badge).
+5. Set up Clerk and Resend (below), then deploy. **Redeploy after
    adding/changing any env var** — Vite inlines `VITE_*` vars at build time.
 6. `vercel.json` registers the daily cron (`/api/cron/rescan`, 13:00 UTC).
    Set `CRON_SECRET` so only Vercel's own cron invocations can trigger it —
@@ -148,38 +144,44 @@ auth code to write. As long as the Email/password strategy is turned on for
 the Clerk app, "Forgot password?" is included automatically; nothing further
 is needed here to get the full sign-up/login/reset flow working.
 
-## Setting up billing (Stripe)
+## Pricing model
 
-1. In the Stripe Dashboard, create one **Product** ("AuditPulse") with four
-   **prices**:
-   - $7.00/month, **recurring** — "Audit" monthly → `STRIPE_PRICE_ID_AUDIT`
-   - $14.00/month, **recurring** — "Audit + Fix" monthly → `STRIPE_PRICE_ID_AUDIT_FIX`
-   - $59.99, **one-time** — "Audit" annual → `STRIPE_PRICE_ID_AUDIT_ANNUAL`
-   - $99.99, **one-time** — "Audit + Fix" annual → `STRIPE_PRICE_ID_AUDIT_FIX_ANNUAL`
+AuditPulse is free. There is no billing integration, no plan gating, and no
+usage cap: every signed-in account gets unlimited sites, unlimited on-demand
+audits, automatic 30-day re-audits, the trust badge, PDF certificates, and
+GitHub fix pull requests.
 
-   The annual prices must be created as **one-time** (not recurring) — they're
-   billed once for a year of access, not on an auto-renewing schedule.
-2. Copy your **Secret key** into `STRIPE_SECRET_KEY`.
-3. Add a webhook endpoint at `https://<your-domain>/api/webhooks/stripe`
-   subscribed to `checkout.session.completed`, `customer.subscription.created`,
-   `customer.subscription.updated`, and `customer.subscription.deleted`.
-   Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-4. Users choose a plan and billing interval from `account.html` (or the
-   landing page's Monthly/Annual toggle), which calls `/api/billing/checkout`
-   with `{ plan: 'audit' | 'audit_fix', interval: 'month' | 'year' }`.
-   - `interval: 'month'` creates a **subscription**-mode Checkout Session;
-     the webhook syncs `users.subscription_status`/`plan` from it as usual,
-     and `/api/billing/portal` (Stripe Billing Portal) handles self-serve
-     cancellation. If a subscriber wants to switch between Audit and
-     Audit + Fix inside the portal rather than via `account.html`, enable
-     "Update subscription" in the portal's configuration (Stripe Dashboard
-     → Settings → Billing → Customer portal) and add both monthly prices to it.
-   - `interval: 'year'` creates a **payment**-mode Checkout Session (no
-     Stripe Subscription object at all); the webhook grants 365 days of
-     access by setting `users.plan_expires_at`, stacking on top of any
-     remaining time if they renew early. There's no Billing Portal entry for
-     these since there's no subscription to manage — they simply lapse
-     unless repurchased.
+The `users` table still carries the vestigial `stripe_*`, `plan`,
+`subscription_status` and `plan_expires_at` columns, and the
+`stripe_events_processed` table still exists. They are unused and left in
+place so the migration stays additive — drop them separately if you want a
+clean schema.
+
+## Email wall
+
+The landing page shows a modal 10 seconds after load asking for an email
+(`src/email-wall.ts` + `api/email-capture.ts`). Once someone submits, it
+never shows again for them; dismissing it only hides it for that page view.
+
+Suppression is layered so clearing one signal isn't enough to bring the
+prompt back:
+
+1. A `localStorage` flag, checked first so repeat visits cost no network call.
+2. An `HttpOnly` `ap_ew` cookie set by the server on submit.
+3. A lookup by client IP against `email_captures`, which covers cleared
+   cookies and a second browser on the same connection.
+
+The IP fallback is deliberately coarse — behind a shared NAT one person's
+submission suppresses the prompt for everyone on that address. That is the
+right trade for a marketing prompt and would **not** be acceptable for
+anything security-relevant.
+
+Captured emails and IP addresses are personal data. Before driving real
+traffic you need a privacy policy covering what is stored, why, and for how
+long, plus a way to honour deletion requests (`DELETE FROM email_captures
+WHERE lower(email) = ...`). The cookie is functional (it only records "this
+visitor already answered") rather than advertising, which is generally
+exempt from consent banners, but confirm that against your own jurisdiction.
 
 ## Setting up report emails (Resend)
 

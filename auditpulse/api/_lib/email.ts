@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import { escapeHtml } from '../../src/escape-html.js';
-import { siteOrigin } from './stripe.js';
+import { siteOrigin } from './site.js';
 
 const SENDER = 'AuditPulse <reports@auditpulse.example.com>';
 const REPLY_TO = 'farmadvisorar@gmail.com';

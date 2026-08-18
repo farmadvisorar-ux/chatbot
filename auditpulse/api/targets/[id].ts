@@ -4,7 +4,7 @@ import { clean } from '../_lib/validate.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
 import { verifyDomainOwnership } from '../_lib/verification.js';
-import { siteOrigin } from '../_lib/stripe.js';
+import { siteOrigin } from '../_lib/site.js';
 import { encryptSecret } from '../_lib/crypto.js';
 import { getRepo, GitHubApiError } from '../../lib/github.js';
 import { renderBadgeSvg } from '../_lib/badge.js';

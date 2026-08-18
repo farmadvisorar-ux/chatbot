@@ -2,7 +2,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { error, json, requireMethod } from '../../_lib/http.js';
 import { requireAuth } from '../../_lib/auth.js';
 import { getPool } from '../../_lib/db.js';
-import { hasFixAccess } from '../../_lib/stripe.js';
 import { decryptSecret } from '../../_lib/crypto.js';
 import { getRepo, GitHubApiError } from '../../../lib/github.js';
 import { applyFix, FixNotApplicableError } from '../../../lib/fixers/index.js';
@@ -15,12 +14,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!user) return;
     const id = typeof req.query.id === 'string' ? req.query.id : '';
     const pool = getPool();
-
-    const { rows: userRows } = await pool.query('SELECT subscription_status, plan, plan_expires_at FROM users WHERE id = $1', [user.userId]);
-    if (!hasFixAccess(userRows[0] ?? {})) {
-        error(res, 402, 'Automatic fixes require the Audit + Fix plan ($14/mo or $99.99/yr). Upgrade from your account page.');
-        return;
-    }
 
     const { rows } = await pool.query(
         `SELECT f.*, t.id AS target_id, t.github_repo, t.github_token_encrypted

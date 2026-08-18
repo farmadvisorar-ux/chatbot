@@ -2,16 +2,16 @@ import './styles.css';
 import { initAuth, requireSignIn } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
 import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
-import { initPricingToggle } from './pricing-toggle.js';
 import { initScanConsole } from './scan-console.js';
+import { initEmailWall } from './email-wall.js';
 import { initScrollReveal } from './reveal.js';
 import { initHeroGlow } from './hero-glow.js';
 
 initAuth();
-const getBillingInterval = initPricingToggle();
 initScanConsole();
 initScrollReveal();
 initHeroGlow();
+initEmailWall();
 
 const form = document.querySelector<HTMLFormElement>('#quick-check-form')!;
 const input = document.querySelector<HTMLInputElement>('#quick-check-url')!;
@@ -40,7 +40,7 @@ form.addEventListener('submit', async event => {
                 ${summaryChipsHtml(data.summary)}
                 ${executiveSummaryHtml(data.grade, data.score, data.findings)}
                 <div id="quick-findings" style="margin-top:16px"></div>
-                <p class="muted" style="font-size:13px;margin-top:18px">This free check only looked at response headers, TLS, and cookies. <a href="#pricing" style="color:var(--accent)">Sign up</a> to run a full, deep audit — every page linked from your homepage, exposed files, secrets in your JS bundles, CORS, DNS security, outdated libraries, and more — with automatic re-audits every 30 days.</p>
+                <p class="muted" style="font-size:13px;margin-top:18px">This free check only looked at response headers, TLS, and cookies. <a href="#pricing" style="color:var(--accent)">Create a free account</a> to run a full, deep audit — every page linked from your homepage, exposed files, secrets in your JS bundles, CORS, DNS security, outdated libraries, and more — with automatic re-audits every 30 days. It's all free.</p>
             </div>`;
         renderFindings(document.querySelector('#quick-findings')!, data.findings);
         resultEl.hidden = false;
@@ -53,11 +53,7 @@ form.addEventListener('submit', async event => {
     }
 });
 
-document.querySelectorAll<HTMLButtonElement>('.pricing-cta').forEach(button => {
-    button.addEventListener('click', async () => {
-        const signedIn = await requireSignIn();
-        if (!signedIn) return;
-        const plan = button.dataset.plan;
-        window.location.href = plan ? `/account.html?plan=${encodeURIComponent(plan)}&interval=${getBillingInterval()}` : '/dashboard.html';
-    });
+// Everything is free, so the only call to action is "make an account".
+document.querySelector<HTMLButtonElement>('#free-cta')?.addEventListener('click', async () => {
+    if (await requireSignIn()) window.location.href = '/dashboard.html';
 });

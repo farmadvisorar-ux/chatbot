@@ -4,10 +4,7 @@ import { validUrl, clean } from '../_lib/validate.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
 import { generateVerificationToken } from '../_lib/verification.js';
-import { hasActiveAccess } from '../_lib/stripe.js';
 import { normalizeTargetUrl } from '../../lib/scanner/engine.js';
-
-const FREE_TARGET_LIMIT = 1;
 
 /** GET list / POST create. Split out from api/targets/[id].ts because a bare `/api/targets` request (no id segment) doesn't reach a `[id].ts` dynamic route. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -58,17 +55,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     } catch {
         error(res, 400, 'Could not parse that URL.');
         return;
-    }
-
-    const { rows: userRows } = await pool.query('SELECT subscription_status, plan, plan_expires_at FROM users WHERE id = $1', [user.userId]);
-    const subscribed = hasActiveAccess(userRows[0] ?? {});
-
-    if (!subscribed) {
-        const { rows: countRows } = await pool.query('SELECT count(*) FROM targets WHERE user_id = $1', [user.userId]);
-        if (Number(countRows[0].count) >= FREE_TARGET_LIMIT) {
-            error(res, 402, `Free accounts can add ${FREE_TARGET_LIMIT} site. Upgrade to Audit ($7/mo or $59.99/yr) to add more.`);
-            return;
-        }
     }
 
     const token = generateVerificationToken();

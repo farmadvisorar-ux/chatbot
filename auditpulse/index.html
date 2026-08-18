@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AuditPulse — Find every vulnerability on your website</title>
-    <meta name="description" content="Scan any website with 18 real security checks — exposed secrets, misconfigured headers, outdated libraries, and more — and get a plain-English, severity-ranked report with step-by-step fixes.">
+    <meta name="description" content="Scan any website with 18 real security checks — exposed secrets, misconfigured headers, outdated libraries, and more — and get a plain-English, severity-ranked report with step-by-step fixes. Completely free.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@
                 <div class="hero-copy">
                     <span class="eyebrow">Security audits in minutes</span>
                     <h1>Find every vulnerability on your website — before someone else does.</h1>
-                    <p class="lead">Enter a URL below for a free instant check. Sign up to run the full 18-check audit — crawled across your site, explained in plain English — with automatic re-audits every 30 days. Add Audit + Fix for one-click pull requests on what it finds.</p>
+                    <p class="lead">Enter a URL below for a free instant check. Create a free account to run the full 18-check audit — crawled across your site, explained in plain English — with automatic re-audits every 30 days and one-click pull requests that fix what it finds.</p>
 
                     <form id="quick-check-form" class="quick-check-form">
                         <input id="quick-check-url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="off">
@@ -75,7 +75,7 @@
                 <div class="card feature-card" data-reveal>
                     <div class="feature-badge">↻</div>
                     <h3>Checked again in 30 days</h3>
-                    <p>Verified sites on a paid plan get re-scanned automatically every month, with the new report landing in your inbox the moment it's done.</p>
+                    <p>Verified sites are re-scanned automatically every month, with the new report landing in your inbox the moment it's done.</p>
                 </div>
                 <div class="card feature-card" data-reveal>
                     <div class="feature-badge">✓</div>
@@ -97,7 +97,7 @@
                 <div class="trust-copy">
                     <span class="eyebrow">Proof, not just a promise</span>
                     <h2>Turn every audit into proof your customers can see.</h2>
-                    <p class="muted">A scan result in a dashboard only you can see doesn't build trust. Verified sites on a paid plan get three things that do:</p>
+                    <p class="muted">A scan result in a dashboard only you can see doesn't build trust. Every verified site gets three things that do:</p>
                     <ul class="check-list">
                         <li><strong>Embeddable trust badge</strong> — a live seal for your site linking to a public verification page, viewable by anyone, no account required.</li>
                         <li><strong>Certificate-style PDF</strong> — emailed after every audit, with the full findings appendix, ready to send to a client or keep on file as a record.</li>
@@ -121,46 +121,42 @@
         </section>
 
         <section class="wrap" id="pricing">
-            <div class="billing-toggle" id="billing-toggle">
-                <button type="button" class="toggle-option active" data-interval="month">Monthly</button>
-                <button type="button" class="toggle-option" data-interval="year">Annual — pay once</button>
-            </div>
-            <div class="pricing-grid">
-                <div class="card pricing-card" data-plan="audit" data-reveal>
-                    <h2>Audit</h2>
-                    <div class="price"><span class="price-amount">$7</span><span class="price-suffix">/month</span></div>
-                    <p class="save-badge" hidden>One-time fee, no auto-renewal</p>
-                    <p class="muted">Cancel anytime.</p>
-                    <ul class="pricing-list">
-                        <li>Unlimited sites, unlimited on-demand audits</li>
-                        <li>Automatic full re-audit every 30 days per site</li>
-                        <li>Unlimited report emails to clients and teammates</li>
-                        <li>Shareable interactive report links — no account needed for recipients</li>
-                    </ul>
-                    <button type="button" class="pricing-cta ghost-button" data-plan="audit" style="width:100%">Choose Audit</button>
+            <div class="free-banner card" data-reveal>
+                <span class="eyebrow">Free, with no catch</span>
+                <h2>Everything above is free.</h2>
+                <p class="muted">Unlimited sites, unlimited on-demand audits, automatic 30-day re-audits, the trust badge, PDF certificates, and GitHub fix pull requests — all included. No card, no trial timer, no per-site limit.</p>
+                <div class="free-grid">
+                    <div><strong>Unlimited</strong><span>sites and audits</span></div>
+                    <div><strong>Every 30 days</strong><span>automatic re-audit</span></div>
+                    <div><strong>Included</strong><span>badge, PDF, fix PRs</span></div>
+                    <div><strong>$0</strong><span>forever</span></div>
                 </div>
-                <div class="card pricing-card featured" data-plan="audit_fix" data-reveal>
-                    <span class="pricing-badge">Also fixes what it finds</span>
-                    <h2>Audit + Fix</h2>
-                    <div class="price"><span class="price-amount">$14</span><span class="price-suffix">/month</span></div>
-                    <p class="save-badge" hidden>One-time fee, no auto-renewal</p>
-                    <p class="muted">Cancel anytime.</p>
-                    <ul class="pricing-list">
-                        <li>Everything in Audit</li>
-                        <li>Connect a GitHub repo per site</li>
-                        <li>One-click "Fix with PR" for fixable findings — missing security headers, outdated JS libraries, missing security.txt</li>
-                        <li>Priority support</li>
-                    </ul>
-                    <button type="button" class="pricing-cta" data-plan="audit_fix" style="width:100%">Choose Audit + Fix</button>
-                </div>
+                <button type="button" id="free-cta" style="margin-top:8px">Create a free account</button>
             </div>
-            <p class="muted" style="text-align:center;font-size:12px;margin-top:16px">New accounts get 1 free site and 1 free full audit before choosing a plan.</p>
         </section>
     </main>
 
     <footer class="wrap">
         AuditPulse only performs non-destructive, passive security checks. Running a full audit requires verifying you own or are authorized to test the target domain. © AuditPulse.
     </footer>
+
+    <div id="email-wall" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="email-wall-title">
+        <div class="modal email-wall-modal">
+            <button type="button" class="email-wall-close text-button" id="email-wall-dismiss" aria-label="Close">&times;</button>
+            <span class="eyebrow">Free forever</span>
+            <h2 id="email-wall-title">Get the full audit, free.</h2>
+            <p class="muted">Drop your email and we'll send you the deeper 18-check audit, your trust badge, and a PDF certificate — no card, no trial timer.</p>
+            <form id="email-wall-form" class="email-wall-form">
+                <label class="field" style="margin-bottom:10px">
+                    <span>Email address</span>
+                    <input id="email-wall-input" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" required>
+                </label>
+                <div id="email-wall-status" class="status" role="status" aria-live="polite"></div>
+                <button type="submit" id="email-wall-submit" style="width:100%;margin-top:6px">Send me the full audit</button>
+            </form>
+            <p class="legal-note" style="margin-top:14px">We store your email and IP address so this prompt doesn't show again, and to send what you asked for. No third-party sharing. Unsubscribe any time.</p>
+        </div>
+    </div>
 
     <script type="module" src="./src/main.ts"></script>
 </body>

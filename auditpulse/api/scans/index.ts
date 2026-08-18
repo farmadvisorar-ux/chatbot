@@ -3,14 +3,12 @@ import { randomBytes } from 'node:crypto';
 import { error, json, requireMethod } from '../_lib/http.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
-import { hasActiveAccess } from '../_lib/stripe.js';
 import { persistScanResult } from '../_lib/persistScan.js';
 import { runScan } from '../../lib/scanner/engine.js';
 import { DisallowedTargetError } from '../../lib/scanner/net.js';
 
 export const config = { maxDuration: 30 };
 
-const FREE_FULL_SCAN_LIMIT = 1;
 const RESCAN_INTERVAL_DAYS = 30;
 const RECENT_ACTIVITY_LIMIT = 20;
 
@@ -45,19 +43,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!target.verified) {
         error(res, 403, 'Verify ownership of this site before running a full audit. See the verification instructions on the target.');
         return;
-    }
-
-    const { rows: userRows } = await pool.query('SELECT subscription_status, plan, plan_expires_at FROM users WHERE id = $1', [user.userId]);
-    const subscribed = hasActiveAccess(userRows[0] ?? {});
-    if (!subscribed) {
-        const { rows: countRows } = await pool.query(
-            `SELECT count(*) FROM scans WHERE user_id = $1 AND kind = 'full' AND status = 'completed'`,
-            [user.userId],
-        );
-        if (Number(countRows[0].count) >= FREE_FULL_SCAN_LIMIT) {
-            error(res, 402, 'Free trial audit already used. Upgrade to Audit ($7/mo or $59.99/yr) for unlimited on-demand and automatic 30-day audits.');
-            return;
-        }
     }
 
     const shareToken = randomBytes(24).toString('base64url');

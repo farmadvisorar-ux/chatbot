@@ -93,7 +93,7 @@ function fixSectionHtml(f: FindingRow, showAction: boolean): string {
     }
     if (!f.auto_fixable) return '';
     if (!showAction) {
-        return `<div class="fix-row muted">Auto-fixable on the Audit + Fix plan.</div>`;
+        return `<div class="fix-row muted">Auto-fixable — connect a GitHub repo for this site to open a fix pull request.</div>`;
     }
     const errorHtml = f.fix_status === 'failed' && f.fix_error
         ? `<div class="fix-error">${escapeHtml(f.fix_error)}</div>` : '';

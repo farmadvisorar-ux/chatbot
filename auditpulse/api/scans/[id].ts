@@ -5,7 +5,7 @@ import { getPool } from '../_lib/db.js';
 import { checkRateLimit } from '../_lib/rateLimit.js';
 import { validEmail, clean } from '../_lib/validate.js';
 import { sendReportEmail } from '../_lib/email.js';
-import { siteOrigin } from '../_lib/stripe.js';
+import { siteOrigin } from '../_lib/site.js';
 import { generateAuditPdf } from '../../lib/pdf/report.js';
 
 export const config = { maxDuration: 30 };

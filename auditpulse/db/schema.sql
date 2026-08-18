@@ -142,3 +142,20 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS rate_limit_events_lookup ON rate_limit_events (bucket, client_key, created_at);
+
+-- Landing-page email wall. Captures are keyed by lowercased email so a
+-- repeat submission updates rather than duplicates. `ip` is stored so the
+-- prompt can stay suppressed for a visitor who clears cookies or switches
+-- browsers on the same connection — see api/email-capture.ts. This is
+-- personal data: keep the retention policy and privacy notice in sync.
+CREATE TABLE IF NOT EXISTS email_captures (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    ip TEXT,
+    user_agent TEXT,
+    source TEXT NOT NULL DEFAULT 'email_wall',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS email_captures_email ON email_captures (lower(email));
+CREATE INDEX IF NOT EXISTS email_captures_ip ON email_captures (ip, created_at DESC);
