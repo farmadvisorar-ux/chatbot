@@ -2,7 +2,8 @@ import { Resend } from 'resend';
 import { escapeHtml } from '../../src/escape-html.js';
 import { siteOrigin } from './site.js';
 
-const SENDER = 'AuditPulse <reports@auditpulse.example.com>';
+// Must be an address on a domain verified in Resend -> Domains, or delivery fails.
+const SENDER = 'AuditPulse <reports@brokehealth.com>';
 const REPLY_TO = 'farmadvisorar@gmail.com';
 
 export type SeveritySummary = { critical: number; high: number; medium: number; low: number; info: number };

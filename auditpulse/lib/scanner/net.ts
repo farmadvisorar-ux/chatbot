@@ -98,7 +98,7 @@ export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Pr
         try {
             response = await fetch(currentUrl, {
                 method: opts.method ?? 'GET',
-                headers: { 'User-Agent': 'AuditPulseBot/1.0 (+https://auditpulse.example.com/about-our-scanner)', ...opts.headers },
+                headers: { 'User-Agent': 'AuditPulseBot/1.0 (+https://brokehealth.com/about-our-scanner)', ...opts.headers },
                 body: opts.body,
                 redirect: 'manual',
                 signal: controller.signal,

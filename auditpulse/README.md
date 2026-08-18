@@ -122,13 +122,37 @@ deployed preview to exercise `/api/*`.
 3. Run the migration once: `DATABASE_URL=... npm run migrate` (or
    `npm run migrate:http` from a sandboxed environment with no direct
    TCP/5432 access — Neon databases only).
-4. Set `PUBLIC_SITE_URL` to your production URL (used in emailed report links
-   and the trust badge).
+4. Set `PUBLIC_SITE_URL` to your production URL (used in emailed report links,
+   the PDF certificate, and the embeddable trust badge).
 5. Set up Clerk and Resend (below), then deploy. **Redeploy after
    adding/changing any env var** — Vite inlines `VITE_*` vars at build time.
 6. `vercel.json` registers the daily cron (`/api/cron/rescan`, 13:00 UTC).
    Set `CRON_SECRET` so only Vercel's own cron invocations can trigger it —
    Vercel automatically sends it as a Bearer token when the env var is set.
+
+## Custom domain (brokehealth.com)
+
+Production runs on **https://brokehealth.com**. The domain is registered at
+Namecheap, so DNS lives there rather than on Vercel nameservers. Required
+records at Namecheap → Domain List → brokehealth.com → Advanced DNS:
+
+| Type | Host | Value | TTL |
+|---|---|---|---|
+| A | `@` | `216.150.1.1` | Automatic |
+| A | `@` | `216.150.16.1` | Automatic |
+| CNAME | `www` | `11f9158fced37d96.vercel-dns-017.com.` | Automatic |
+
+Delete the Namecheap parking records first — the default `A @ 162.255.119.85`
+and `CNAME www parkingpage.namecheap.com.` will conflict. `www` is configured
+in Vercel as a 308 redirect to the apex, so both resolve to the same site.
+
+Vercel issues the TLS certificate automatically once the records resolve
+(usually minutes; DNS propagation can take up to a few hours).
+
+Two things are tied to this domain and need updating if it ever changes:
+`PUBLIC_SITE_URL` (Vercel env var, plus the fallback in `api/_lib/site.ts`)
+and `SENDER` in `api/_lib/email.ts`, which must be an address on a domain
+verified under Resend → Domains or report emails will not deliver.
 
 ## Setting up sign-in (Clerk)
 
