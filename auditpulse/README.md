@@ -126,9 +126,10 @@ deployed preview to exercise `/api/*`.
    the PDF certificate, and the embeddable trust badge).
 5. Set up Clerk and Resend (below), then deploy. **Redeploy after
    adding/changing any env var** — Vite inlines `VITE_*` vars at build time.
-6. `vercel.json` registers the daily cron (`/api/cron/rescan`, 13:00 UTC).
-   Set `CRON_SECRET` so only Vercel's own cron invocations can trigger it —
-   Vercel automatically sends it as a Bearer token when the env var is set.
+6. `vercel.json` registers a daily cron (`/api/cron/rescan`, 13:00 UTC) as a
+   backstop; the GitHub Actions workflow below is what actually drives the
+   schedule. Set `CRON_SECRET` so only authorised callers can trigger it —
+   Vercel sends it as a Bearer token automatically when the env var is set.
 
 ## Custom domain (brokehealth.com)
 
@@ -198,20 +199,36 @@ only moves forward once a scan actually finishes. A fixed batch size would
 either waste the budget or overrun it, since a full audit's duration varies
 with how many pages it crawls.
 
-**Throughput is the thing to watch.** Vercel's Hobby plan allows one cron
-run per day and caps functions at 60s, which realistically means only a
-handful of sites get re-scanned daily — fine for a few users, not enough
-once site count grows. Two ways to raise it, in order of effort:
+**Throughput is driven by how often the endpoint is called.** Vercel's
+Hobby plan allows one cron run per day and caps functions at 60s, which only
+covers a handful of sites. So the real scheduler is a GitHub Actions
+workflow — `.github/workflows/auditpulse-rescan.yml` — which pokes the same
+endpoint every 10 minutes. Actions minutes are free and unmetered on public
+repositories, so this raises capacity roughly 144x at no cost. The
+`vercel.json` daily cron stays as a backstop.
 
-1. Point an **external scheduler** (cron-job.org, GitHub Actions, any host
-   with cron) at `POST /api/cron/rescan` every 10–15 minutes with
-   `Authorization: Bearer $CRON_SECRET`. The endpoint is idempotent — it
-   only ever picks up what is genuinely due — so calling it often is safe
-   and costs nothing extra.
-2. Move to a Vercel plan with sub-daily crons and a longer function limit.
+Calling it often is safe: the endpoint only ever picks up targets whose
+`next_rescan_at` has actually elapsed, and only advances that timestamp once
+a scan completes, so extra invocations are a no-op rather than duplicate
+work.
 
-The response body reports `processed` and `dueRemaining` on every run, so
-you can tell at a glance whether the schedule is keeping up.
+Setup — the workflow needs one repository secret:
+
+1. Settings → Secrets and variables → Actions → New repository secret
+2. Name `AUDITPULSE_CRON_SECRET`, value identical to the project's
+   `CRON_SECRET` env var in Vercel.
+
+Optionally override the target with an `AUDITPULSE_RESCAN_URL` repository
+variable; it defaults to `https://brokehealth.com/api/cron/rescan`.
+
+Each run writes `Scanned N site(s); M still due.` to its job summary. If
+`M` stays above zero across consecutive runs, the schedule isn't keeping up
+and the interval needs tightening (or the work needs a longer function
+limit on a paid Vercel plan).
+
+**Gotcha:** GitHub disables scheduled workflows in a public repository
+after 60 days with no commits. If the repo goes quiet, re-enable the
+workflow from the Actions tab — otherwise weekly re-audits silently stop.
 
 ## Email wall
 

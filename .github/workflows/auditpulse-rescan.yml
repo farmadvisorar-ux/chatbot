@@ -1,0 +1,70 @@
+name: AuditPulse weekly re-audit runner
+
+# Drives AuditPulse's automatic weekly site re-audits.
+#
+# The scan work happens in the Vercel function (/api/cron/rescan); this
+# workflow only pokes it. Vercel's Hobby plan allows a single cron run per
+# day, which isn't enough throughput — each invocation only has a ~45s
+# budget and a full audit takes tens of seconds, so one run a day covers a
+# handful of sites at most. Calling the same endpoint every 10 minutes
+# raises capacity roughly 144x at no cost (Actions minutes are free on
+# public repositories).
+#
+# The endpoint is idempotent: it only ever picks up targets whose
+# next_rescan_at has actually elapsed, and only advances that timestamp once
+# a scan completes. Calling it more often than needed is therefore a no-op,
+# not duplicate work.
+#
+# Offset off the top of the hour deliberately — GitHub's scheduled runs are
+# best-effort and queue longest at :00.
+on:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let a slow run stack on top of the next tick.
+concurrency:
+  group: auditpulse-rescan
+  cancel-in-progress: false
+
+jobs:
+  rescan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger due re-audits
+        env:
+          CRON_SECRET: ${{ secrets.AUDITPULSE_CRON_SECRET }}
+          RESCAN_URL: ${{ vars.AUDITPULSE_RESCAN_URL || 'https://brokehealth.com/api/cron/rescan' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "AUDITPULSE_CRON_SECRET is not set on this repository." >&2
+            echo "Add it under Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+
+          response=$(curl -sS -X POST "$RESCAN_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -w '\n%{http_code}' \
+            --max-time 120)
+
+          status=$(printf '%s' "$response" | tail -n1)
+          body=$(printf '%s' "$response" | sed '$d')
+
+          echo "$body"
+
+          if [ "$status" != "200" ]; then
+            echo "Re-audit run failed with HTTP $status" >&2
+            exit 1
+          fi
+
+          # Surface throughput in the run summary so a backlog is visible
+          # without opening logs: dueRemaining > 0 across consecutive runs
+          # means the schedule isn't keeping up with the number of sites.
+          processed=$(printf '%s' "$body" | jq -r '.processed // 0')
+          remaining=$(printf '%s' "$body" | jq -r '.dueRemaining // 0')
+          echo "Scanned $processed site(s); $remaining still due." >> "$GITHUB_STEP_SUMMARY"
