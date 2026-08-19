@@ -37,7 +37,9 @@ jobs:
       - name: Trigger due re-audits
         env:
           CRON_SECRET: ${{ secrets.AUDITPULSE_CRON_SECRET }}
-          RESCAN_URL: ${{ vars.AUDITPULSE_RESCAN_URL || 'https://brokehealth.com/api/cron/rescan' }}
+          # Vercel's permanent project alias, not the customer-facing domain:
+          # an internal scheduler shouldn't break because public DNS is mid-migration.
+          RESCAN_URL: ${{ vars.AUDITPULSE_RESCAN_URL || 'https://auditpulse-ten.vercel.app/api/cron/rescan' }}
         run: |
           set -euo pipefail
 

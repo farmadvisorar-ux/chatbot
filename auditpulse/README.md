@@ -218,8 +218,11 @@ Setup — the workflow needs one repository secret:
 2. Name `AUDITPULSE_CRON_SECRET`, value identical to the project's
    `CRON_SECRET` env var in Vercel.
 
-Optionally override the target with an `AUDITPULSE_RESCAN_URL` repository
-variable; it defaults to `https://brokehealth.com/api/cron/rescan`.
+The workflow targets Vercel's permanent project alias
+(`auditpulse-ten.vercel.app`) rather than `brokehealth.com`, deliberately: an
+internal scheduler shouldn't stop working because customer-facing DNS is
+mid-migration or gets repointed. Override it with an `AUDITPULSE_RESCAN_URL`
+repository variable if the project ever moves.
 
 Each run writes `Scanned N site(s); M still due.` to its job summary. If
 `M` stays above zero across consecutive runs, the schedule isn't keeping up
