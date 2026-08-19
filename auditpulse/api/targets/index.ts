@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { error, json, requireMethod, clientKey } from '../_lib/http.js';
+import { error, json, requireMethod, isRead, clientKey } from '../_lib/http.js';
 import { validUrl, clean } from '../_lib/validate.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
     const pool = getPool();
 
-    if (req.method === 'GET') {
+    if (isRead(req)) {
         // LEFT JOIN LATERAL pulls in each target's most recent *completed*
         // scan (if any) in the same query, so the dashboard can render grade
         // badges and an overview without a request per site.

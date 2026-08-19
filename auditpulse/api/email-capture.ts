@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { error, json, requireMethod, clientKey } from './_lib/http.js';
+import { error, json, requireMethod, isRead, clientKey } from './_lib/http.js';
 import { validEmail, clean } from './_lib/validate.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
 import { getPool } from './_lib/db.js';
@@ -36,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!process.env.DATABASE_URL) {
         // Without a database we can still honour the cookie, so the wall
         // doesn't nag a visitor who already dismissed it via submission.
-        if (req.method === 'GET') {
+        if (isRead(req)) {
             json(res, 200, { known: hasSuppressionCookie(req) });
             return;
         }
@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const pool = getPool();
     const ip = clientKey(req);
 
-    if (req.method === 'GET') {
+    if (isRead(req)) {
         if (hasSuppressionCookie(req)) {
             json(res, 200, { known: true });
             return;

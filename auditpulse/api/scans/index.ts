@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomBytes } from 'node:crypto';
-import { error, json, requireMethod } from '../_lib/http.js';
+import { error, json, requireMethod, isRead } from '../_lib/http.js';
 import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
 import { persistScanResult } from '../_lib/persistScan.js';
@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
     const pool = getPool();
 
-    if (req.method === 'GET') {
+    if (isRead(req)) {
         const { rows } = await pool.query(
             `SELECT s.id, s.kind, s.status, s.score, s.grade, s.summary, s.started_at, s.completed_at, s.triggered_by,
                     t.id AS target_id, t.label AS target_label, t.hostname
