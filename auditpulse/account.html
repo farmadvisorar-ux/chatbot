@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your account — AuditPulse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="appbar">
+        <div class="wrap appbar-inner">
+            <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
+            <nav class="nav-links" aria-label="Main">
+                <a class="nav-link" href="/dashboard.html" data-nav-icon="grid">Dashboard</a>
+                <a class="nav-link" href="/account.html" aria-current="page" data-nav-icon="user">Account</a>
+            </nav>
+            <div id="header-controls" data-auth-controls></div>
+        </div>
+    </header>
+
+    <main class="wrap-narrow" style="padding-bottom:80px">
+        <section id="signed-out" hidden class="card center" style="margin-top:60px">
+            <h1>Your account</h1>
+            <p class="muted">Sign in to manage your subscription.</p>
+            <button id="signin" type="button">Sign in</button>
+        </section>
+
+        <section id="loading" class="card center" style="margin-top:60px">
+            <p class="muted">Loading…</p>
+        </section>
+
+        <section id="signed-in" hidden>
+            <h1 style="margin-top:24px">Your plan</h1>
+            <div id="plan-card" class="card" style="margin-top:16px"></div>
+            <p id="status" class="status" role="status" aria-live="polite" style="margin-top:14px"></p>
+        </section>
+    </main>
+
+    <script type="module" src="./src/account.ts"></script>
+</body>
+</html>

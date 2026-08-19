@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuditPulse — Find every vulnerability on your website</title>
+    <meta name="description" content="Scan any website with 18 real security checks — exposed secrets, misconfigured headers, outdated libraries, and more — and get a plain-English, severity-ranked report with step-by-step fixes. Completely free.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="topbar wrap">
+        <a class="brand" href="/"><span class="brand-mark">A</span> AuditPulse</a>
+        <div id="header-controls" data-auth-controls></div>
+    </header>
+
+    <main>
+        <section class="hero wrap">
+            <div class="hero-grid">
+                <div class="hero-copy">
+                    <span class="eyebrow">Security audits in minutes</span>
+                    <h1>Find every vulnerability on your website — before someone else does.</h1>
+                    <p class="lead">Enter a URL below for a free instant check. Create a free account to run the full 18-check audit — crawled across your site, explained in plain English — with automatic weekly re-audits and one-click pull requests that fix what it finds.</p>
+
+                    <form id="quick-check-form" class="quick-check-form">
+                        <input id="quick-check-url" type="text" inputmode="url" placeholder="https://yourwebsite.com" required autocomplete="off">
+                        <button type="submit" id="quick-check-submit">Scan for free</button>
+                    </form>
+                    <p class="legal-note">One passive request — the same one your browser already makes — reading response headers, TLS, and cookies. No sign-up needed. Only scan sites you own or are authorized to test.</p>
+
+                    <div id="quick-check-status" class="status" role="status" aria-live="polite"></div>
+                    <div id="quick-check-result" style="text-align:left;margin-top:24px" hidden></div>
+                </div>
+                <div class="hero-visual">
+                    <div class="scan-console" aria-hidden="true">
+                        <div class="console-bar">
+                            <span></span><span></span><span></span>
+                            <span class="console-title">auditpulse — sample scan</span>
+                        </div>
+                        <div class="console-body" id="console-body"></div>
+                    </div>
+                    <p class="hero-visual-caption" aria-hidden="true">What a scan looks like — illustrative, not a live result.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="wrap">
+            <div class="stat-strip" data-reveal>
+                <div class="stat-strip-item"><strong>18</strong><span>automated checks</span></div>
+                <div class="stat-strip-item"><strong>&lt;60s</strong><span>typical scan time</span></div>
+                <div class="stat-strip-item"><strong>100%</strong><span>passive, non-destructive</span></div>
+                <div class="stat-strip-item"><strong>0</strong><span>exploitation, ever</span></div>
+            </div>
+        </section>
+
+        <section class="wrap">
+            <div class="feature-grid">
+                <div class="card feature-card feature-card--lg" data-reveal>
+                    <div class="feature-badge">18</div>
+                    <h3>18 checks, every time</h3>
+                    <p>Headers, TLS, cookies, CORS, hardcoded secrets in your JS bundles, exposed backups, outdated libraries, DNS email security, and more — crawled across the pages linked from your homepage, not just "/".</p>
+                </div>
+                <div class="card feature-card" data-reveal>
+                    <div class="feature-badge">≡</div>
+                    <h3>Built to be understood</h3>
+                    <p>Every finding leads with what could actually go wrong, in plain English. The technical detail and exact fix are one click away — not the whole story up front.</p>
+                </div>
+                <div class="card feature-card" data-reveal>
+                    <div class="feature-badge">↗</div>
+                    <h3>Reports clients can open</h3>
+                    <p>Email a report straight to a client or teammate. They open the full interactive findings from the link alone — no account, no password.</p>
+                </div>
+                <div class="card feature-card" data-reveal>
+                    <div class="feature-badge">↻</div>
+                    <h3>Re-checked every week</h3>
+                    <p>Every verified site is re-scanned automatically once a week, with the new report landing in your inbox the moment it's done.</p>
+                </div>
+                <div class="card feature-card" data-reveal>
+                    <div class="feature-badge">✓</div>
+                    <h3>Only sites you own</h3>
+                    <p>A full audit requires proving control of the domain first — a DNS record or a file upload. There's no way to point AuditPulse at a site that isn't yours.</p>
+                </div>
+                <div class="card feature-card feature-card--wide" data-reveal>
+                    <div class="feature-badge">0</div>
+                    <div>
+                        <h3>Nothing to install</h3>
+                        <p>No agent, no plugin, no config file. Paste a URL, verify it's yours, and the first audit is running in under a minute.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="wrap">
+            <div class="trust-section" data-reveal>
+                <div class="trust-copy">
+                    <span class="eyebrow">Proof, not just a promise</span>
+                    <h2>Turn every audit into proof your customers can see.</h2>
+                    <p class="muted">A scan result in a dashboard only you can see doesn't build trust. Every verified site gets three things that do:</p>
+                    <ul class="check-list">
+                        <li><strong>Embeddable trust badge</strong> — a live seal for your site linking to a public verification page, viewable by anyone, no account required.</li>
+                        <li><strong>Certificate-style PDF</strong> — emailed after every audit, with the full findings appendix, ready to send to a client or keep on file as a record.</li>
+                        <li><strong>Re-verified every week</strong> — the badge and report both reflect a current check, not a one-time snapshot that quietly goes stale.</li>
+                    </ul>
+                </div>
+                <div class="trust-visual" aria-hidden="true">
+                    <svg width="220" height="76" viewBox="0 0 168 58" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto">
+                        <rect x="0.5" y="0.5" width="167" height="57" rx="10" fill="#0b0e14" stroke="#35e0a1" stroke-opacity="0.6"/>
+                        <circle cx="16" cy="18" r="6" fill="none" stroke="#35e0a1" stroke-width="1.6"/>
+                        <path d="M13 18l2 2.2 4-4.6" stroke="#35e0a1" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                        <text x="27" y="22" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="bold" fill="#ffffff">AuditPulse</text>
+                        <text x="14" y="38" font-family="Arial, Helvetica, sans-serif" font-size="9" letter-spacing="1" fill="#93a0b5">SECURITY AUDITED</text>
+                        <rect x="130" y="10" width="24" height="24" rx="6" fill="#35e0a1" fill-opacity="0.15" stroke="#35e0a1"/>
+                        <text x="142" y="27" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="bold" fill="#35e0a1" text-anchor="middle">A</text>
+                        <text x="14" y="50" font-family="Arial, Helvetica, sans-serif" font-size="8" fill="#6b7385">Checked Jul 2026</text>
+                    </svg>
+                    <p class="hero-visual-caption">Example badge — yours reflects your site's real grade.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="wrap" id="pricing">
+            <div class="free-banner card" data-reveal>
+                <span class="eyebrow">Free, with no catch</span>
+                <h2>Everything above is free.</h2>
+                <p class="muted">Up to 10 sites, unlimited on-demand audits, automatic weekly re-audits, the trust badge, PDF certificates, and GitHub fix pull requests — all included. No card, no trial timer.</p>
+                <div class="free-grid">
+                    <div><strong>10 sites</strong><span>per free account</span></div>
+                    <div><strong>Every week</strong><span>automatic re-audit</span></div>
+                    <div><strong>Included</strong><span>badge, PDF, fix PRs</span></div>
+                    <div><strong>$0</strong><span>forever</span></div>
+                </div>
+                <button type="button" id="free-cta" style="margin-top:8px">Create a free account</button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="wrap">
+        AuditPulse only performs non-destructive, passive security checks. Running a full audit requires verifying you own or are authorized to test the target domain. © AuditPulse.
+    </footer>
+
+    <div id="email-wall" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="email-wall-title">
+        <div class="modal email-wall-modal">
+            <button type="button" class="email-wall-close text-button" id="email-wall-dismiss" aria-label="Close">&times;</button>
+            <span class="eyebrow">Free forever</span>
+            <h2 id="email-wall-title">Get the full audit, free.</h2>
+            <p class="muted">Drop your email and we'll send you the deeper 18-check audit, your trust badge, and a PDF certificate — no card, no trial timer.</p>
+            <form id="email-wall-form" class="email-wall-form">
+                <label class="field" style="margin-bottom:10px">
+                    <span>Email address</span>
+                    <input id="email-wall-input" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" required>
+                </label>
+                <div id="email-wall-status" class="status" role="status" aria-live="polite"></div>
+                <button type="submit" id="email-wall-submit" style="width:100%;margin-top:6px">Send me the full audit</button>
+            </form>
+            <p class="legal-note" style="margin-top:14px">We store your email and IP address so this prompt doesn't show again, and to send what you asked for. No third-party sharing. Unsubscribe any time.</p>
+        </div>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
