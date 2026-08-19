@@ -21,6 +21,7 @@ eggs/
 lib/
 !/auditpulse/lib/
 !/auditpulse/lib/**
+!wayback-downloader/src/lib/
 lib64/
 parts/
 sdist/

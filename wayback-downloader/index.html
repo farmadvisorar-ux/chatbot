@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wayback Downloader &mdash; rescue a website from the Wayback Machine</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <h1>🕰️ Wayback Downloader</h1>
+      <p class="subtitle">
+        Pull an archived copy of any website straight out of the
+        <a href="https://web.archive.org" target="_blank" rel="noopener">Internet Archive Wayback Machine</a>
+        and download it as a ready-to-browse zip file. No install, no command line.
+      </p>
+    </header>
+
+    <main>
+      <form id="download-form" class="card">
+        <label class="field">
+          <span>Website</span>
+          <input type="text" id="domain" name="domain" placeholder="example.com" autocomplete="off" required>
+          <small>A domain (<code>example.com</code>) or a full URL. Subdomains and every path under it are included by default.</small>
+        </label>
+
+        <details class="advanced">
+          <summary>Advanced options</summary>
+
+          <div class="grid">
+            <label class="field">
+              <span>From date</span>
+              <input type="text" id="from_ts" placeholder="YYYYMMDD (optional)">
+            </label>
+            <label class="field">
+              <span>To date</span>
+              <input type="text" id="to_ts" placeholder="YYYYMMDD (optional)">
+            </label>
+          </div>
+
+          <div class="grid">
+            <label class="checkbox">
+              <input type="checkbox" id="exact_url">
+              <span>Only this exact URL <small>(don't include sub-paths)</small></span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="all_snapshots">
+              <span>Every snapshot version <small>(not just the latest per page)</small></span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="only_status_200" checked>
+              <span>Only successful pages <small>(HTTP 200)</small></span>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>File types</span>
+            <div class="chips" id="extension-chips">
+              <label class="chip"><input type="checkbox" value="html" checked>HTML</label>
+              <label class="chip"><input type="checkbox" value="css">CSS</label>
+              <label class="chip"><input type="checkbox" value="js">JS</label>
+              <label class="chip"><input type="checkbox" value="jpg">JPG</label>
+              <label class="chip"><input type="checkbox" value="png">PNG</label>
+              <label class="chip"><input type="checkbox" value="gif">GIF</label>
+              <label class="chip"><input type="checkbox" value="svg">SVG</label>
+              <label class="chip"><input type="checkbox" value="pdf">PDF</label>
+            </div>
+            <small>Leave everything unchecked to download all file types.</small>
+          </label>
+
+          <div class="grid">
+            <label class="field">
+              <span>Only URLs matching (regex)</span>
+              <input type="text" id="only_pattern" placeholder="e.g. /blog/">
+            </label>
+            <label class="field">
+              <span>Exclude URLs matching (regex)</span>
+              <input type="text" id="exclude_pattern" placeholder="e.g. /wp-admin/">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Max files this run: <output id="max-files-value">1000</output></span>
+            <input type="range" id="max_files" min="10" max="1000" value="1000">
+          </label>
+        </details>
+
+        <div class="actions">
+          <button type="button" id="preview-btn" class="btn secondary">Preview</button>
+          <button type="submit" id="start-btn" class="btn primary">Download site</button>
+        </div>
+      </form>
+
+      <section id="preview-panel" class="card hidden">
+        <h2>Preview</h2>
+        <p id="preview-summary"></p>
+        <ul id="preview-sample" class="sample-list"></ul>
+      </section>
+
+      <section id="progress-panel" class="card hidden">
+        <h2>Progress</h2>
+        <p id="progress-message">Starting...</p>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="stats">
+          <span><strong id="stat-completed">0</strong> downloaded</span>
+          <span><strong id="stat-skipped">0</strong> skipped</span>
+          <span><strong id="stat-failed">0</strong> failed</span>
+          <span><strong id="stat-total">0</strong> total</span>
+        </div>
+        <div class="actions">
+          <button type="button" id="cancel-btn" class="btn secondary">Cancel</button>
+          <button type="button" id="download-btn" class="btn primary hidden">Build &amp; download zip</button>
+        </div>
+        <p id="zip-message" class="zip-message hidden"></p>
+        <details class="log">
+          <summary>Activity log</summary>
+          <div id="log-output"></div>
+        </details>
+      </section>
+
+      <section id="error-panel" class="card error hidden">
+        <h2>Something went wrong</h2>
+        <p id="error-message"></p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Uses the public <a href="https://archive.org/help/wayback_api.php" target="_blank" rel="noopener">Wayback CDX API</a>
+        and <a href="https://vercel.com/docs/storage/vercel-blob" target="_blank" rel="noopener">Vercel Blob</a> storage.
+        A modern, web-based take on
+        <a href="https://github.com/hartator/wayback-machine-downloader" target="_blank" rel="noopener">hartator/wayback-machine-downloader</a>.
+      </p>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

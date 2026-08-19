@@ -39,6 +39,7 @@
                 <button class="tab" data-tab="analytics" type="button">Analytics</button>
                 <button class="tab" data-tab="insights" type="button">Insights <span id="count-insights">0</span></button>
                 <button class="tab" data-tab="marketplace" type="button">Marketplace <span id="count-marketplace">0</span></button>
+                <button class="tab" data-tab="ads" type="button">Ads <span id="count-ads">0</span></button>
                 <button class="tab" data-tab="payouts" type="button">Payouts <span id="count-payouts">0</span></button>
                 <button class="tab" data-tab="people" type="button">People <span id="count-people">0</span></button>
                 <button class="tab" data-tab="tools" type="button">Tools</button>
@@ -75,6 +76,11 @@
             <div class="panel" data-panel="marketplace">
                 <p class="muted">SaaS businesses listed for sale. New listings arrive pending review and are only purchasable once approved and the seller has finished payout setup.</p>
                 <div id="marketplace-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="ads">
+                <p class="muted">Self-serve ads bought by advertisers for a package of views. Paid ads land here pending review — approve to start rotating them in the sponsored slot, or reject to keep them off the site. A live ad stops rotating on its own once its purchased views run out.</p>
+                <div id="ads-list" class="list"></div>
             </div>
 
             <div class="panel" data-panel="people">

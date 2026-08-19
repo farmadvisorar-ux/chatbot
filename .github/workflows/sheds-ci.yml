@@ -1,0 +1,89 @@
+name: sheds
+
+# Only when sheds changes: the repo holds several unrelated projects and a
+# push to one should not spend minutes checking the others.
+on:
+  push:
+    paths: ['sheds/**', '.github/workflows/sheds-ci.yml']
+  pull_request:
+    paths: ['sheds/**', '.github/workflows/sheds-ci.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sheds
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: sheds/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The parser runs against the committed snapshot of all 198 buildings,
+      # so this is what catches a supplier rename that would otherwise empty a
+      # filter silently rather than failing.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # data/catalog.json is generated and committed, so a reproducible build
+      # leaves it untouched. It did not: a wall-clock timestamp in it meant
+      # every build dirtied the tree and every commit carried a meaningless
+      # diff, which buried the one reason to commit the file — that its diff
+      # is the record of what the supplier changed.
+      - name: The build is reproducible
+        run: git diff --exit-code -- data/catalog.json
+
+      # The build reports its own page weights, but nothing enforces them, and
+      # the entire premise of this site is that it is smaller than the one it
+      # replaces. A regression here is the product breaking, not a nicety:
+      # the supplier's homepage is 844 KB and a building page 677 KB.
+      - name: Page weight
+        run: |
+          fail=0
+          check() {
+            size=$(wc -c < "dist/$1")
+            if [ "$size" -gt "$2" ]; then
+              echo "::error::dist/$1 is $size bytes, over the $2 byte budget"
+              fail=1
+            else
+              echo "ok  dist/$1  $size / $2 bytes"
+            fi
+          }
+          # Roughly 25% over what each currently is, so ordinary growth passes
+          # and a srcset ladder or a framework sneaking in does not.
+          check index.html 20000
+          check buildings.html 260000
+          check site.css 30000
+          check filters.js 8000
+          # Two self-hosted variable faces, latin-subset. This is the one place
+          # the speed budget was deliberately spent, so it is also the one most
+          # worth a ceiling: adding a weight or forgetting to subset a face
+          # doubles it without changing anything visible in review.
+          fonts=$(cat dist/fonts/*.woff2 | wc -c)
+          if [ "$fonts" -gt 140000 ]; then
+            echo "::error::fonts total $fonts bytes, over the 140000 byte budget"
+            fail=1
+          else
+            echo "ok  fonts  $fonts / 140000 bytes"
+          fi
+          # Every building page, not just a sampled one — a template change
+          # that bloats one bloats all 198.
+          biggest=$(find dist/b -name '*.html' -printf '%s\n' | sort -rn | head -1)
+          if [ "$biggest" -gt 40000 ]; then
+            echo "::error::the largest building page is $biggest bytes, over the 40000 byte budget"
+            fail=1
+          else
+            echo "ok  largest building page  $biggest / 40000 bytes"
+          fi
+          exit $fail

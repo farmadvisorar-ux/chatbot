@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Sikads Admin</title>
+    <link rel="stylesheet" href="./src/admin.css">
+</head>
+<body>
+    <main id="admin-root">
+        <section id="admin-login" class="card">
+            <h1>Sikads Admin</h1>
+            <p class="muted">Enter your admin key to review paid ad campaigns.</p>
+            <form id="login-form">
+                <label>Admin key
+                    <input id="admin-key" type="password" autocomplete="current-password" required placeholder="Paste your ADMIN_SECRET">
+                </label>
+                <label class="checkbox"><input id="remember" type="checkbox"> Stay signed in on this device</label>
+                <button type="submit">Sign in</button>
+                <p id="login-status" class="status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section id="admin-app" hidden>
+            <header class="topbar">
+                <h1>Sikads Admin</h1>
+                <div>
+                    <a class="ghost linkbtn" href="/" target="_blank" rel="noopener">View site</a>
+                    <button id="refresh" type="button" class="ghost">Refresh</button>
+                    <button id="signout" type="button" class="ghost">Sign out</button>
+                </div>
+            </header>
+            <p id="refresh-status" class="status" role="status" aria-live="polite"></p>
+
+            <div id="stats" class="stats"></div>
+
+            <nav class="tabs">
+                <button class="tab active" data-tab="ads" type="button">Campaigns <span id="count-ads">0</span></button>
+                <button class="tab" data-tab="publishers" type="button">Publishers <span id="count-publishers">0</span></button>
+            </nav>
+
+            <div class="panel active" data-panel="ads">
+                <p class="muted">Paid campaigns land here pending review — approve to start rotating them, or reject to keep them off the network. A live campaign stops rotating on its own once its purchased views run out.</p>
+                <div id="ads-list" class="list"></div>
+            </div>
+
+            <div class="panel" data-panel="publishers">
+                <p class="muted">Sites placing the ad unit. Approve one and its slot key starts earning on every view it serves — so check the site is real first, since an approved key can be looped against a page nobody visits. Settle only after you have actually sent the money.</p>
+                <div id="publishers-list" class="list"></div>
+            </div>
+        </section>
+    </main>
+    <script type="module" src="./src/admin.ts"></script>
+</body>
+</html>

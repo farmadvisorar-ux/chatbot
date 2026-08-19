@@ -4,6 +4,7 @@ import { track, trackSearch } from './analytics';
 import { initDirectory } from './directory';
 import { mountAIWorkspace } from './ai-workspace';
 import { mountMarketplace } from './marketplace';
+import { mountAds } from './ads';
 import { escapeHtml } from './escape-html';
 import { initAuth } from './auth';
 import { createIcons, ArrowRight, Sparkles, Rocket, Search, CheckCircle2, Layers3, Zap, Globe2, Menu, X, BadgeCheck, Mail, Plus, Building2, CircleDollarSign, FileQuestion, ClipboardList } from 'lucide';
@@ -167,6 +168,7 @@ initDirectory();
 loadProjects();
 mountAIWorkspace();
 mountMarketplace();
+mountAds();
 
 track('pageview');
 document.querySelectorAll<HTMLElement>('[data-submit]').forEach(button =>

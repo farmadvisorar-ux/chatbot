@@ -192,3 +192,44 @@ CREATE INDEX IF NOT EXISTS insight_articles_live ON insight_articles (published,
 -- "best of" list is a deceptive endorsement under the FTC guides, and the
 -- disclosure is what keeps the promotional guides defensible.
 ALTER TABLE insight_articles ADD COLUMN IF NOT EXISTS disclosure TEXT;
+
+-- Upvotes. Every competing launch directory runs on this loop and FreshSAAS
+-- had no engagement mechanic at all. The count is denormalised onto the entry
+-- so the directory read stays a single table scan; directory_votes exists to
+-- stop one visitor voting twice.
+ALTER TABLE directory_entries ADD COLUMN IF NOT EXISTS votes INT NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS directory_votes (
+    entry_id UUID NOT NULL REFERENCES directory_entries(id) ON DELETE CASCADE,
+    -- Random key held in the visitor's localStorage. Anonymous by design: no
+    -- account needed to vote, and clearing storage lets someone vote again,
+    -- which is the same trade every directory in this category makes.
+    voter_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (entry_id, voter_key)
+);
+CREATE INDEX IF NOT EXISTS directory_votes_entry ON directory_votes (entry_id);
+CREATE INDEX IF NOT EXISTS directory_entries_votes ON directory_entries (votes DESC) WHERE status = 'live';
+
+-- Self-serve ads: anyone buys a package of views for a one-line pitch that
+-- links to their own site. Unlike marketplace_listings (a whole SaaS for
+-- sale), an ad buys impressions on FreshSAAS itself, so 100% of the price is
+-- platform revenue and there is no seller_payout split to track.
+-- Lifecycle: awaiting_payment -> pending_review (paid, held for a manual
+-- look before it can appear publicly) -> live -> exhausted (ran out of
+-- views) or rejected.
+CREATE TABLE IF NOT EXISTS ad_campaigns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    advertiser_email TEXT NOT NULL,
+    headline TEXT NOT NULL,
+    url TEXT NOT NULL,
+    views_purchased INTEGER NOT NULL DEFAULT 0,
+    views_remaining INTEGER NOT NULL DEFAULT 0,
+    price_cents INTEGER NOT NULL CHECK (price_cents > 0),
+    status TEXT NOT NULL DEFAULT 'awaiting_payment'
+        CHECK (status IN ('awaiting_payment', 'pending_review', 'live', 'rejected', 'exhausted')),
+    stripe_session_id TEXT UNIQUE,
+    stripe_payment_intent_id TEXT,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ad_campaigns_live ON ad_campaigns (status) WHERE status IN ('live', 'pending_review');

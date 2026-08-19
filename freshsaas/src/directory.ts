@@ -44,6 +44,68 @@ const savedIds = (): string[] => {
   try { return JSON.parse(localStorage.getItem('freshsaas_saved') || '[]') as string[]; } catch { return []; }
 };
 
+/* Feed state ---------------------------------------------------------------
+ * Votes are the engagement loop every competing launch directory runs on and
+ * this one had none. The voter key is anonymous and lives in localStorage, so
+ * nobody has to create an account to take part.
+ */
+const VOTER_KEY = 'freshsaas_voter';
+const VOTED_KEY = 'freshsaas_voted';
+const LAST_VISIT_KEY = 'freshsaas_last_visit';
+const PAGE_SIZE = 48;
+const DAY_MS = 864e5;
+
+const voterKey = (): string => {
+  try {
+    let key = localStorage.getItem(VOTER_KEY);
+    if (!key) {
+      key = `v${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+      localStorage.setItem(VOTER_KEY, key);
+    }
+    return key;
+  } catch { return ''; }
+};
+
+const votedIds = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(VOTED_KEY) || '[]') as string[]; } catch { return []; }
+};
+
+const rememberVote = (id: string, on: boolean): void => {
+  const next = on ? [...new Set([...votedIds(), id])] : votedIds().filter(item => item !== id);
+  try { localStorage.setItem(VOTED_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+};
+
+/** Timestamp of the previous visit, read once before it is overwritten. */
+const lastVisit = (() => {
+  try {
+    const raw = Number(localStorage.getItem(LAST_VISIT_KEY) || 0);
+    localStorage.setItem(LAST_VISIT_KEY, String(Date.now()));
+    return raw;
+  } catch { return 0; }
+})();
+
+/**
+ * Which dated section a launch belongs in. Grouping the feed by day is what
+ * gives someone a reason to come back tomorrow — a flat list sorted by
+ * freshness looks identical whether one launch arrived or forty.
+ */
+// freshness doubles as the sort weight — the seed catalog starts at 135 and
+// featured entries get 200 minus their rank — so it has to be clamped before
+// being shown as a percentage. Cards were displaying "123% fresh".
+const BUCKET_ORDER = ['Featured', 'Today', 'Yesterday', 'This week', 'This month', 'Earlier'];
+
+const bucketOf = (product: Product): string => {
+  if (product.featured || product.id === 'pilot-policy') return 'Featured';
+  if (!product.discoveredAt) return 'Earlier';
+  const age = Date.now() - new Date(product.discoveredAt).getTime();
+  if (age < DAY_MS) return 'Today';
+  if (age < 2 * DAY_MS) return 'Yesterday';
+  if (age < 7 * DAY_MS) return 'This week';
+  if (age < 30 * DAY_MS) return 'This month';
+  return 'Earlier';
+};
+
+
 export function initDirectory(): void {
   const preview = document.querySelector<HTMLElement>('.launch-preview');
   if (!preview || document.querySelector('#launch-directory')) return;
@@ -59,7 +121,7 @@ export function initDirectory(): void {
   const section = document.createElement('section');
   section.id = 'launch-directory';
   section.className = 'launch-directory';
-  section.innerHTML = `<div class="section-wrap"><div class="directory-head"><div><span class="directory-badge"><i data-lucide="sparkles"></i>Multi-source discovery • ${products.length} verified launches</span><h2>Browse what just launched.</h2></div><p>Browse launches discovered across Product Hunt, BetaList, Launching Next, Microlaunch, Tiny Startups, and other current feeds. Search by product, category, audience, source, or use case.</p></div><div class="directory-toolbar"><label class="directory-search"><i data-lucide="search"></i><span class="sr-only">Search launches</span><input id="directory-search" type="search" placeholder="Search products, use cases, or audiences"></label><div id="category-filters" class="category-filters"></div><div><button id="saved-toggle" class="saved-toggle" type="button"><i data-lucide="bookmark"></i><span>Saved</span></button><select id="sort-select" class="sort-select" aria-label="Sort launches"><option value="fresh">Freshest</option><option value="name">A–Z</option></select></div></div><div class="directory-summary"><span id="directory-count"></span><span>Duplicate-safe catalog • 35 newest multi-source additions • Saved locally on this device</span></div><div id="directory-grid" class="directory-grid"></div></div>`;
+  section.innerHTML = `<div class="section-wrap"><div class="directory-head"><div><span class="directory-badge"><i data-lucide="sparkles"></i>Multi-source discovery • ${products.length} verified launches</span><h2>Browse what just launched.</h2></div><p>Browse launches discovered across Product Hunt, BetaList, Launching Next, Microlaunch, Tiny Startups, and other current feeds. Search by product, category, audience, source, or use case.</p></div><div class="directory-toolbar"><label class="directory-search"><i data-lucide="search"></i><span class="sr-only">Search launches</span><input id="directory-search" type="search" placeholder="Search products, use cases, or audiences"></label><div id="category-filters" class="category-filters"></div><div><button id="saved-toggle" class="saved-toggle" type="button"><i data-lucide="bookmark"></i><span>Saved</span></button><select id="sort-select" class="sort-select" aria-label="Sort launches"><option value="fresh">Freshest</option><option value="votes">Most upvoted</option><option value="name">A–Z</option></select></div></div><div class="directory-summary"><span id="directory-count"></span><span>Duplicate-safe catalog • 35 newest multi-source additions • Saved locally on this device</span></div><div id="directory-new" class="directory-new" hidden></div><div id="directory-grid" class="directory-grid"></div></div>`;
   preview.after(section);
 
   const modal = document.createElement('div');
@@ -79,11 +141,41 @@ export function initDirectory(): void {
   let category = 'All';
   let savedOnly = false;
 
+  // Thirty-odd categories wrapped onto five rows and pushed the listings
+  // most of a screen down the page. Show the busiest ones, keep the rest
+  // behind a toggle, and always keep the active one visible.
+  const CATEGORY_PREVIEW = 11;
+  let showAllCategories = false;
+
   const renderCategoryFilters = (): void => {
     if (!filterWrap) return;
-    const categories = ['All', ...Array.from(new Set(products.map(product => product.category)))];
-    filterWrap.innerHTML = categories.map(item => `<button class="filter-button${item === category ? ' active' : ''}" type="button" data-category="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join('');
+    const counts = new Map<string, number>();
+    products.forEach(product => counts.set(product.category, (counts.get(product.category) ?? 0) + 1));
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+
+    let shown = ranked;
+    if (!showAllCategories && ranked.length > CATEGORY_PREVIEW) {
+      shown = ranked.slice(0, CATEGORY_PREVIEW);
+      if (category !== 'All' && !shown.includes(category)) shown = [...shown.slice(0, CATEGORY_PREVIEW - 1), category];
+    }
+
+    const hidden = ranked.length - shown.length;
+    filterWrap.innerHTML = ['All', ...shown]
+      .map(item => `<button class="filter-button${item === category ? ' active' : ''}" type="button" data-category="${escapeHtml(item)}">${escapeHtml(item)}${item !== 'All' ? `<span class="filter-count">${counts.get(item) ?? 0}</span>` : ''}</button>`)
+      .join('')
+      + (hidden > 0
+        ? `<button class="filter-button filter-more" type="button" data-more-categories>+${hidden} more</button>`
+        : ranked.length > CATEGORY_PREVIEW
+          ? '<button class="filter-button filter-more" type="button" data-more-categories>Show fewer</button>'
+          : '');
   };
+
+  filterWrap?.addEventListener('click', event => {
+    if (!(event.target as HTMLElement).closest('[data-more-categories]')) return;
+    showAllCategories = !showAllCategories;
+    renderCategoryFilters();
+  });
+
   renderCategoryFilters();
 
   const closeModal = (): void => {
@@ -111,11 +203,18 @@ export function initDirectory(): void {
     if (modal.classList.contains('open') && product) openModal(product);
   };
 
-  const render = (): void => {
-    if (!grid || !count) return;
+  let renderLimit = PAGE_SIZE;
+
+  const cardMarkup = (product: Product, saved: string[], voted: string[]): string => {
+    const canVote = product.id.startsWith('db-');
+    const isVoted = voted.includes(product.id);
+    return `<article class="directory-card${product.featured ? ' featured' : ''}${product.id === 'pilot-policy' ? ' pilot-featured' : ''}" data-product-id="${escapeHtml(product.id)}"><div class="directory-card-top"><span class="directory-logo" style="background:${escapeHtml(product.accent)}">${escapeHtml(product.initials)}</span><div class="card-actions">${canVote ? `<button class="vote-button${isVoted ? ' voted' : ''}" type="button" data-vote="${escapeHtml(product.id)}" aria-pressed="${isVoted}" aria-label="Upvote ${escapeHtml(product.name)}"><span class="vote-caret">▲</span><span class="vote-count">${product.votes ?? 0}</span></button>` : ''}<button class="save-button${saved.includes(product.id) ? ' saved' : ''}" type="button" aria-label="${escapeHtml(saved.includes(product.id) ? 'Remove' : 'Save')} ${escapeHtml(product.name)}" data-save="${escapeHtml(product.id)}"><i data-lucide="bookmark"></i></button></div></div><span class="directory-category">${escapeHtml(product.category)} • ${escapeHtml(product.launched)}</span><h3>${escapeHtml(product.name)}</h3><p class="directory-tagline">${escapeHtml(product.tagline)}</p><p class="directory-description">${escapeHtml(product.description)}</p>${product.id === 'pilot-policy' ? `<a class="project-url" href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer" aria-label="Visit PilotPolicy.com">PilotPolicy.com</a>` : ''}<div class="directory-card-footer"><span class="freshness"><i data-lucide="badge-check"></i>${Math.min(100, product.freshness)}% fresh</span><button class="details-button" type="button" data-details="${escapeHtml(product.id)}">${product.id === 'pilot-policy' ? 'View project' : 'View launch'} <i data-lucide="arrow-right"></i></button></div></article>`;
+  };
+
+  const visibleProducts = (): Product[] => {
     const query = search?.value.trim().toLowerCase() || '';
     const saved = savedIds();
-    const filtered = products.filter(product => {
+    return products.filter(product => {
       const haystack = [product.name, product.category, product.tagline, product.description, product.audience, ...product.tags].join(' ').toLowerCase();
       return (category === 'All' || product.category === category) && (!query || haystack.includes(query)) && (!savedOnly || saved.includes(product.id));
     }).sort((a, b) => {
@@ -127,12 +226,73 @@ export function initDirectory(): void {
         product.id === 'pilot-policy' ? 0 : product.featured ? 1 : 2;
       const difference = rank(a) - rank(b);
       if (difference !== 0) return difference;
-      return sort?.value === 'name' ? a.name.localeCompare(b.name) : b.freshness - a.freshness;
+
+      // In the chronological view, order by dated section first so the day
+      // headings run Today -> Yesterday -> This week and never repeat.
+      if ((sort?.value || 'fresh') === 'fresh') {
+        const bucketDifference = BUCKET_ORDER.indexOf(bucketOf(a)) - BUCKET_ORDER.indexOf(bucketOf(b));
+        if (bucketDifference !== 0) return bucketDifference;
+      }
+
+      if (sort?.value === 'name') return a.name.localeCompare(b.name);
+      if (sort?.value === 'votes') return (b.votes ?? 0) - (a.votes ?? 0) || b.freshness - a.freshness;
+      return b.freshness - a.freshness;
+    });
+  };
+
+  const render = (reset = true): void => {
+    if (!grid || !count) return;
+    if (reset) renderLimit = PAGE_SIZE;
+
+    const filtered = visibleProducts();
+    const saved = savedIds();
+    const voted = votedIds();
+    count.textContent = `${filtered.length} launch${filtered.length === 1 ? '' : 'es'} showing`;
+
+    if (!filtered.length) {
+      grid.innerHTML = '<div class="directory-empty">No launches match those filters yet. Try a broader search or switch back to All.</div>';
+      return;
+    }
+
+    // Only the freshness view is chronological, so day headings would be
+    // meaningless — and misleading — under A–Z or Most upvoted.
+    const grouped = (sort?.value || 'fresh') === 'fresh';
+    const page = filtered.slice(0, renderLimit);
+    let html = '';
+    let bucket = '';
+
+    page.forEach(product => {
+      if (grouped) {
+        const next = bucketOf(product);
+        if (next !== bucket) {
+          bucket = next;
+          const size = filtered.filter(item => bucketOf(item) === next).length;
+          html += `<h3 class="day-heading" data-day-group="${escapeHtml(next)}">${escapeHtml(next)}<span>${size}</span></h3>`;
+        }
+      }
+      html += cardMarkup(product, saved, voted);
     });
 
-    count.textContent = `${filtered.length} launch${filtered.length === 1 ? '' : 'es'} showing`;
-    grid.innerHTML = filtered.length ? filtered.map(product => `<article class="directory-card${product.featured ? ' featured' : ''}${product.id === 'pilot-policy' ? ' pilot-featured' : ''}" data-product-id="${escapeHtml(product.id)}"><div class="directory-card-top"><span class="directory-logo" style="background:${escapeHtml(product.accent)}">${escapeHtml(product.initials)}</span><button class="save-button${saved.includes(product.id) ? ' saved' : ''}" type="button" aria-label="${escapeHtml(saved.includes(product.id) ? 'Remove' : 'Save')} ${escapeHtml(product.name)}" data-save="${escapeHtml(product.id)}"><i data-lucide="bookmark"></i></button></div><span class="directory-category">${escapeHtml(product.category)} • ${escapeHtml(product.launched)}</span><h3>${escapeHtml(product.name)}</h3><p class="directory-tagline">${escapeHtml(product.tagline)}</p><p class="directory-description">${escapeHtml(product.description)}</p>${product.id === 'pilot-policy' ? `<a class="project-url" href="${escapeHtml(product.url)}" target="_blank" rel="noopener noreferrer" aria-label="Visit PilotPolicy.com">PilotPolicy.com</a>` : ''}<div class="directory-card-footer"><span class="freshness"><i data-lucide="badge-check"></i>${product.freshness}% fresh</span><button class="details-button" type="button" data-details="${escapeHtml(product.id)}">${product.id === 'pilot-policy' ? 'View project' : 'View launch'} <i data-lucide="arrow-right"></i></button></div></article>`).join('') : '<div class="directory-empty">No launches match those filters yet. Try a broader search or switch back to All.</div>';
+    const remaining = filtered.length - page.length;
+    // Rendering all 380+ cards at once put ~8,700 nodes in the document and
+    // made every keystroke in the search box re-render the lot.
+    if (remaining > 0) {
+      html += `<button class="load-more" type="button" data-load-more>Show ${Math.min(PAGE_SIZE, remaining)} more <span>${remaining} left</span></button>`;
+    }
+
+    grid.innerHTML = html;
     createIcons({ icons: { ArrowRight, Bookmark, BadgeCheck } });
+  };
+
+  /** "12 new since your last visit" — the cheapest reason to come back. */
+  const renderNewBanner = (): void => {
+    const banner = document.querySelector<HTMLElement>('#directory-new');
+    if (!banner || !lastVisit) return;
+    const fresh = products.filter(product =>
+      product.discoveredAt && new Date(product.discoveredAt).getTime() > lastVisit);
+    if (!fresh.length) return;
+    banner.innerHTML = `<span class="dot"></span><strong>${fresh.length} new launch${fresh.length === 1 ? '' : 'es'}</strong> since your last visit`;
+    banner.hidden = false;
   };
 
   filterWrap?.addEventListener('click', event => {
@@ -143,8 +303,55 @@ export function initDirectory(): void {
     render();
   });
 
+  /**
+   * Optimistic: the count moves immediately and is reverted if the request
+   * fails, because waiting on a round trip to acknowledge a click is what
+   * makes voting feel broken.
+   */
+  const toggleVote = async (id: string, button: HTMLButtonElement): Promise<void> => {
+    const product = products.find(item => item.id === id);
+    if (!product) return;
+    const withdraw = votedIds().includes(id);
+    const countEl = button.querySelector<HTMLElement>('.vote-count');
+    const before = product.votes ?? 0;
+
+    product.votes = Math.max(0, before + (withdraw ? -1 : 1));
+    button.classList.toggle('voted', !withdraw);
+    button.setAttribute('aria-pressed', String(!withdraw));
+    if (countEl) countEl.textContent = String(product.votes);
+    rememberVote(id, !withdraw);
+
+    try {
+      const response = await api.post<{ votes: number }>('/api/directory?action=vote', {
+        entryId: id, voterKey: voterKey(), withdraw,
+      });
+      const server = response.data?.votes;
+      if (typeof server === 'number') {
+        product.votes = server;
+        if (countEl) countEl.textContent = String(server);
+      }
+    } catch {
+      product.votes = before;
+      button.classList.toggle('voted', withdraw);
+      button.setAttribute('aria-pressed', String(withdraw));
+      if (countEl) countEl.textContent = String(before);
+      rememberVote(id, withdraw);
+    }
+  };
+
   grid?.addEventListener('click', event => {
     const target = event.target as HTMLElement;
+
+    const more = target.closest<HTMLButtonElement>('[data-load-more]');
+    if (more) {
+      renderLimit += PAGE_SIZE;
+      render(false);
+      return;
+    }
+
+    const voteButton = target.closest<HTMLButtonElement>('[data-vote]');
+    if (voteButton?.dataset.vote) { void toggleVote(voteButton.dataset.vote, voteButton); return; }
+
     const saveButton = target.closest<HTMLButtonElement>('[data-save]');
     if (saveButton?.dataset.save) { toggleSave(saveButton.dataset.save); return; }
     const detailsButton = target.closest<HTMLButtonElement>('[data-details]');
@@ -159,8 +366,10 @@ export function initDirectory(): void {
     if (saveButton?.dataset.modalSave) toggleSave(saveButton.dataset.modalSave);
   });
 
-  search?.addEventListener('input', render);
-  sort?.addEventListener('change', render);
+  // Wrapped: render takes a reset flag, and passing it straight to
+  // addEventListener would hand it the Event object as that flag.
+  search?.addEventListener('input', () => render());
+  sort?.addEventListener('change', () => render());
   savedToggle?.addEventListener('click', () => {
     savedOnly = !savedOnly;
     savedToggle.classList.toggle('active', savedOnly);
@@ -190,6 +399,7 @@ export function initDirectory(): void {
 
       const badge = section.querySelector<HTMLElement>('.directory-badge');
       if (badge) badge.innerHTML = `<i data-lucide="sparkles"></i>Multi-source discovery • ${products.length} launches`;
+      renderNewBanner();
       renderCategoryFilters();
       render();
       createIcons({ icons: { Search, Bookmark, Sparkles, X } });

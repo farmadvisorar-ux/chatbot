@@ -1,0 +1,37 @@
+name: sikads
+
+# Only when sikads changes: the repo holds several unrelated projects and a
+# push to one should not spend minutes checking the others.
+on:
+  push:
+    paths: ['sikads/**', '.github/workflows/sikads-ci.yml']
+  pull_request:
+    paths: ['sikads/**', '.github/workflows/sikads-ci.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sikads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: sikads/package-lock.json
+
+      - run: npm ci
+
+      # Type errors in the API are invisible until a function is invoked in
+      # production, so both projects are checked, not just the frontend.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Guards the arithmetic that decides what a publisher is owed.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
