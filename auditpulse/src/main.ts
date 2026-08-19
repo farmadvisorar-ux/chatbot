@@ -40,7 +40,7 @@ form.addEventListener('submit', async event => {
                 ${summaryChipsHtml(data.summary)}
                 ${executiveSummaryHtml(data.grade, data.score, data.findings)}
                 <div id="quick-findings" style="margin-top:16px"></div>
-                <p class="muted" style="font-size:13px;margin-top:18px">This free check only looked at response headers, TLS, and cookies. <a href="#pricing" style="color:var(--accent)">Create a free account</a> to run a full, deep audit — every page linked from your homepage, exposed files, secrets in your JS bundles, CORS, DNS security, outdated libraries, and more — with automatic re-audits every 30 days. It's all free.</p>
+                <p class="muted" style="font-size:13px;margin-top:18px">This free check only looked at response headers, TLS, and cookies. <a href="#pricing" style="color:var(--accent)">Create a free account</a> to run a full, deep audit — every page linked from your homepage, exposed files, secrets in your JS bundles, CORS, DNS security, outdated libraries, and more — with automatic weekly re-audits. It's all free.</p>
             </div>`;
         renderFindings(document.querySelector('#quick-findings')!, data.findings);
         resultEl.hidden = false;

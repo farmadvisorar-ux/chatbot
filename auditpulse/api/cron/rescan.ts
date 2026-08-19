@@ -10,14 +10,26 @@ import { siteOrigin } from '../_lib/site.js';
 
 export const config = { maxDuration: 60 };
 
-const BATCH_SIZE = 5;
+/** Hard ceiling on rows fetched per run — a safety net, not the real limiter. */
+const MAX_BATCH = 25;
+/**
+ * Stop starting new scans once this much of the function's 60s budget is
+ * spent. A full audit crawls several pages and runs 18 checks, so its
+ * duration varies a lot; a fixed batch size would either waste the budget
+ * or overrun it. Whatever isn't reached stays due and is picked up on the
+ * next run, because next_rescan_at only moves forward once a scan finishes.
+ */
+const TIME_BUDGET_MS = 45_000;
 
 /**
- * Vercel Cron hits this daily (see vercel.json). Finds every verified
- * target whose 30-day re-audit is due, re-runs the full scan, and emails the report automatically. Capped to a
- * small batch per run so one invocation can't exceed the function's time
- * budget; targets not reached today are picked up on the next run since
- * next_rescan_at is only pushed forward once a scan actually completes.
+ * Re-audits every verified site whose weekly scan is due, then emails the
+ * report (with PDF) to the owner and any client recipients.
+ *
+ * Throughput is bounded by how often this is invoked. Vercel's Hobby plan
+ * allows one cron run per day and a 60s function limit, which is only
+ * enough for a handful of sites; point an external scheduler at this same
+ * endpoint (with the CRON_SECRET bearer token) to run it more frequently,
+ * or move to a plan with sub-daily crons. See the README.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
@@ -31,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
     }
 
+    const startedAt = Date.now();
     const pool = getPool();
     const { rows: due } = await pool.query(
         `SELECT t.*, u.email AS owner_email, u.name AS owner_name
@@ -40,12 +53,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
            AND t.next_rescan_at IS NOT NULL AND t.next_rescan_at <= now()
          ORDER BY t.next_rescan_at ASC
          LIMIT $1`,
-        [BATCH_SIZE],
+        [MAX_BATCH],
     );
 
     const results: { targetId: string; ok: boolean; error?: string }[] = [];
+    let skippedForTime = 0;
 
     for (const target of due) {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) {
+            skippedForTime = due.length - results.length;
+            break;
+        }
         const shareToken = randomBytes(24).toString('base64url');
         const { rows: scanRows } = await pool.query(
             `INSERT INTO scans (target_id, user_id, kind, status, share_token, triggered_by) VALUES ($1,$2,'full','running',$3,'auto_rescan') RETURNING id`,
@@ -57,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const outcome = await runScan(target.url, 'full');
             await persistScanResult(pool, scanId, outcome);
             await pool.query(
-                `UPDATE targets SET last_scanned_at = now(), next_rescan_at = now() + interval '30 days' WHERE id = $1`,
+                `UPDATE targets SET last_scanned_at = now(), next_rescan_at = now() + interval '7 days' WHERE id = $1`,
                 [target.id],
             );
 
@@ -85,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             for (const recipient of recipients) {
                 await sendReportEmail({
                     toEmail: recipient,
-                    note: 'This is your automatic 30-day AuditPulse re-audit.',
+                    note: 'This is your automatic weekly AuditPulse re-audit.',
                     targetLabel: target.label || target.url,
                     targetUrl: target.url,
                     grade: outcome.grade,
@@ -103,10 +121,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             const message = err instanceof Error ? err.message : 'Scan failed.';
             await pool.query(`UPDATE scans SET status = 'failed', error = $2, completed_at = now() WHERE id = $1`, [scanId, message]);
             // Push the schedule forward anyway so a permanently-broken target doesn't monopolize every run.
-            await pool.query(`UPDATE targets SET next_rescan_at = now() + interval '30 days' WHERE id = $1`, [target.id]);
+            await pool.query(`UPDATE targets SET next_rescan_at = now() + interval '7 days' WHERE id = $1`, [target.id]);
             results.push({ targetId: target.id, ok: false, error: message });
         }
     }
 
-    json(res, 200, { processed: results.length, results });
+    json(res, 200, { processed: results.length, dueRemaining: skippedForTime, results });
 }

@@ -22,6 +22,9 @@ interface ScanSummaryRow {
 }
 interface ActivityRow extends ScanSummaryRow { target_id: string; target_label: string | null; hostname: string }
 
+/** Mirrors MAX_TARGETS_PER_USER in api/targets/index.ts — the server enforces it; this is only for display. */
+const MAX_TARGETS = 10;
+
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const signedOutSection = el<HTMLElement>('signed-out');
 const loadingSection = el<HTMLElement>('loading');
@@ -157,6 +160,11 @@ async function loadTargets(): Promise<void> {
     targets = data.targets;
     renderStatTiles();
     renderTargetList();
+    // Block the add flow at the cap rather than letting the request 409.
+    const addBtn = el<HTMLButtonElement>('add-target-btn');
+    const atLimit = targets.length >= MAX_TARGETS;
+    addBtn.disabled = atLimit;
+    addBtn.title = atLimit ? `You've reached the ${MAX_TARGETS}-site limit — remove one to add another.` : '';
 }
 
 async function loadActivity(): Promise<void> {
@@ -189,10 +197,10 @@ function renderStatTiles(): void {
         </div>`;
 
     statTilesEl.innerHTML = [
-        tile(icons.globe, 'Sites', String(targets.length), `${targets.length === 1 ? 'site' : 'sites'} monitored`),
+        tile(icons.globe, 'Sites', `${targets.length}/${MAX_TARGETS}`, targets.length >= MAX_TARGETS ? 'limit reached' : `${MAX_TARGETS - targets.length} more available`),
         tile(icons.shield, 'Verified', `${verified}/${targets.length}`, verified === targets.length ? 'all ownership proven' : `${targets.length - verified} awaiting proof`, verified === targets.length ? 'stat-tile-ok' : ''),
         tile(icons.alert, 'Needs fixing', String(openSevere), 'critical + high findings', openSevere ? 'stat-tile-warn' : 'stat-tile-ok'),
-        tile(icons.clock, 'Upcoming', String(dueSoon), 're-audits due in 7 days'),
+        tile(icons.clock, 'Upcoming', String(dueSoon), 're-audits due this week'),
     ].join('');
 }
 

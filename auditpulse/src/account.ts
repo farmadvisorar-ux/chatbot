@@ -12,9 +12,9 @@ const signedInSection = el<HTMLElement>('signed-in');
 const planCard = el<HTMLElement>('plan-card');
 
 const INCLUDED = [
-    'Unlimited websites and unlimited on-demand audits',
+    'Up to 10 websites, with unlimited on-demand audits',
     'The full 18-check deep audit, crawled across your site',
-    'Automatic re-audit every 30 days per verified site',
+    'Automatic re-audit every week per verified site',
     'Embeddable trust badge and public verification page',
     'Certificate-style PDF report emailed after every audit',
     'One-click "Fix with PR" on a connected GitHub repo',

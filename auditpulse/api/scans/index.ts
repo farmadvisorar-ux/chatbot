@@ -9,7 +9,7 @@ import { DisallowedTargetError } from '../../lib/scanner/net.js';
 
 export const config = { maxDuration: 30 };
 
-const RESCAN_INTERVAL_DAYS = 30;
+const RESCAN_INTERVAL_DAYS = 7;
 const RECENT_ACTIVITY_LIMIT = 20;
 
 /** GET recent activity across every site the user owns / POST run a new audit. Split out from api/scans/[id].ts because a bare `/api/scans` request (no id segment) doesn't reach a `[id].ts` dynamic route. */

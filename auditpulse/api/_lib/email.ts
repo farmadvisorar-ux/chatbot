@@ -38,7 +38,7 @@ export async function sendWelcomeEmail(toEmail: string, name: string | null): Pr
             to: toEmail,
             replyTo: REPLY_TO,
             subject: 'Welcome to AuditPulse',
-            text: `${greeting}\n\nWelcome to AuditPulse. Add a website to start auditing it for security vulnerabilities and misconfigurations. Verified sites on the Unlimited plan get an automatic re-audit every 30 days.\n\nQuestions? Just reply to this email.\n\n— AuditPulse`,
+            text: `${greeting}\n\nWelcome to AuditPulse. Add a website to start auditing it for security vulnerabilities and misconfigurations. Add up to 10 sites; every verified site is re-audited automatically once a week, with the report emailed to you.\n\nQuestions? Just reply to this email.\n\n— AuditPulse`,
         });
         if (error) console.error('Welcome email was not sent:', error.name, error.message);
     } catch (err) {

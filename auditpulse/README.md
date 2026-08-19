@@ -2,8 +2,8 @@
 
 A vulnerability audit platform: enter a URL, get a comprehensive, interactive
 security report with severity-ranked findings and step-by-step fixes. It is
-**free** — every signed-in account gets unlimited sites, unlimited on-demand
-audits, automatic re-audits every 30 days, an embeddable trust badge, PDF
+**free** — every signed-in account gets up to 10 sites, unlimited on-demand
+audits, automatic weekly re-audits, an embeddable trust badge, PDF
 certificates, and GitHub-connected pull requests that fix what was found.
 
 Built as a static Vite frontend with Vercel serverless functions and
@@ -17,7 +17,7 @@ Postgres, following the same stack/conventions as this repo's `freshsaas/` app.
 - Database: any Postgres (Vercel Postgres, Neon, Supabase, etc.) via `DATABASE_URL`
 - Auth: [Clerk](https://clerk.com) — Google, Microsoft, email+password, email magic link
 - Transactional email: [Resend](https://resend.com) — report emails, welcome email
-- Scheduling: Vercel Cron (`vercel.json`) — daily automatic 30-day re-audits
+- Scheduling: Vercel Cron (`vercel.json`) — automatic weekly re-audits
 - Auto-fix: `lib/fixers/` — opens pull requests via the GitHub REST API using a per-site fine-grained PAT
 
 ## What the scanner actually does
@@ -170,16 +170,48 @@ is needed here to get the full sign-up/login/reset flow working.
 
 ## Pricing model
 
-AuditPulse is free. There is no billing integration, no plan gating, and no
-usage cap: every signed-in account gets unlimited sites, unlimited on-demand
-audits, automatic 30-day re-audits, the trust badge, PDF certificates, and
-GitHub fix pull requests.
+AuditPulse is free. There is no billing integration and no paid tier. Every
+signed-in account gets up to **10 sites**, unlimited on-demand audits,
+automatic weekly re-audits, the trust badge, PDF certificates, and GitHub fix
+pull requests.
+
+The 10-site cap (`MAX_TARGETS_PER_USER` in `api/targets/index.ts`) is a real
+resource limit rather than an upsell: each site costs a recurring weekly
+scan. The dashboard mirrors it for display only — the server enforces it.
 
 The `users` table still carries the vestigial `stripe_*`, `plan`,
 `subscription_status` and `plan_expires_at` columns, and the
 `stripe_events_processed` table still exists. They are unused and left in
 place so the migration stays additive — drop them separately if you want a
 clean schema.
+
+## Weekly re-audit scheduling
+
+Every verified site is re-scanned once a week. `next_rescan_at` is set to
+`now() + 7 days` whenever a scan completes (manual or automatic), and
+`api/cron/rescan.ts` picks up whatever is due.
+
+The cron is **time-budgeted, not count-batched**: it keeps starting scans
+until 45s of the function's 60s limit is spent, then stops. Anything it
+didn't reach stays due and is picked up next run, because `next_rescan_at`
+only moves forward once a scan actually finishes. A fixed batch size would
+either waste the budget or overrun it, since a full audit's duration varies
+with how many pages it crawls.
+
+**Throughput is the thing to watch.** Vercel's Hobby plan allows one cron
+run per day and caps functions at 60s, which realistically means only a
+handful of sites get re-scanned daily — fine for a few users, not enough
+once site count grows. Two ways to raise it, in order of effort:
+
+1. Point an **external scheduler** (cron-job.org, GitHub Actions, any host
+   with cron) at `POST /api/cron/rescan` every 10–15 minutes with
+   `Authorization: Bearer $CRON_SECRET`. The endpoint is idempotent — it
+   only ever picks up what is genuinely due — so calling it often is safe
+   and costs nothing extra.
+2. Move to a Vercel plan with sub-daily crons and a longer function limit.
+
+The response body reports `processed` and `dueRemaining` on every run, so
+you can tell at a glance whether the schedule is keeping up.
 
 ## Email wall
 
@@ -251,7 +283,7 @@ scan, two things become available from its dashboard detail panel:
   browser needed) renders a cover page (grade, score, verification status, a
   plain-English "what this certifies" statement) followed by every finding
   in full detail. It's attached to the report email both when a user clicks
-  "Email report" and on every automatic 30-day re-audit, so the emailed
+  "Email report" and on every automatic weekly re-audit, so the emailed
   proof and the badge/report stay in sync without the user having to
   regenerate anything.
 

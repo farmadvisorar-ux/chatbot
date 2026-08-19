@@ -6,6 +6,9 @@ import { getPool } from '../_lib/db.js';
 import { generateVerificationToken } from '../_lib/verification.js';
 import { normalizeTargetUrl } from '../../lib/scanner/engine.js';
 
+/** Per-account cap. Weekly automatic re-audits mean every added site costs recurring scan capacity, so this is a real resource limit, not an upsell. */
+const MAX_TARGETS_PER_USER = 10;
+
 /** GET list / POST create. Split out from api/targets/[id].ts because a bare `/api/targets` request (no id segment) doesn't reach a `[id].ts` dynamic route. */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const user = await requireAuth(req, res);
@@ -54,6 +57,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         ({ hostname, targetUrl } = normalizeTargetUrl(url));
     } catch {
         error(res, 400, 'Could not parse that URL.');
+        return;
+    }
+
+    const { rows: countRows } = await pool.query('SELECT count(*)::int AS c FROM targets WHERE user_id = $1', [user.userId]);
+    if (countRows[0].c >= MAX_TARGETS_PER_USER) {
+        error(res, 409, `You've reached the limit of ${MAX_TARGETS_PER_USER} sites. Remove one before adding another.`);
         return;
     }
 
