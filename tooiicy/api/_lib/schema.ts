@@ -48,27 +48,25 @@ CREATE TABLE IF NOT EXISTS product_variants (
 );
 CREATE INDEX IF NOT EXISTS product_variants_product ON product_variants (product_id, sort_order);
 
--- Lifecycle: awaiting_payment (created when the Stripe Checkout Session is
--- opened, before anyone has paid) -> paid (webhook confirmed) ->
+-- Lifecycle: awaiting_payment (created when the PayPal order is opened,
+-- before anyone has paid) -> paid (capture confirmed) ->
 -- submitted_to_printful (fulfillment order accepted) or fulfillment_error
 -- (Printful rejected it — held for an admin to retry) -> shipped (Printful
--- webhook reported it left the warehouse). cancelled covers a Checkout
--- Session that was opened and abandoned or expired.
+-- webhook reported it left the warehouse). cancelled covers a PayPal order
+-- that was opened and abandoned or expired.
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT,
     status TEXT NOT NULL DEFAULT 'awaiting_payment'
         CHECK (status IN ('awaiting_payment', 'paid', 'submitted_to_printful', 'fulfillment_error', 'shipped', 'cancelled')),
-    stripe_session_id TEXT UNIQUE,
-    stripe_payment_intent_id TEXT,
+    paypal_order_id TEXT UNIQUE,
+    paypal_capture_id TEXT,
     subtotal_cents INTEGER NOT NULL CHECK (subtotal_cents > 0),
     shipping_cents INTEGER NOT NULL DEFAULT 0 CHECK (shipping_cents >= 0),
     total_cents INTEGER NOT NULL CHECK (total_cents > 0),
     shipping_name TEXT,
-    -- Free-form because Stripe's own shipping_details shape is what gets
-    -- stored — {line1, line2, city, state, postal_code, country} — and it is
-    -- read back only for display and for the Printful recipient, never
-    -- queried by field.
+    -- Free-form address object from PayPal, read back only for display and
+    -- for the Printful recipient, never queried by field.
     shipping_address JSONB,
     printful_order_id BIGINT,
     tracking_number TEXT,

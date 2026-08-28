@@ -52,16 +52,19 @@ function renderError(message: string): void {
     root.innerHTML = `<div class="receipt"><h1>Hmm</h1><p>${escapeHtml(message)}</p></div>`;
 }
 
-const sessionId = new URLSearchParams(window.location.search).get('session_id');
-if (!sessionId) {
+// PayPal appends ?token={PAYPAL_ORDER_ID} to the return URL.
+const params = new URLSearchParams(window.location.search);
+const paypalOrderId = params.get('token');
+
+if (!paypalOrderId) {
     renderError('No order was specified.');
 } else {
-    api.get<{ order: Order }>(`/api/orders?session_id=${encodeURIComponent(sessionId)}`)
+    api.post<{ order: Order }>('/api/capture', { paypalOrderId })
         .then(({ data }) => {
             render(data.order);
             clearCart();
         })
         .catch(err => {
-            renderError(err instanceof ApiError ? err.message : 'Could not load your order.');
+            renderError(err instanceof ApiError ? err.message : 'Could not confirm your payment. Please contact us.');
         });
 }

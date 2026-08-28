@@ -7,18 +7,18 @@ import { clean } from './_lib/validate.js';
 /**
  * GET /api/orders?session_id=cs_... -> the receipt for the success page.
  *
- * The Stripe Checkout Session id doubles as the access token here: it is a
- * long, unguessable string Stripe hands only to the browser that just paid,
- * so knowing it is treated as proof this is that shopper looking up their
- * own order. There is no account system to check a role against instead.
+ * The PayPal order ID doubles as the access token here: it is a long,
+ * unguessable string PayPal hands only to the browser that just paid, so
+ * knowing it is treated as proof this is that shopper looking up their own
+ * order. There is no account system to check a role against instead.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     await guarded('orders', res, async () => {
         if (!requireMethod(req, res, ['GET'])) return;
 
-        const sessionId = clean(req.query.session_id, 200);
+        const sessionId = clean(req.query.paypal_order_id, 200);
         if (!sessionId) {
-            error(res, 400, 'Missing session_id');
+            error(res, 400, 'Missing paypal_order_id');
             return;
         }
         if (!isDatabaseConfigured()) {
@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                     total_cents AS "totalCents", shipping_name AS "shippingName",
                     shipping_address AS "shippingAddress", tracking_number AS "trackingNumber",
                     tracking_url AS "trackingUrl", created_at AS "createdAt"
-             FROM orders WHERE stripe_session_id = $1`,
+             FROM orders WHERE paypal_order_id = $1`,
             [sessionId],
         );
         const order = rows[0];

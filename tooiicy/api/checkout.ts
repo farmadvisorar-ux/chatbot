@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getPool, isDatabaseConfigured } from './_lib/db.js';
 import { json, error, requireMethod, clientKey } from './_lib/http.js';
 import { guarded } from './_lib/errors.js';
-import { getStripe, siteOrigin } from './_lib/stripe.js';
+import { isPayPalConfigured, siteOrigin, createPayPalOrder } from './_lib/paypal.js';
 import { checkRateLimit } from './_lib/rateLimit.js';
 import { isUuid, clean, validEmail } from './_lib/validate.js';
 import { clampQuantity, subtotalCents, MAX_LINE_ITEMS } from './_lib/cart.js';
@@ -12,17 +12,15 @@ type CartLine = { variantId: string; quantity: number };
 /**
  * POST /api/checkout {items: [{variantId, quantity}], email?}
  *
- * Creates the order as `awaiting_payment` and opens a Stripe Checkout
- * Session for it. Prices are never taken from the request — every unit price
- * charged comes from product_variants, looked up server-side, so a tampered
- * client payload can change what's in the cart but never what it costs.
+ * Creates the order as `awaiting_payment` and opens a PayPal order for it.
+ * Prices are never taken from the request — every unit price charged comes
+ * from product_variants, looked up server-side.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     await guarded('checkout', res, async () => {
         if (!requireMethod(req, res, ['POST'])) return;
 
-        const stripe = getStripe();
-        if (!stripe) {
+        if (!isPayPalConfigured()) {
             error(res, 501, 'Checkout is not configured yet');
             return;
         }
@@ -128,32 +126,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
 
         const origin = siteOrigin();
-        const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
-            line_items: orderItems.map(item => ({
-                quantity: item.quantity,
-                price_data: {
-                    currency: 'usd',
-                    unit_amount: item.unitPriceCents,
-                    product_data: { name: item.name },
-                },
-            })),
-            shipping_address_collection: { allowed_countries: ['US'] },
-            shipping_options: [{
-                shipping_rate_data: {
-                    type: 'fixed_amount',
-                    fixed_amount: { amount: shippingCents, currency: 'usd' },
-                    display_name: 'Standard Shipping',
-                },
-            }],
-            customer_email: email || undefined,
-            success_url: `${origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${origin}/`,
-            metadata: { orderId },
+        const { orderId: paypalOrderId, approvalUrl } = await createPayPalOrder({
+            items: orderItems.map(i => ({ name: i.name, quantity: i.quantity, unitPriceCents: i.unitPriceCents })),
+            shippingCents,
+            totalCents: total,
+            returnUrl: `${origin}/success.html?orderId=${orderId}`,
+            cancelUrl: `${origin}/`,
         });
 
-        await pool.query('UPDATE orders SET stripe_session_id = $2 WHERE id = $1', [orderId, session.id]);
+        await pool.query('UPDATE orders SET paypal_order_id = $2 WHERE id = $1', [orderId, paypalOrderId]);
 
-        json(res, 200, { url: session.url, orderId });
+        json(res, 200, { url: approvalUrl, orderId });
     });
 }
