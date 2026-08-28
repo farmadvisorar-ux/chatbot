@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tooiicy — Elevate Your Style | Dallas, TX</title>
+    <meta name="description" content="Tooiicy: it's not a brand, it's a lifestyle. Streetwear from Juicecuzz, designed and printed in Dallas, Texas.">
+    <meta name="theme-color" content="#0b0b0d">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+    <!--
+      Site URL below is the current live address. It's hardcoded because
+      crawlers for link previews (Facebook, iMessage, Discord, Slack, etc.)
+      read these tags as static HTML and never run the page's JavaScript, so
+      it can't be filled in at runtime the way api/_lib/stripe.ts's
+      PUBLIC_SITE_URL is. Update every tooiicy.vercel.app below to
+      https://tooiicy.com once the real domain is live and pointed here.
+    -->
+    <link rel="canonical" href="https://tooiicy.vercel.app/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Tooiicy">
+    <meta property="og:url" content="https://tooiicy.vercel.app/">
+    <meta property="og:title" content="Tooiicy — Elevate Your Style | Dallas, TX">
+    <meta property="og:description" content="Official Juicecuzz streetwear. Not a brand — a lifestyle. Designed and printed in Dallas, TX.">
+    <meta property="og:image" content="https://tooiicy.vercel.app/og-image.png">
+    <meta property="og:image:width" content="400">
+    <meta property="og:image:height" content="210">
+    <meta property="og:image:alt" content="Tooiicy — Elevate your style. Official Juicecuzz streetwear, Dallas, TX.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tooiicy — Elevate Your Style | Dallas, TX">
+    <meta name="twitter:description" content="Official Juicecuzz streetwear. Not a brand — a lifestyle. Designed and printed in Dallas, TX.">
+    <meta name="twitter:image" content="https://tooiicy.vercel.app/og-image.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <a class="logo" href="/">Tooi<b>icy</b><span class="logo-tag">Juicecuzz</span></a>
+        <div class="header-actions">
+            <button class="cart-btn" id="cart-open" type="button" aria-haspopup="true">
+                Cart <span class="cart-count" id="cart-count">0</span>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero wrap">
+            <p class="badge">Not a brand. A lifestyle. — Dallas, TX</p>
+            <h1>TOO<span class="juice">ICY</span></h1>
+            <p class="hero-sub">Elevate your style with Tooiicy. Unapologetically cool, bold, and chill all at once — every piece designed and printed in Dallas by Juicecuzz, nothing sits in a warehouse.</p>
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="#shop">Shop the drop</a>
+            </div>
+        </section>
+
+        <section class="coming-soon wrap" id="coming-soon">
+            <div class="coming-soon-content">
+                <p class="badge">Drop incoming</p>
+                <h2>Merchandise Coming Soon</h2>
+                <p class="coming-soon-text">We're designing something special. Stay tuned for the next drop.</p>
+                <div class="social-links-container" id="social-links"></div>
+            </div>
+        </section>
+
+        <section class="shop wrap" id="shop">
+            <div class="notice-slot" id="notice"></div>
+            <div class="shop-header">
+                <h2>Shop</h2>
+            </div>
+            <div class="grid" id="product-grid"></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="wrap">
+            <div class="footer-content">
+                <p>© <span id="year"></span> Tooiicy. Designed &amp; printed in Dallas, TX.</p>
+                <div class="footer-social" id="footer-social"></div>
+            </div>
+        </div>
+    </footer>
+
+    <div class="scrim" id="scrim"></div>
+
+    <div class="overlay" id="product-overlay" role="dialog" aria-modal="true">
+        <div class="modal" id="product-modal"></div>
+    </div>
+
+    <aside class="drawer" id="cart-drawer" aria-label="Shopping cart">
+        <div class="drawer-header">
+            <h3>Your cart</h3>
+            <button class="modal-close" id="cart-close" type="button" aria-label="Close cart" style="position: static; margin: 0;">✕</button>
+        </div>
+        <div class="drawer-items" id="cart-items"></div>
+        <div class="drawer-footer">
+            <div class="notice-slot" id="cart-notice"></div>
+            <input class="email-input" id="cart-email" type="email" placeholder="Email for your receipt (optional)" autocomplete="email">
+            <div class="drawer-total"><span>Total</span><span id="cart-total">$0.00</span></div>
+            <button class="btn btn-primary btn-block" id="cart-checkout" type="button">Checkout</button>
+        </div>
+    </aside>
+
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
