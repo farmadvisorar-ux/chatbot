@@ -70,3 +70,11 @@ jobs:
           processed=$(printf '%s' "$body" | jq -r '.processed // 0')
           remaining=$(printf '%s' "$body" | jq -r '.dueRemaining // 0')
           echo "Scanned $processed site(s); $remaining still due." >> "$GITHUB_STEP_SUMMARY"
+
+          # A scan whose report never reached anyone is a silent failure, so
+          # call it out here rather than leaving it buried in the JSON body.
+          failed=$(printf '%s' "$body" | jq -r '.emailsFailed // 0')
+          if [ "$failed" -gt 0 ]; then
+            reason=$(printf '%s' "$body" | jq -r '[.results[]?.emailError] | map(select(.)) | first // "unknown error"')
+            echo "WARNING: $failed report email(s) failed to send - $reason" >> "$GITHUB_STEP_SUMMARY"
+          fi
