@@ -56,7 +56,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         [MAX_BATCH],
     );
 
-    const results: { targetId: string; ok: boolean; error?: string }[] = [];
+    const results: {
+        targetId: string;
+        ok: boolean;
+        error?: string;
+        emailsSent?: number;
+        emailsFailed?: number;
+        emailError?: string;
+    }[] = [];
     let skippedForTime = 0;
 
     for (const target of due) {
@@ -100,8 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                 verifiedOwnership: target.verified,
                 autoRescan: target.auto_rescan,
             });
+            // A re-audit nobody receives is indistinguishable from no re-audit
+            // at all, so delivery failures are counted and reported rather than
+            // discarded — an unverified Resend sending domain fails every send
+            // while the scan itself still succeeds.
+            let emailsSent = 0;
+            let emailError: string | undefined;
             for (const recipient of recipients) {
-                await sendReportEmail({
+                const sent = await sendReportEmail({
                     toEmail: recipient,
                     note: 'This is your automatic weekly AuditPulse re-audit.',
                     targetLabel: target.label || target.url,
@@ -114,9 +127,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                     senderName: target.owner_name,
                     pdfBuffer,
                 });
+                if (sent.ok) emailsSent += 1;
+                else emailError ??= sent.error;
             }
+            if (emailError) console.error(`Re-audit report email failed for ${target.hostname}:`, emailError);
 
-            results.push({ targetId: target.id, ok: true });
+            results.push({ targetId: target.id, ok: true, emailsSent, emailsFailed: recipients.length - emailsSent, emailError });
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Scan failed.';
             await pool.query(`UPDATE scans SET status = 'failed', error = $2, completed_at = now() WHERE id = $1`, [scanId, message]);
@@ -126,5 +142,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         }
     }
 
-    json(res, 200, { processed: results.length, dueRemaining: skippedForTime, results });
+    const emailsFailed = results.reduce((total, r) => total + (r.emailsFailed ?? 0), 0);
+    json(res, 200, { processed: results.length, dueRemaining: skippedForTime, emailsFailed, results });
 }
