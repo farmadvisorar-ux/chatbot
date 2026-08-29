@@ -23,7 +23,7 @@
             ]
         },
         {
-            "source": "/(robots.txt|sitemap.xml|feed.xml|products.csv)",
+            "source": "/(robots.txt|sitemap.xml|feed.xml|products.csv|llms.txt)",
             "headers": [
                 { "key": "Cache-Control", "value": "public, max-age=3600" }
             ]

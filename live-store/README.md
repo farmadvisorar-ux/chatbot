@@ -118,3 +118,37 @@ routes, and only the first works without a login:
    domain, then submit `sitemap.xml` under Indexing → Sitemaps. This is the
    one that gets the site indexed promptly, and it cannot be automated from
    here.
+
+## Assistant / LLM legibility
+
+Three things, in descending order of how much they actually matter:
+
+1. **`FAQPage` in the JSON-LD `@graph`.** Seven questions in the shape people
+   ask them, with answers copied verbatim from the page's spec and about
+   sections. This is the part that carries: it is machine-readable Q&A about a
+   real product. Google stopped showing FAQ rich results for ordinary
+   commercial sites, so it is not chasing a snippet — it is for engines that
+   summarise rather than rank.
+
+   **Every answer must stay true to the page.** An assistant repeats these as
+   statements of fact about a real product from a real person. Shipping cost is
+   deliberately absent: the page says "calculated at checkout" while the
+   checkout adds nothing, and that contradiction needs a decision rather than a
+   confident answer.
+
+2. **Assistant crawlers named in `robots.txt`.** `User-agent: * / Allow: /`
+   already permitted them, so this changes no behaviour — it records the
+   decision, so that someone tightening the file later has to remove a line
+   deliberately instead of cutting the assistants off by tightening `*`.
+   Retrieval bots (OAI-SearchBot, ClaudeBot, PerplexityBot) and training
+   crawlers (GPTBot, CCBot) are listed apart, because those are different
+   bargains and only the second is worth reconsidering.
+
+3. **`llms.txt`.** A short brief per the llmstxt.org convention. Being honest
+   about it: a proposal with partial adoption, not a standard anyone must read.
+   It costs a few hundred bytes and repeats facts that are already in the
+   JSON-LD, so nothing depends on it being honoured.
+
+What none of this buys is a guarantee of being cited. Assistants surface pages
+they can parse and trust; this makes the store parseable and consistent, which
+is the part that is under our control.

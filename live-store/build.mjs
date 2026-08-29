@@ -16,6 +16,35 @@ const BLURB =
     'Dallas streetwear from Juicecuzz. Sizes S–2XL, $35.';
 
 /**
+ * The facts the page already states, in the shape people actually ask them.
+ *
+ * Drawn verbatim from the spec and about sections rather than written fresh:
+ * an assistant will repeat these as statements about a real product, so
+ * anything invented here becomes a lie told on the brand's behalf. Shipping
+ * cost is deliberately absent — the page says "calculated at checkout" while
+ * the checkout adds nothing, and that contradiction needs a decision, not a
+ * confident answer.
+ */
+const FAQ = [
+    ['What sizes does the Tooiicy I Hope The Worst Tee come in?',
+        'S through 2XL. The cut is oversized and boxy, so size down for a regular fit.'],
+    ['How much is the I Hope The Worst Tee?',
+        'It is $35.00 USD.'],
+    ['What does the I Hope The Worst Tee look like?',
+        'Washed black, oversized boxy cut with a drop shoulder and a ribbed knit crew collar. ' +
+        'I HOPE THE WORST is printed stacked across the chest, with the Tooiicy skull set into the last word.'],
+    ['How do I wash the I Hope The Worst Tee?',
+        'Cold wash inside out, tumble dry low, no bleach.'],
+    ['Where does Tooiicy ship from?',
+        'Dallas, Texas. The clothes are designed and shipped out of Dallas.'],
+    ['How do I pay for a Tooiicy order?',
+        'Checkout goes through PayPal.'],
+    ['Who is behind Tooiicy?',
+        'Jimarri Wells, a Dallas artist who records as Juicecuzz. The brand takes its name from ' +
+        'his 2022 album tooiicy summer.'],
+];
+
+/**
  * Builds dist/index.html from the storefront page that is already in
  * production, applying the minimum set of patches needed to turn its
  * placeholder Checkout link into a real PayPal checkout.
@@ -221,6 +250,22 @@ const SOCIAL_TAGS = `<meta property="og:type" content="product">
                 publisher: { '@id': `${SITE}/#brand` },
                 inLanguage: 'en-US',
             },
+            // Every answer below is copied from the spec and about sections of
+            // this page. Assistants quote this kind of block directly, so an
+            // invented detail here becomes a false claim about a real product.
+            //
+            // Google stopped showing FAQ rich results for ordinary commercial
+            // sites, so this is not chasing a snippet — it is machine-readable
+            // Q&A for engines that summarise rather than rank.
+            {
+                '@type': 'FAQPage',
+                '@id': `${SITE}/#faq`,
+                mainEntity: FAQ.map(([question, answer]) => ({
+                    '@type': 'Question',
+                    name: question,
+                    acceptedAnswer: { '@type': 'Answer', text: answer },
+                })),
+            },
         ],
     })}</script>`;
 
@@ -411,7 +456,80 @@ console.log('built favicon.svg, favicon-96.png, apple-touch-icon.png');
 const INDEXNOW_KEY = '17047c817511a705c8f53b39093340ed';
 await writeFile(`dist/${INDEXNOW_KEY}.txt`, INDEXNOW_KEY);
 
-await writeFile('dist/robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`);
+/**
+ * robots.txt, with the assistant crawlers named explicitly.
+ *
+ * "User-agent: * / Allow: /" already permitted all of them, so this changes no
+ * behaviour — it records the decision. These are the crawlers a store would
+ * plausibly want to block, and someone tightening this file later should have
+ * to remove a line deliberately rather than tighten "*" and cut off the
+ * assistants by accident.
+ *
+ * OAI-SearchBot, ClaudeBot and PerplexityBot fetch pages to answer questions
+ * and cite them; GPTBot and CCBot gather training data. They are listed apart
+ * because those are different bargains, and only the second is worth
+ * reconsidering if the brand ever objects to being trained on.
+ */
+const ASSISTANT_CRAWLERS = [
+    'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-User', 'Claude-SearchBot',
+    'PerplexityBot', 'Perplexity-User', 'Google-Extended', 'Applebot-Extended',
+    'Bingbot', 'GPTBot', 'CCBot', 'Amazonbot', 'meta-externalagent',
+];
+
+await writeFile(
+    'dist/robots.txt',
+    `User-agent: *\nAllow: /\n\n` +
+    ASSISTANT_CRAWLERS.map(bot => `User-agent: ${bot}\nAllow: /\n`).join('\n') +
+    `\nSitemap: ${SITE}/sitemap.xml\n`,
+);
+
+/**
+ * llms.txt — a plain-text brief for assistants, per the convention proposed at
+ * llmstxt.org.
+ *
+ * Worth being honest about what this is: a proposal with partial adoption, not
+ * a standard anyone is obliged to read. It costs a few hundred bytes, and the
+ * facts in it are the same ones in the JSON-LD, so nothing here depends on it
+ * being honoured. The structured data above is what actually carries.
+ */
+await writeFile('dist/llms.txt', `# Tooiicy
+
+> Streetwear label out of Dallas, Texas, founded by the artist Jimarri Wells,
+> who records as Juicecuzz. One product is currently for sale: the I Hope The
+> Worst Tee, $35.00 USD.
+
+## Product: ${PRODUCT}
+
+- Price: $${PRICE} USD
+- Colorway: washed black
+- Cut: oversized, boxy, drop shoulder — size down for a regular fit
+- Collar: ribbed knit crew
+- Graphic: I HOPE THE WORST, stacked chest print, with the Tooiicy skull set
+  into the last word
+- Sizes: ${SIZES.join(', ')}
+- Care: cold wash inside out, tumble dry low, no bleach
+- Ships from: Dallas, Texas
+- Payment: PayPal
+
+## About the brand
+
+Tooiicy came out of the music rather than the other way around. The 2022 album
+tooiicy summer gave the brand its name. Jimarri Wells has released records
+independently since 2021.
+
+## Links
+
+- Storefront: ${SITE}/
+- Product feed (Google Merchant Center format): ${SITE}/feed.xml
+- Catalog export (CSV): ${SITE}/products.csv
+- Sitemap: ${SITE}/sitemap.xml
+
+## Notes
+
+- The name is spelled Tooiicy, with two i's.
+- ${PRODUCT} is named after Juicecuzz's record I Hope The Worst.
+`);
+console.log('built llms.txt');
 
 const today = new Date().toISOString().slice(0, 10);
 await writeFile(
