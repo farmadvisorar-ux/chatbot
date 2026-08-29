@@ -166,25 +166,62 @@ const SOCIAL_TAGS = `<meta property="og:type" content="product">
     <meta name="twitter:description" content="${BLURB}">
     <meta name="twitter:image" content="${SITE}/og-image.jpg">
     <meta name="twitter:image:alt" content="Model wearing the Tooiicy ${PRODUCT} in washed black">
+    <meta property="og:locale" content="en_US">
     <link rel="canonical" href="${SITE}/">
+    <link rel="icon" href="${SITE}/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="${SITE}/favicon-96.png" sizes="96x96" type="image/png">
+    <link rel="apple-touch-icon" href="${SITE}/apple-touch-icon.png">
     <script type="application/ld+json">${JSON.stringify({
         '@context': 'https://schema.org',
-        '@type': 'Product',
-        name: PRODUCT,
-        description: BLURB,
-        image: [`${SITE}/og-image.jpg`, `${SITE}/tee.jpg`],
-        brand: { '@type': 'Brand', name: 'Tooiicy' },
-        color: 'Washed Black',
-        audience: { '@type': 'PeopleAudience', suggestedGender: 'unisex' },
-        offers: SIZES.map(size => ({
-            '@type': 'Offer',
-            name: `${PRODUCT} — Size ${size}`,
-            url: `${SITE}/`,
-            priceCurrency: 'USD',
-            price: PRICE,
-            availability: 'https://schema.org/InStock',
-            itemCondition: 'https://schema.org/NewCondition',
-        })),
+        '@graph': [
+            {
+                '@type': 'Product',
+                '@id': `${SITE}/#product`,
+                name: PRODUCT,
+                description: BLURB,
+                image: [`${SITE}/og-image.jpg`, `${SITE}/tee.jpg`],
+                brand: { '@type': 'Brand', name: 'Tooiicy' },
+                color: 'Washed Black',
+                audience: { '@type': 'PeopleAudience', suggestedGender: 'unisex' },
+                offers: SIZES.map(size => ({
+                    '@type': 'Offer',
+                    name: `${PRODUCT} — Size ${size}`,
+                    url: `${SITE}/`,
+                    priceCurrency: 'USD',
+                    price: PRICE,
+                    availability: 'https://schema.org/InStock',
+                    itemCondition: 'https://schema.org/NewCondition',
+                    seller: { '@id': `${SITE}/#brand` },
+                })),
+            },
+            // Ties the store to its founder and its city, which is what a
+            // search engine reads to treat Tooiicy as a brand entity rather
+            // than an unattributed page that happens to sell a shirt.
+            {
+                '@type': 'Organization',
+                '@id': `${SITE}/#brand`,
+                name: 'Tooiicy',
+                url: `${SITE}/`,
+                logo: `${SITE}/favicon-96.png`,
+                image: `${SITE}/og-image.jpg`,
+                description: 'Streetwear label out of Dallas, Texas, founded by the artist Juicecuzz.',
+                founder: { '@type': 'Person', name: 'Jimarri Wells', alternateName: 'Juicecuzz' },
+                address: {
+                    '@type': 'PostalAddress',
+                    addressLocality: 'Dallas',
+                    addressRegion: 'TX',
+                    addressCountry: 'US',
+                },
+            },
+            {
+                '@type': 'WebSite',
+                '@id': `${SITE}/#website`,
+                url: `${SITE}/`,
+                name: 'Tooiicy',
+                publisher: { '@id': `${SITE}/#brand` },
+                inLanguage: 'en-US',
+            },
+        ],
     })}</script>`;
 
 html = patch(
@@ -214,6 +251,41 @@ html = patch(
     'stop upscaling the product shot',
     /\.stage img\{width:100%;height:auto;\}/,
     '.stage img{display:block;width:100%;max-width:340px;height:auto;margin:0 auto;}',
+);
+
+// The product shot is the largest thing above the fold, so it decides the
+// page's LCP. Telling the browser to fetch it at high priority stops it
+// queueing behind the webfont CSS.
+html = patch(
+    html,
+    'prioritise the LCP image',
+    /(<img src="\/tee\.jpg"[^>]*?)>/,
+    '$1 fetchpriority="high" decoding="async">',
+);
+
+// The webfont stylesheet blocked the first render. Loading it as print media
+// and flipping to all on load takes it off the critical path; the noscript
+// copy keeps it working without JavaScript. The font URL already carries
+// display=swap, so text was always going to swap in — this just stops the
+// whole page waiting on Google's server first.
+html = patch(
+    html,
+    'stop webfont CSS blocking the first render',
+    /<link href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)" rel="stylesheet">/,
+    '<link rel="preload" as="style" href="$1">\n' +
+    '    <link rel="stylesheet" href="$1" media="print" onload="this.media=\'all\';this.onload=null">\n' +
+    '    <noscript><link rel="stylesheet" href="$1"></noscript>',
+);
+
+// Cart thumbnails are below the fold and only exist once something is added,
+// so they should never compete with the first paint. The empty alt also left
+// the row unreadable to a screen reader.
+html = patch(
+    html,
+    'defer and label the cart thumbnail',
+    /<img class="lithumb" src="\/tee\.jpg" alt="">/,
+    '<img class="lithumb" src="/tee.jpg" alt="Tooiicy I Hope The Worst tee in washed black" ' +
+    'width="52" height="52" loading="lazy" decoding="async">',
 );
 
 // The bug itself: with items in the cart the page pointed Checkout at
@@ -301,6 +373,28 @@ if (card.width !== CARD.width || card.height !== CARD.height) {
     throw new Error(`Share card came out ${card.width}x${card.height}, expected 1200x630.`);
 }
 console.log(`built dist/og-image.jpg (${card.width}x${card.height})`);
+
+/**
+ * Favicons. There were none at all — every icon path 404'd and nothing was
+ * declared — and Google puts a site's favicon next to its title in mobile
+ * results, so the listing rendered with a blank placeholder.
+ *
+ * Drawn as rectangles rather than text so it does not depend on a font being
+ * present wherever it gets rasterised. Google wants a square that is a
+ * multiple of 48px, hence 96.
+ */
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0B111C"/>
+  <rect x="12" y="16" width="40" height="10" fill="#2F86F0"/>
+  <rect x="27" y="16" width="10" height="32" fill="#2F86F0"/>
+</svg>
+`;
+await writeFile('dist/favicon.svg', FAVICON_SVG);
+
+for (const [file, size] of [['favicon-96.png', 96], ['apple-touch-icon.png', 180]]) {
+    await sharp(Buffer.from(FAVICON_SVG)).resize(size, size).png().toFile(`dist/${file}`);
+}
+console.log('built favicon.svg, favicon-96.png, apple-touch-icon.png');
 
 await writeFile('dist/robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`);
 
