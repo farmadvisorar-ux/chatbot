@@ -145,3 +145,34 @@ html = patch(html, 'inject checkout', /<\/body>/, `${CHECKOUT_SCRIPT}</body>`);
 await mkdir('dist', { recursive: true });
 await writeFile('dist/index.html', html);
 console.log(`built dist/index.html (${html.length} bytes)`);
+
+/**
+ * Copies across every local file the page asks for.
+ *
+ * This deployment replaces one that was uploaded whole, so anything the page
+ * references but this build does not emit becomes a 404 the moment it ships —
+ * which is exactly what happened to the product photo on the first release.
+ * The list is scraped from the built HTML rather than hardcoded so a new
+ * asset cannot be silently left behind, and a reference that will not fetch
+ * fails the build instead of going live broken.
+ */
+const referenced = new Set(
+    [...html.matchAll(/["'(](\/[A-Za-z0-9._~-]+\.[A-Za-z0-9]{2,5})["')]/g)].map(match => match[1]),
+);
+
+for (const path of referenced) {
+    const assetResponse = await fetch(new URL(path, SOURCE));
+    if (!assetResponse.ok) {
+        throw new Error(
+            `The page references ${path} but it could not be fetched from ` +
+            `${SOURCE} (${assetResponse.status}). Shipping without it would 404.`,
+        );
+    }
+    const bytes = Buffer.from(await assetResponse.arrayBuffer());
+    await writeFile(`dist${path}`, bytes);
+    console.log(`copied ${path} (${bytes.length} bytes)`);
+}
+
+if (referenced.size === 0) {
+    throw new Error('No referenced assets found — the scrape pattern is probably broken.');
+}
