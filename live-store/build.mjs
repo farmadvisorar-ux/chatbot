@@ -127,6 +127,20 @@ html = patch(
     '',
 );
 
+// The product shot is a 340x353 JPEG, but .stage img stretched it to the full
+// width of its grid column — around 570px on a desktop, so roughly 1.7x native
+// and blurry. Holding it to its own resolution renders it sharp instead, and
+// centring it in the stage keeps that from reading as a layout mistake.
+//
+// This is a stopgap, not a fix: the ceiling is the source file. Swap in a
+// ~1200px original and this cap should be raised to match it.
+html = patch(
+    html,
+    'stop upscaling the product shot',
+    /\.stage img\{width:100%;height:auto;\}/,
+    '.stage img{display:block;width:100%;max-width:340px;height:auto;margin:0 auto;}',
+);
+
 // The bug itself: with items in the cart the page pointed Checkout at
 // CHECKOUT_URL ("https://tooiicy.com"), which is this same homepage, so
 // checking out just reopened the store.
