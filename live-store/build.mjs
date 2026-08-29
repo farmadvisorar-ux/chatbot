@@ -396,6 +396,21 @@ for (const [file, size] of [['favicon-96.png', 96], ['apple-touch-icon.png', 180
 }
 console.log('built favicon.svg, favicon-96.png, apple-touch-icon.png');
 
+/**
+ * IndexNow ownership key.
+ *
+ * Bing, Yandex, Seznam and Naver accept push notifications of changed URLs
+ * with no account: proof of ownership is simply that this key is readable at
+ * the domain root. Google is not a participant — it dropped its own
+ * unauthenticated sitemap ping in 2023, so the only ways in are the Sitemap
+ * line in robots.txt below and a signed-in Search Console submission.
+ *
+ * Hardcoded rather than generated per build: regenerating it would invalidate
+ * the key already registered with those engines.
+ */
+const INDEXNOW_KEY = '17047c817511a705c8f53b39093340ed';
+await writeFile(`dist/${INDEXNOW_KEY}.txt`, INDEXNOW_KEY);
+
 await writeFile('dist/robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`);
 
 const today = new Date().toISOString().slice(0, 10);

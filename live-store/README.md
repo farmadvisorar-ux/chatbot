@@ -99,3 +99,22 @@ The product photo is the weak point. Google wants at least 250x250 for apparel
 and recommends 800x800 or better; `tee.jpg` is 340x353, so it will pass review
 but look poor beside competitors. A larger original fixes this and the share
 card at the same time.
+
+## Search engine submission
+
+`build.mjs` writes an IndexNow key file to the domain root. Bing, Yandex,
+Seznam and Naver accept pushed URL notifications with no account — ownership is
+proved by that key being readable at the root — so URLs are submitted with a
+plain POST to `api.indexnow.org`. The key is hardcoded rather than generated
+per build; regenerating it would invalidate the one already registered.
+
+Google does not participate in IndexNow, and it removed its own
+unauthenticated sitemap ping endpoint in 2023 (it now 404s). That leaves two
+routes, and only the first works without a login:
+
+1. The `Sitemap:` line in `robots.txt`, which Google reads when it crawls.
+   Already in place — this is passive discovery, not a submission.
+2. Search Console, which requires a signed-in Google account. Verify the
+   domain, then submit `sitemap.xml` under Indexing → Sitemaps. This is the
+   one that gets the site indexed promptly, and it cannot be automated from
+   here.
