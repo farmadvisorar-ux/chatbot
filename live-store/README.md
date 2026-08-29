@@ -59,3 +59,43 @@ There is no database here. PayPal is the system of record — each order carries
 the product, size and quantity as line items, plus the buyer's shipping address.
 Fulfillment is manual from the PayPal dashboard. The `tooiicy/` app is where
 order storage and Printful automation live, once it is deployed.
+
+## Share previews, search, and Google Shopping
+
+The page shipped `og:image="/tee.jpg"` — a relative URL. Facebook, iMessage,
+WhatsApp, Slack and Gmail all require an absolute one and silently drop a
+relative path, so shared links arrived with no picture. Every URL in the head
+is now absolute and points at `https://www.tooiicy.com` (the apex 308-redirects
+to www, and a crawler that has to follow a redirect to reach an image will
+often drop it).
+
+The build emits:
+
+- `og-image.jpg` — a 1200x630 share card, composed by `sharp` from the product
+  photo on the site's own `--panel` background. Wordless on purpose: text needs
+  fonts the build container is not guaranteed to have, and the title and price
+  already travel in the `og:` tags.
+- `robots.txt` and `sitemap.xml`.
+- `feed.xml` — a Google Merchant Center feed, one entry per size.
+
+Plus `twitter:` card tags, a canonical link, and `Product` JSON-LD with an
+offer per size, which is what Google reads for rich results and free Shopping
+listings.
+
+`og:description` and the meta description both still advertised the $20
+pre-order; they now describe what is actually for sale.
+
+### Listing on Google Shopping
+
+The feed is generated but nothing is listed until someone connects it:
+
+1. Create a Merchant Center account and verify + claim `tooiicy.com`.
+2. Add a scheduled feed pointing at `https://www.tooiicy.com/feed.xml`.
+3. Configure shipping rates and a returns policy — Merchant Center rejects
+   products without them.
+4. Opt in to free listings, and to Shopping ads if they are wanted.
+
+The product photo is the weak point. Google wants at least 250x250 for apparel
+and recommends 800x800 or better; `tee.jpg` is 340x353, so it will pass review
+but look poor beside competitors. A larger original fixes this and the share
+card at the same time.

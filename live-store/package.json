@@ -5,5 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.33.5"
   }
 }

@@ -1,4 +1,19 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import sharp from 'sharp';
+
+/**
+ * The apex 308-redirects to www, so www is the canonical origin. Every
+ * absolute URL below has to agree with that: a preview crawler that follows a
+ * redirect to reach an image often just drops the image instead.
+ */
+const SITE = 'https://www.tooiicy.com';
+
+const PRICE = '35.00';
+const SIZES = ['S', 'M', 'L', 'XL', '2XL'];
+const PRODUCT = 'I Hope The Worst Tee';
+const BLURB =
+    'Oversized boxy tee in washed black, with I HOPE THE WORST stacked across the chest. ' +
+    'Dallas streetwear from Juicecuzz. Sizes S–2XL, $35.';
 
 /**
  * Builds dist/index.html from the storefront page that is already in
@@ -127,6 +142,66 @@ html = patch(
     '',
 );
 
+// The page shipped og:image="/tee.jpg" — a relative URL. Facebook, iMessage,
+// WhatsApp, Slack and Gmail all require an absolute one and silently drop a
+// relative path, which is why shared links came through with no picture at
+// all. Everything here is absolute and points at the canonical www origin.
+//
+// og:description also still sold the $20 pre-order, which no longer exists.
+const SOCIAL_TAGS = `<meta property="og:type" content="product">
+    <meta property="og:site_name" content="Tooiicy">
+    <meta property="og:url" content="${SITE}/">
+    <meta property="og:title" content="TOOIICY — ${PRODUCT}">
+    <meta property="og:description" content="${BLURB}">
+    <meta property="og:image" content="${SITE}/og-image.jpg">
+    <meta property="og:image:secure_url" content="${SITE}/og-image.jpg">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Model wearing the Tooiicy ${PRODUCT} in washed black">
+    <meta property="product:price:amount" content="${PRICE}">
+    <meta property="product:price:currency" content="USD">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TOOIICY — ${PRODUCT}">
+    <meta name="twitter:description" content="${BLURB}">
+    <meta name="twitter:image" content="${SITE}/og-image.jpg">
+    <meta name="twitter:image:alt" content="Model wearing the Tooiicy ${PRODUCT} in washed black">
+    <link rel="canonical" href="${SITE}/">
+    <script type="application/ld+json">${JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: PRODUCT,
+        description: BLURB,
+        image: [`${SITE}/og-image.jpg`, `${SITE}/tee.jpg`],
+        brand: { '@type': 'Brand', name: 'Tooiicy' },
+        color: 'Washed Black',
+        audience: { '@type': 'PeopleAudience', suggestedGender: 'unisex' },
+        offers: SIZES.map(size => ({
+            '@type': 'Offer',
+            name: `${PRODUCT} — Size ${size}`,
+            url: `${SITE}/`,
+            priceCurrency: 'USD',
+            price: PRICE,
+            availability: 'https://schema.org/InStock',
+            itemCondition: 'https://schema.org/NewCondition',
+        })),
+    })}</script>`;
+
+html = patch(
+    html,
+    'replace social tags with absolute-URL versions',
+    /<meta property="og:title"[\s\S]*?<meta property="og:image"[^>]*>/,
+    SOCIAL_TAGS,
+);
+
+// The meta description sold the pre-order too.
+html = patch(
+    html,
+    'drop pre-order copy from the meta description',
+    /<meta name="description" content="[^"]*">/,
+    `<meta name="description" content="${BLURB}">`,
+);
+
 // The product shot is a 340x353 JPEG, but .stage img stretched it to the full
 // width of its grid column — around 570px on a desktop, so roughly 1.7x native
 // and blurry. Holding it to its own resolution renders it sharp instead, and
@@ -190,3 +265,89 @@ for (const path of referenced) {
 if (referenced.size === 0) {
     throw new Error('No referenced assets found — the scrape pattern is probably broken.');
 }
+
+/**
+ * Builds the 1200x630 share card that og:image points at.
+ *
+ * Composed here rather than committed so there is no binary to keep in step
+ * with the photo. It is deliberately wordless: text would need fonts that the
+ * build container is not guaranteed to have, and the title and price already
+ * travel in the og: tags next to it.
+ *
+ * The source photo is only 340px wide, so it is placed at 470px tall — some
+ * upscaling, but share cards are rendered small and the alternative is a
+ * postage stamp adrift on a wide canvas.
+ */
+const CARD = { width: 1200, height: 630 };
+const photo = await sharp(`dist${[...referenced].find(p => p.endsWith('tee.jpg')) ?? '/tee.jpg'}`)
+    .resize({ height: 470, fit: 'inside' })
+    .toBuffer();
+
+await sharp({
+    create: {
+        width: CARD.width,
+        height: CARD.height,
+        channels: 3,
+        // --panel from the site's own palette, so the card reads as the store.
+        background: { r: 0x0B, g: 0x11, b: 0x1C },
+    },
+})
+    .composite([{ input: photo, gravity: 'centre' }])
+    .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+    .toFile('dist/og-image.jpg');
+
+const card = await sharp('dist/og-image.jpg').metadata();
+if (card.width !== CARD.width || card.height !== CARD.height) {
+    throw new Error(`Share card came out ${card.width}x${card.height}, expected 1200x630.`);
+}
+console.log(`built dist/og-image.jpg (${card.width}x${card.height})`);
+
+await writeFile('dist/robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`);
+
+const today = new Date().toISOString().slice(0, 10);
+await writeFile(
+    'dist/sitemap.xml',
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    `  <url><loc>${SITE}/</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>\n` +
+    `</urlset>\n`,
+);
+
+/**
+ * Google Merchant Center product feed, one entry per size.
+ *
+ * There are no GTINs for these, so each size carries an MPN and declares
+ * identifier_exists=no, which is what Google expects from a brand selling its
+ * own goods. Submitting this still needs a Merchant Center account with
+ * shipping and returns configured — the feed alone does not list anything.
+ */
+const feedItems = SIZES.map(size => `    <item>
+      <g:id>tooiicy-ihtw-${size.toLowerCase()}</g:id>
+      <g:item_group_id>tooiicy-ihtw</g:item_group_id>
+      <g:title>Tooiicy ${PRODUCT} — Washed Black, Size ${size}</g:title>
+      <g:description>${BLURB}</g:description>
+      <g:link>${SITE}/</g:link>
+      <g:image_link>${SITE}/tee.jpg</g:image_link>
+      <g:availability>in_stock</g:availability>
+      <g:price>${PRICE} USD</g:price>
+      <g:brand>Tooiicy</g:brand>
+      <g:mpn>TOOIICY-IHTW-${size}</g:mpn>
+      <g:identifier_exists>no</g:identifier_exists>
+      <g:condition>new</g:condition>
+      <g:age_group>adult</g:age_group>
+      <g:gender>unisex</g:gender>
+      <g:color>Washed Black</g:color>
+      <g:size>${size}</g:size>
+      <g:product_type>Apparel &amp; Accessories &gt; Clothing &gt; Shirts &amp; Tops</g:product_type>
+      <g:google_product_category>212</g:google_product_category>
+    </item>`).join('\n');
+
+await writeFile(
+    'dist/feed.xml',
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">\n` +
+    `  <channel>\n    <title>Tooiicy</title>\n    <link>${SITE}/</link>\n` +
+    `    <description>Dallas streetwear from Juicecuzz.</description>\n${feedItems}\n` +
+    `  </channel>\n</rss>\n`,
+);
+console.log(`built robots.txt, sitemap.xml, feed.xml (${SIZES.length} variants)`);
