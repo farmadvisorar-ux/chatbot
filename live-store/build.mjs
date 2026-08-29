@@ -350,4 +350,42 @@ await writeFile(
     `    <description>Dallas streetwear from Juicecuzz.</description>\n${feedItems}\n` +
     `  </channel>\n</rss>\n`,
 );
-console.log(`built robots.txt, sitemap.xml, feed.xml (${SIZES.length} variants)`);
+/**
+ * A plain catalog export, one row per size.
+ *
+ * Marketplace onboarding (Shop.com among them) generally starts by asking for
+ * a spreadsheet of the catalog rather than a feed URL, and each one wants its
+ * own column names. This is deliberately generic — standard retail fields,
+ * no vendor's schema guessed at — so it can be remapped to whatever a given
+ * marketplace's template turns out to require.
+ */
+const csvCell = value => `"${String(value).replace(/"/g, '""')}"`;
+const CSV_COLUMNS = [
+    'sku', 'item_group_id', 'title', 'description', 'brand', 'mpn',
+    'price', 'currency', 'condition', 'availability', 'color', 'size',
+    'gender', 'age_group', 'category', 'product_url', 'image_url',
+];
+
+const csvRows = SIZES.map(size => [
+    `TOOIICY-IHTW-${size}`,
+    'tooiicy-ihtw',
+    `Tooiicy ${PRODUCT} — Washed Black, Size ${size}`,
+    BLURB,
+    'Tooiicy',
+    `TOOIICY-IHTW-${size}`,
+    PRICE,
+    'USD',
+    'New',
+    'In stock',
+    'Washed Black',
+    size,
+    'Unisex',
+    'Adult',
+    'Apparel & Accessories > Clothing > Shirts & Tops',
+    `${SITE}/`,
+    `${SITE}/tee.jpg`,
+].map(csvCell).join(','));
+
+await writeFile('dist/products.csv', `${CSV_COLUMNS.join(',')}\n${csvRows.join('\n')}\n`);
+
+console.log(`built robots.txt, sitemap.xml, feed.xml, products.csv (${SIZES.length} variants)`);
