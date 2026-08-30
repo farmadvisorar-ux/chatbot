@@ -140,7 +140,36 @@ html = patch(
 // render() is called by the confirmation handler to empty the cart on return.
 html = patch(html, 'expose render()', /\nrender\(\);/, '\nwindow.render=render;\nrender();');
 
-html = patch(html, 'inject checkout', /<\/body>/, `${CHECKOUT_SCRIPT}</body>`);
+const ANALYTICS_SCRIPT = `
+<script>
+(function(){
+  const TRACK_URL='https://tooiicy-analytics-wordwide-top-10.vercel.app/api/track';
+  const SESSION_KEY='tooiicy_session_' + new Date().toISOString().split('T')[0];
+  let session=sessionStorage.getItem(SESSION_KEY);
+  if(!session){
+    session=Math.random().toString(36).substring(2,15);
+    sessionStorage.setItem(SESSION_KEY,session);
+  }
+  function track(e,m){
+    navigator.sendBeacon(TRACK_URL,new Blob([JSON.stringify({
+      page_view:e==='page_view'?1:0,select_size:e==='select_size'?1:0,add_to_cart:e==='add_to_cart'?1:0,
+      open_cart:e==='open_cart'?1:0,begin_checkout:e==='begin_checkout'?1:0,session:session,page:m||window.location.pathname
+    })],{type:'text/plain'}),TRACK_URL);
+  }
+  track('page_view');
+  window.trackEvent=track;
+})();
+</script>
+`;
+
+const AGENT_WIDGET = `
+<script>
+  window.TOOIICY_AGENT_URL='https://your-antigravity-endpoint.com';
+</script>
+<script src="https://your-antigravity-endpoint.com/agent-widget.js"><\/script>
+`;
+
+html = patch(html, 'inject checkout', /<\/body>/, `${CHECKOUT_SCRIPT}${ANALYTICS_SCRIPT}${AGENT_WIDGET}</body>`);
 
 await mkdir('dist', { recursive: true });
 await writeFile('dist/index.html', html);
