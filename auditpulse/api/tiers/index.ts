@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { json, requireMethod, isRead } from '../_lib/http.js';
+import { json, requireMethod } from '../_lib/http.js';
 
 interface Tier {
   id: number;
@@ -94,10 +94,7 @@ const TIERS: Tier[] = [
   },
 ];
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (!isRead(req)) {
-    return requireMethod(res, ['GET']);
-  }
-
-  return json(res, 200, { tiers: TIERS });
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (!requireMethod(req, res, ['GET'])) return;
+  json(res, 200, { tiers: TIERS });
 }

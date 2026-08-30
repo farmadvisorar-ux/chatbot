@@ -533,13 +533,18 @@ async function selectScan(scanId: string): Promise<void> {
     }
 
     const reportUrl = `${window.location.origin}/report.html?token=${encodeURIComponent(scan.share_token)}`;
+    // All seven security headers patch the same vercel.json block, so fixing
+    // them individually opens PRs that conflict with each other. Offer the
+    // batch action whenever more than one fix is still outstanding.
+    const fixableCount = findings.filter(f => f.auto_fixable && (f.fix_status ?? 'none') === 'none').length;
     scanDetailEl.innerHTML = `
         <div class="card">
             <div class="summary-row">${gradeBadgeHtml(scan.grade!, scan.score!)}</div>
             ${summaryChipsHtml(scan.summary)}
             ${executiveSummaryHtml(scan.grade!, scan.score!, findings)}
             <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
-                <button type="button" id="email-report-btn" data-nav-icon="mail">Email report</button>
+                ${fixableCount > 1 ? `<button type="button" id="fix-all-btn" data-nav-icon="bolt">Fix all ${fixableCount} in one PR</button>` : ''}
+                <button type="button" class="${fixableCount > 1 ? 'ghost-button' : ''}" id="email-report-btn" data-nav-icon="mail">Email report</button>
                 <button type="button" class="ghost-button" id="copy-link-btn" data-nav-icon="link">Copy shareable link</button>
             </div>
             <div id="scan-findings"></div>
@@ -548,6 +553,9 @@ async function selectScan(scanId: string): Promise<void> {
     renderIcons(scanDetailEl);
     renderFindings(el<HTMLElement>('scan-findings'), findings, { onFix: handleFix });
 
+    if (fixableCount > 1) {
+        el<HTMLButtonElement>('fix-all-btn').addEventListener('click', event => handleFixAll(scanId, event.currentTarget as HTMLButtonElement));
+    }
     el<HTMLButtonElement>('email-report-btn').addEventListener('click', () => openEmailModal(scanId));
     el<HTMLButtonElement>('copy-link-btn').addEventListener('click', async () => {
         await navigator.clipboard.writeText(reportUrl);
@@ -566,6 +574,25 @@ async function handleFix(findingId: string, button: HTMLButtonElement): Promise<
         showToast(err instanceof ApiError ? err.message : 'Could not open a fix PR.', true);
         button.disabled = false;
         button.textContent = 'Fix with PR →';
+    }
+}
+
+async function handleFixAll(scanId: string, button: HTMLButtonElement): Promise<void> {
+    const original = button.textContent ?? 'Fix all';
+    button.disabled = true;
+    button.textContent = 'Opening PR…';
+    try {
+        const result = await apiFetch<{ prUrl: string; fixedCount: number; skipped: Array<{ title: string; reason: string }> }>(
+            `/scans/${scanId}?action=fix-all`, { method: 'POST' },
+        );
+        showToast(result.skipped.length
+            ? `PR opened for ${result.fixedCount} finding${result.fixedCount === 1 ? '' : 's'}; ${result.skipped.length} needs a manual fix.`
+            : `Fix PR opened for ${result.fixedCount} findings.`);
+        if (selectedScanId) await selectScan(selectedScanId);
+    } catch (err) {
+        showToast(err instanceof ApiError ? err.message : 'Could not open a fix PR.', true);
+        button.disabled = false;
+        button.textContent = original;
     }
 }
 

@@ -1,9 +1,17 @@
-import { pathExists, getBranchSha, createBranch, putFile, createPullRequest } from '../github.js';
-import { FixNotApplicableError, type FixContext, type FixResult } from './types.js';
+import { pathExists } from '../github.js';
+import { submitPlans } from './submit.js';
+import { FixNotApplicableError, type FixContext, type FixPlan, type FixResult, type FixableFinding } from './types.js';
 
 const CANDIDATE_STATIC_DIRS = ['public', 'static'];
 
-export async function fixMissingSecurityTxt(ctx: FixContext): Promise<FixResult> {
+interface PlanRepoContext {
+    token: string;
+    owner: string;
+    repo: string;
+    defaultBranch: string;
+}
+
+export async function planSecurityTxt(ctx: PlanRepoContext, finding: FixableFinding): Promise<FixPlan> {
     let staticDir: string | null = null;
     for (const dir of CANDIDATE_STATIC_DIRS) {
         if (await pathExists(ctx.token, ctx.owner, ctx.repo, dir, ctx.defaultBranch)) {
@@ -28,21 +36,17 @@ export async function fixMissingSecurityTxt(ctx: FixContext): Promise<FixResult>
         '',
     ].join('\n');
 
-    const branch = `auditpulse-fix/security-txt-${Date.now()}`;
-    const baseSha = await getBranchSha(ctx.token, ctx.owner, ctx.repo, ctx.defaultBranch);
-    await createBranch(ctx.token, ctx.owner, ctx.repo, branch, baseSha);
-    await putFile(ctx.token, ctx.owner, ctx.repo, {
-        path,
-        content: contents,
-        message: 'Add security.txt',
-        branch,
-    });
-
-    const pr = await createPullRequest(ctx.token, ctx.owner, ctx.repo, {
+    return {
+        edits: [{ path, content: contents, message: 'Add security.txt' }],
+        summary: `- Added \`${path}\` per RFC 9116`,
+        branchHint: 'security-txt',
         title: 'Security fix: publish security.txt',
-        head: branch,
-        base: ctx.defaultBranch,
-        body: `Opened automatically by AuditPulse in response to this finding:\n\n> **${ctx.finding.title}**\n\nAdds \`${path}\` per RFC 9116. **Replace the placeholder contact email** (\`security@${ctx.owner}.example\`) with a real address you monitor before merging.`,
-    });
-    return { prUrl: pr.url };
+        findingTitles: [finding.title],
+        note: `Replace the placeholder contact email (\`security@${ctx.owner}.example\`) with a real address you monitor.`,
+    };
+}
+
+export async function fixMissingSecurityTxt(ctx: FixContext): Promise<FixResult> {
+    const plan = await planSecurityTxt(ctx, ctx.finding);
+    return submitPlans(ctx, [plan]);
 }
