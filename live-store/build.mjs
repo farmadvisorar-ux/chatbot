@@ -164,9 +164,9 @@ const ANALYTICS_SCRIPT = `
 
 const AGENT_WIDGET = `
 <script>
-  window.TOOIICY_AGENT_URL='https://your-antigravity-endpoint.com';
+  window.TOOIICY_AGENT_URL='https://tooiicy-agent-wordwide-top-10.vercel.app';
 </script>
-<script src="https://your-antigravity-endpoint.com/agent-widget.js"><\/script>
+<script src="https://tooiicy-agent-wordwide-top-10.vercel.app/agent-widget.js"><\/script>
 `;
 
 html = patch(html, 'inject checkout', /<\/body>/, `${CHECKOUT_SCRIPT}${ANALYTICS_SCRIPT}${AGENT_WIDGET}</body>`);
