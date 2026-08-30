@@ -111,4 +111,18 @@ CREATE TABLE IF NOT EXISTS social_links (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS social_links_active ON social_links (active, sort_order);
+
+-- Limited editions: first 200 sold get special edition numbers
+CREATE TABLE IF NOT EXISTS limited_editions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL UNIQUE REFERENCES orders(id) ON DELETE CASCADE,
+    edition_number INTEGER NOT NULL CHECK (edition_number >= 1 AND edition_number <= 200),
+    certificate_token TEXT NOT NULL UNIQUE,
+    variation TEXT,
+    serial_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS limited_editions_order ON limited_editions (order_id);
+CREATE INDEX IF NOT EXISTS limited_editions_number ON limited_editions (edition_number);
+CREATE SEQUENCE IF NOT EXISTS edition_counter START 1 INCREMENT 1 MAXVALUE 200;
 `;
