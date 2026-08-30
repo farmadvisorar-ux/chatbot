@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AuditPulse">
+  <title>AuditPulse</title>
+  <!-- Shield = the audit; pulse line = continuous weekly re-checks. Kept to two
+       shapes and one colour pair so it stays legible at 16px in a browser tab. -->
+  <defs>
+    <linearGradient id="ap-shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5cf0bb"/>
+      <stop offset="1" stop-color="#22c98c"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ap-shield)"
+        d="M32 3.5 56.5 12.6V32c0 14.6-11.2 25.2-24.5 29.2C18.7 57.2 7.5 46.6 7.5 32V12.6Z"/>
+  <path fill="none" stroke="#04140d" stroke-width="5.2"
+        stroke-linecap="round" stroke-linejoin="round"
+        d="M15 34h8.4l4.4-10.4L35.2 43l4-9h9.8"/>
+</svg>

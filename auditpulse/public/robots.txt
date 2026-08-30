@@ -1,0 +1,31 @@
+# AuditPulse — https://brokehealth.com
+# Shared audit reports carry a secret token in the URL and must never be
+# indexed; they also send X-Robots-Tag/noindex themselves. Everything else
+# is public marketing and is fine to crawl.
+
+User-agent: *
+Allow: /
+Disallow: /report.html
+Disallow: /dashboard.html
+Disallow: /account.html
+Disallow: /api/
+
+# Assistant crawlers are allowed deliberately. AuditPulse is free, and being
+# quotable in an answer engine is the point rather than a leak — the pages
+# below contain no customer data.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://brokehealth.com/sitemap.xml

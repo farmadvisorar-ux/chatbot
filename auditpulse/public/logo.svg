@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 64" role="img" aria-label="AuditPulse">
+  <title>AuditPulse</title>
+  <!-- Horizontal lockup: mark + wordmark, for docs, READMEs and press use.
+       The wordmark is live <text> with a system-font fallback chain, so a
+       viewer without Syne installed gets a slightly different face rather
+       than nothing. Convert it to outlines before handing this to a printer
+       or anywhere the exact letterforms matter. -->
+  <defs>
+    <linearGradient id="ap-shield-lockup" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5cf0bb"/>
+      <stop offset="1" stop-color="#22c98c"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ap-shield-lockup)"
+        d="M32 3.5 56.5 12.6V32c0 14.6-11.2 25.2-24.5 29.2C18.7 57.2 7.5 46.6 7.5 32V12.6Z"/>
+  <path fill="none" stroke="#04140d" stroke-width="5.2"
+        stroke-linecap="round" stroke-linejoin="round"
+        d="M15 34h8.4l4.4-10.4L35.2 43l4-9h9.8"/>
+  <text x="72" y="42" fill="#e9edf5"
+        font-family="Syne, 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif"
+        font-size="26" font-weight="800" letter-spacing="-0.4">AuditPulse</text>
+</svg>

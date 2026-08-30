@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Only the two publicly meaningful pages. verify.html is listed without a
+     token because the bare page explains the badge programme; the tokenised
+     form is per-site and not something to enumerate. Signed-in pages and
+     shared reports are excluded here and in robots.txt. -->
+<urlset xmlns="http://www.w3.org/1999/9/sitemap.xsd">
+  <url>
+    <loc>https://brokehealth.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://brokehealth.com/verify.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+  </url>
+</urlset>
