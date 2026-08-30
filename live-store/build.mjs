@@ -117,7 +117,13 @@ font-family:'Space Mono',monospace;font-size:13px;letter-spacing:.06em;backgroun
     say("Confirming your payment\\u2026");
     var sid=null; try{ sid=sessionStorage.getItem("tooiicy_sid"); }catch(e){}
     post("/api/capture",{paypalOrderId:token,sessionId:sid}).then(function(d){
-      say("Order confirmed. Thank you \\u2014 a PayPal receipt is on its way.");
+      var msg="Order confirmed. Thank you \\u2014 a PayPal receipt is on its way.";
+      if(d.edition){
+        msg+=" You got Card 0"+d.edition.card+" \\u2014 First Edition #"+
+          String(d.edition.number).padStart(3,"0")+" of "+d.edition.limit+". "+
+          "View your certificate: "+location.origin+"/certificate.html?token="+d.edition.token;
+      }
+      say(msg);
       try{ window.history.replaceState({},"",window.location.pathname); }catch(e){}
       if(window.cart){ window.cart.length=0; if(window.render) window.render(); }
     }).catch(function(err){
@@ -520,6 +526,75 @@ independently since 2021.
 - ${PRODUCT} is named after Juicecuzz's record I Hope The Worst.
 `);
 console.log('built llms.txt');
+
+/**
+ * The certificate a First Edition buyer lands on. Static shell, dynamic data:
+ * it fetches its own card from /api/certificate by the token in the URL, so
+ * this file never needs rebuilding as new orders claim new numbers. Colors
+ * and font match the storefront's own banner (CHECKOUT_SCRIPT above) rather
+ * than inventing a second palette.
+ */
+await writeFile('dist/certificate.html', `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Tooiicy First Edition Certificate</title>
+<style>
+  :root{color-scheme:dark;}
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+    background:#03121E;font-family:'Space Mono',monospace;color:#fff;}
+  .card{max-width:420px;width:100%;background:#0B111C;border:2px solid #2F86F0;border-radius:10px;
+    padding:32px;text-align:center;box-shadow:0 10px 40px rgba(47,134,240,.25);}
+  .series{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7fb0ec;margin-bottom:6px;}
+  .brand{font-size:26px;font-weight:700;letter-spacing:.06em;margin-bottom:18px;}
+  .num{display:inline-block;background:#2F86F0;color:#03121E;font-weight:700;font-size:22px;
+    padding:10px 20px;border-radius:6px;letter-spacing:.04em;margin-bottom:8px;}
+  .rarity{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#F0662F;margin-bottom:22px;}
+  .rows{text-align:left;border-top:1px solid rgba(47,134,240,.3);padding-top:16px;}
+  .row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;
+    border-bottom:1px solid rgba(47,134,240,.15);}
+  .row span:first-child{color:#7fb0ec;}
+  .note{margin-top:22px;font-size:11px;line-height:1.6;color:#7fb0ec;border-top:1px solid rgba(47,134,240,.3);
+    padding-top:16px;}
+  .state{padding:40px 0;color:#7fb0ec;font-size:13px;}
+  .err{color:#F0662F;}
+  @media print{body{background:#fff;color:#000;}.card{border-color:#000;box-shadow:none;}}
+</style>
+</head>
+<body>
+<div class="card"><div id="c" class="state">Loading your certificate\\u2026</div></div>
+<script>
+(function(){
+  var token=new URLSearchParams(location.search).get("token");
+  var el=document.getElementById("c");
+  if(!token){ el.className="state err"; el.textContent="Missing certificate link."; return; }
+  fetch("/api/certificate?token="+encodeURIComponent(token))
+    .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||"Not found"); return d; }); })
+    .then(function(d){
+      el.outerHTML=
+        '<div class="series">Tooiicy Collectible Series \\u00b7 Card 0'+d.card+'</div>'+
+        '<div class="brand">'+d.product+'</div>'+
+        '<div class="num">FIRST EDITION #'+String(d.edition).padStart(3,"0")+' / '+d.limit+'</div>'+
+        '<div class="rarity">'+d.rarity+'</div>'+
+        '<div class="rows">'+
+          '<div class="row"><span>Card</span><span>0'+d.card+' of an ongoing series</span></div>'+
+          '<div class="row"><span>Edition</span><span>'+d.edition+' of '+d.limit+' ever issued</span></div>'+
+          '<div class="row"><span>Issued</span><span>'+new Date(d.issued).toLocaleDateString()+'</span></div>'+
+        '</div>'+
+        '<div class="note">Only the first '+d.limit+' '+d.product+' orders carry a First Edition number. '+
+        'Every future Tooiicy drop adds another numbered card to the series \\u2014 this one doesn\\u2019t '+
+        'get reissued once it sells out.</div>';
+    })
+    .catch(function(err){ el.className="state err"; el.textContent=err.message||"Certificate not found."; });
+})();
+</script>
+</body>
+</html>
+`);
+console.log('built certificate.html');
 
 const today = new Date().toISOString().slice(0, 10);
 await writeFile(
