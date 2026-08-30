@@ -1,0 +1,14 @@
+{
+  "name": "tooiicy-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Antigravity agent for Tooiicy merchandise support",
+  "main": "agent.js",
+  "scripts": {
+    "dev": "node agent.js",
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0"
+  }
+}
