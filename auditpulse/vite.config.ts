@@ -10,6 +10,7 @@ export default defineConfig({
             // ships to anonymous landing-page visitors, and vice versa.
             input: {
                 main: resolve(__dirname, 'index.html'),
+                pricing: resolve(__dirname, 'pricing.html'),
                 dashboard: resolve(__dirname, 'dashboard.html'),
                 report: resolve(__dirname, 'report.html'),
                 account: resolve(__dirname, 'account.html'),
