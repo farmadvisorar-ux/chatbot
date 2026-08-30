@@ -8,7 +8,5 @@
     "dev": "node agent.js",
     "start": "node agent.js"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0"
-  }
+  "dependencies": {}
 }

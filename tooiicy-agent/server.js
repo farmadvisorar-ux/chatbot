@@ -1,9 +1,7 @@
 import http from 'node:http';
-import Anthropic from '@anthropic-ai/sdk';
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 const PORT = process.env.PORT || 3000;
 
@@ -98,14 +96,29 @@ const server = http.createServer(async (req, res) => {
           { role: 'user', content: message },
         ];
 
-        const response = await client.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1024,
-          system: SYSTEM_PROMPT,
-          messages,
+        const response = await fetch(GROQ_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${GROQ_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'mixtral-8x7b-32768',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              ...messages,
+            ],
+            max_tokens: 1024,
+            temperature: 0.7,
+          }),
         });
 
-        const assistantMessage = response.content[0].type === 'text' ? response.content[0].text : '';
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message || 'Groq API error');
+        }
+
+        const assistantMessage = data.choices[0].message.content;
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
