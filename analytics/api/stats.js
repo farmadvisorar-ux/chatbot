@@ -22,7 +22,7 @@ export default async function handler(req, res) {
         return json(res, 501, { error: 'No database is configured on this deployment.' });
     }
 
-    const requested = Number(req.query.days);
+    const requested = Number(new URL(req.url, 'http://x').searchParams.get('days'));
     const days = Number.isFinite(requested) ? Math.min(Math.max(Math.trunc(requested), 1), 365) : 30;
 
     try {

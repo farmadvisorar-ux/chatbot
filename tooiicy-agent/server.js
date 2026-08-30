@@ -2,6 +2,7 @@ import http from 'node:http';
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL = 'openai/gpt-oss-120b';
 
 const PORT = process.env.PORT || 3000;
 
@@ -65,7 +66,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
+    res.end(JSON.stringify({ status: 'ok', groqConfigured: !!GROQ_API_KEY, model: MODEL }));
     return;
   }
 
@@ -83,6 +84,12 @@ const server = http.createServer(async (req, res) => {
 
     req.on('end', async () => {
       try {
+        if (!GROQ_API_KEY) {
+          res.writeHead(501, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'GROQ_API_KEY is not set on this deployment.' }));
+          return;
+        }
+
         const { message, history = [] } = JSON.parse(body);
 
         if (!message) {
@@ -103,7 +110,7 @@ const server = http.createServer(async (req, res) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'mixtral-8x7b-32768',
+            model: MODEL,
             messages: [
               { role: 'system', content: SYSTEM_PROMPT },
               ...messages,
