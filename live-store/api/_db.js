@@ -46,8 +46,8 @@ export async function ensureSchema() {
     if (ensured) return;
     ensured = true;
     const db = sql();
-    await db(SEQUENCE);
-    await db(SCHEMA);
+    await db.query(SEQUENCE);
+    await db.query(SCHEMA);
 }
 
 /** How many First Edition cards a single card design is capped at. */

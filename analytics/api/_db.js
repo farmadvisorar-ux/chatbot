@@ -69,8 +69,8 @@ export async function ensureSchema() {
     if (ensured) return;
     ensured = true;
     const db = sql();
-    await db(SCHEMA);
-    for (const index of INDEXES) await db(index);
+    await db.query(SCHEMA);
+    for (const index of INDEXES) await db.query(index);
 }
 
 /**

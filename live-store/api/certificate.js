@@ -15,7 +15,7 @@ export default async function handler(req, res) {
             return json(res, 501, { error: 'Certificates are not configured on this deployment yet.' });
         }
 
-        const token = String(req.query.token ?? '').trim();
+        const token = new URL(req.url, 'http://x').searchParams.get('token') ?? '';
         if (!/^[a-f0-9]{32}$/.test(token)) {
             return json(res, 400, { error: 'Invalid certificate link.' });
         }
