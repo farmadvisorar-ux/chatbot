@@ -87,6 +87,9 @@ svg:not([width]){width:16px;height:16px;display:inline-block;vertical-align:midd
    App nav
    ============================================================ */
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:var(--s-6);padding:var(--s-4) 0}
+/* The sign-in/sign-up pair plus the brand already fill a phone-width topbar,
+   so the Pricing link falls back to the footer below this width. */
+@media (max-width:520px){.topbar{gap:var(--s-2)}.nav-pricing{display:none}}
 .appbar{
   position:sticky;top:0;z-index:40;
   background:color-mix(in srgb,var(--bg) 88%,transparent);
@@ -127,13 +130,13 @@ button svg{width:15px;height:15px;flex-shrink:0}
 
 .ghost-button{background:var(--surface-2);color:var(--ink);border-color:var(--line-strong)}
 .ghost-button:hover{background:var(--surface-3);filter:none}
-.text-button{background:transparent;color:var(--muted);border-color:transparent;padding:7px 10px;font-weight:600}
+.text-button{background:transparent;color:var(--muted);border-color:transparent;padding:7px 10px;font-weight:600;white-space:nowrap}
 .text-button:hover{background:var(--surface-2);color:var(--ink);filter:none}
 /* Destructive actions are quiet until hovered — they should never compete
    with the primary action for attention. */
 .danger-button{background:transparent;color:var(--critical);border-color:rgba(255,77,109,.3)}
 .danger-button:hover{background:rgba(255,77,109,.12);border-color:var(--critical);filter:none}
-.mini-cta{padding:8px 14px;font-size:var(--t-sm)}
+.mini-cta{padding:8px 14px;font-size:var(--t-sm);white-space:nowrap}
 
 /* ============================================================
    Cards

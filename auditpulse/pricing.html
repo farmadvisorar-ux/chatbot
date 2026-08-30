@@ -7,6 +7,16 @@
     <meta name="description" content="Choose the right AuditPulse plan for your security needs. From free scanning to enterprise penetration testing.">
     <link rel="icon" type="image/svg+xml" href="./public/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="./public/icon-32.png">
+    <link rel="apple-touch-icon" href="./public/apple-touch-icon.png">
+    <meta property="og:title" content="Pricing — AuditPulse">
+    <meta property="og:description" content="Start free with 10 sites and weekly re-audits. Scale up to daily scans, enterprise automation, and elite penetration testing.">
+    <meta property="og:image" content="https://brokehealth.com/public/og-image.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://brokehealth.com/pricing.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pricing — AuditPulse">
+    <meta name="twitter:description" content="Start free with 10 sites and weekly re-audits. Scale up to daily scans, enterprise automation, and elite penetration testing.">
+    <meta name="twitter:image" content="https://brokehealth.com/public/og-image.png">
     <link rel="canonical" href="https://brokehealth.com/pricing.html">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -118,6 +128,8 @@
             font-weight: 700;
         }
         .tier-cta {
+            display: block;
+            width: 100%;
             background: var(--accent);
             color: var(--accent-ink);
             border: none;
@@ -125,6 +137,9 @@
             border-radius: var(--r-md);
             font-size: var(--t-base);
             font-weight: 600;
+            font-family: inherit;
+            text-align: center;
+            text-decoration: none;
             cursor: pointer;
             margin-top: auto;
             transition: all 0.2s;
@@ -135,19 +150,8 @@
         .tier-cta.coming {
             background: var(--surface-2);
             color: var(--muted);
+            border: 1px dashed var(--line-strong);
             cursor: not-allowed;
-        }
-        .coming-badge {
-            display: inline-block;
-            background: var(--surface-2);
-            color: var(--muted);
-            padding: var(--s-3) var(--s-4);
-            border-radius: var(--r-md);
-            font-size: var(--t-sm);
-            font-weight: 600;
-            margin-top: var(--s-4);
-            width: 100%;
-            text-align: center;
         }
     </style>
 </head>
@@ -168,39 +172,6 @@
         </section>
     </main>
 
-    <script type="module">
-        async function loadTiers() {
-            try {
-                const res = await fetch('./api/tiers');
-                const { tiers } = await res.json();
-
-                const container = document.getElementById('pricing-container');
-                container.innerHTML = tiers.map(tier => `
-                    <div class="tier-card ${tier.featured ? 'featured' : ''}">
-                        ${tier.badge ? `<span class="tier-badge">${tier.badge}</span>` : ''}
-                        <div class="tier-name">${tier.name}</div>
-                        ${tier.coming_soon ?
-                            `<div class="coming-badge">Coming Soon</div>` :
-                            `<div class="tier-price">${tier.price}<small>${tier.billing_period}</small></div>`
-                        }
-                        <p class="tier-desc">${tier.description}</p>
-                        <ul class="tier-features">
-                            ${tier.features.map(f => `<li>${f}</li>`).join('')}
-                        </ul>
-                        <button class="tier-cta ${tier.coming_soon ? 'coming' : ''}"
-                                ${tier.coming_soon ? 'disabled' : 'onclick="window.location.href = \\"/dashboard.html\\";"'}>
-                            ${tier.coming_soon ? 'Coming Soon' : 'Get Started'}
-                        </button>
-                    </div>
-                `).join('');
-            } catch (e) {
-                console.error('Failed to load tiers:', e);
-                document.getElementById('pricing-container').innerHTML =
-                    '<p style="color: var(--muted); text-align: center;">Unable to load pricing information.</p>';
-            }
-        }
-
-        loadTiers();
-    </script>
+    <script type="module" src="./src/pricing.ts"></script>
 </body>
 </html>

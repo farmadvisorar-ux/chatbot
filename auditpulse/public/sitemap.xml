@@ -3,11 +3,16 @@
      token because the bare page explains the badge programme; the tokenised
      form is per-site and not something to enumerate. Signed-in pages and
      shared reports are excluded here and in robots.txt. -->
-<urlset xmlns="http://www.w3.org/1999/9/sitemap.xsd">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://brokehealth.com/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://brokehealth.com/pricing.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://brokehealth.com/verify.html</loc>
