@@ -370,6 +370,25 @@ html = patch(
 // render() is called by the confirmation handler to empty the cart on return.
 html = patch(html, 'expose render()', /\nrender\(\);/, '\nwindow.render=render;\nrender();');
 
+// Adds a Legal column to the existing footer grid, matching the Shop/Listen/
+// Get-the-next-drop-first columns already there. Anchored on the contact
+// mailto link — the last thing in the last existing column — rather than on
+// exact whitespace, so small formatting changes upstream don't break it.
+const LEGAL_FCOL = `
+      <div class="fcol">
+        <h4>Info</h4>
+        <a href="/faq.html">FAQ</a>
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="/terms.html">Terms of Service</a>
+      </div>`;
+
+html = patch(
+    html,
+    'add Legal column to footer',
+    /(<a href="mailto:Contact@tooiicy\.com"[^>]*>Contact@tooiicy\.com<\/a><\/p>\s*)<\/div>(\s*<\/div>\s*<div class="fbot">)/,
+    `$1</div>${LEGAL_FCOL}$2`,
+);
+
 const AGENT_WIDGET = `
 <script>
   window.TOOIICY_AGENT_URL='https://tooiicy-agent-wordwide-top-10.vercel.app';
@@ -388,8 +407,15 @@ console.log(`built dist/index.html (${html.length} bytes)`);
  * not hardcoded, so nothing can be left behind the way the product photo was
  * on the first release. A reference that will not fetch fails the build.
  */
+// Pages this build writes itself, not assets to pull from SOURCE — the
+// scrape below would otherwise try to fetch them from the upstream page and
+// 404, since they only exist here.
+const GENERATED_PAGES = new Set(['/certificate.html', '/faq.html', '/privacy.html', '/terms.html']);
+
 const referenced = new Set(
-    [...html.matchAll(/["'(](\/[A-Za-z0-9._~-]+\.[A-Za-z0-9]{2,5})["')]/g)].map(match => match[1]),
+    [...html.matchAll(/["'(](\/[A-Za-z0-9._~-]+\.[A-Za-z0-9]{2,5})["')]/g)]
+        .map(match => match[1])
+        .filter(path => !GENERATED_PAGES.has(path)),
 );
 
 for (const path of referenced) {
@@ -596,12 +622,158 @@ await writeFile('dist/certificate.html', `<!DOCTYPE html>
 `);
 console.log('built certificate.html');
 
+/**
+ * Shared shell for the plain content pages below. Same palette and font as
+ * the rest of the site (see CHECKOUT_SCRIPT and the certificate page above)
+ * so a visitor following a footer link doesn't land somewhere that looks
+ * like a different site.
+ */
+function legalPage(title, bodyHtml) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="${title} for Tooiicy, a Dallas streetwear label.">
+<link rel="canonical" href="${SITE}/${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.html">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>${title} — Tooiicy</title>
+<style>
+  :root{color-scheme:dark;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:#03121E;color:#E9F2F8;font-family:'Space Mono',monospace;line-height:1.7;}
+  .wrap{max-width:720px;margin:0 auto;padding:48px 24px 80px;}
+  a{color:#2F86F0;}
+  .back{display:inline-block;margin-bottom:28px;font-size:13px;color:#7fb0ec;text-decoration:none;}
+  .back:hover{text-decoration:underline;}
+  h1{font-size:28px;letter-spacing:-.01em;margin:0 0 8px;color:#fff;}
+  .updated{font-size:12px;color:#7fb0ec;margin:0 0 36px;text-transform:uppercase;letter-spacing:.08em;}
+  h2{font-size:16px;color:#fff;margin:32px 0 10px;}
+  p,li{font-size:14px;color:#cfe0ee;}
+  ul{padding-left:20px;}
+  .qa{margin-bottom:22px;}
+  .qa dt{font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;}
+  .qa dd{margin:0;font-size:14px;color:#cfe0ee;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">&larr; Back to Tooiicy</a>
+  <h1>${title}</h1>
+  <p class="updated">Last updated ${new Date().toISOString().slice(0, 10)}</p>
+  ${bodyHtml}
+</div>
+</body>
+</html>
+`;
+}
+
+const FAQ_BODY = `<dl>
+${FAQ.map(([q, a]) => `  <div class="qa"><dt>${q}</dt><dd>${a}</dd></div>`).join('\n')}
+</dl>
+<h2>Contact</h2>
+<p>Anything not covered here: <a href="mailto:Contact@tooiicy.com">Contact@tooiicy.com</a></p>`;
+
+await writeFile('dist/faq.html', legalPage('FAQ', FAQ_BODY));
+console.log('built faq.html');
+
+const PRIVACY_BODY = `
+<p>Tooiicy ("we", "us") is a streetwear label operated out of Dallas, Texas.
+This page explains what happens to your information when you visit this site
+or place an order.</p>
+
+<h2>Payment and order information</h2>
+<p>Checkout is handled entirely by PayPal. When you pay, PayPal collects your
+name, shipping address, and payment details directly — this site never sees
+or stores your card number, and does not keep a copy of your name, email, or
+shipping address in its own systems. Your order and shipping details live in
+your PayPal account and are used by us only to fulfil that order.</p>
+
+<h2>Analytics</h2>
+<p>We use a small, self-hosted analytics system to see how many people visit
+the site and which pages they look at. It does not use cookies and does not
+track you across visits or across other websites. It works by hashing your IP
+address together with the current date, so the resulting identifier changes
+every day and cannot be used to build a profile of you over time or identify
+you personally. We record coarse details like country, city, device type, and
+which page you were on — never your name, email, or exact location.</p>
+
+<h2>What we don't do</h2>
+<ul>
+  <li>We don't sell or share your data with advertisers.</li>
+  <li>We don't use tracking cookies or cross-site pixels.</li>
+  <li>We don't build advertising profiles.</li>
+</ul>
+
+<h2>First Edition certificates</h2>
+<p>If your order is one of the first 200, we store a randomly generated
+certificate number and a link token so you can look up your card online.
+That record is not tied to your name or contact details — only to the order
+itself.</p>
+
+<h2>Contact</h2>
+<p>Questions about this policy: <a href="mailto:Contact@tooiicy.com">Contact@tooiicy.com</a></p>`;
+
+await writeFile('dist/privacy.html', legalPage('Privacy Policy', PRIVACY_BODY));
+console.log('built privacy.html');
+
+const TERMS_BODY = `
+<p>By placing an order on tooiicy.com you agree to the following terms.</p>
+
+<h2>Products and pricing</h2>
+<p>We currently sell one product, the ${PRODUCT}, in sizes ${SIZES.join(', ')}, at
+$${PRICE} USD per item. Prices are set and verified on our server at the time
+of checkout — nothing you see or edit in your browser can change what you're
+charged.</p>
+
+<h2>Payment</h2>
+<p>Payment is processed by PayPal. We do not accept any other payment method,
+and we never see or store your full payment details.</p>
+
+<h2>First Edition cards</h2>
+<p>The first 200 orders of the ${PRODUCT} are issued a numbered First Edition
+certificate as a collectible bonus. It has no cash value, is not an
+investment, and we make no promise about resale value, if any. It's a bonus,
+not a term of the sale itself.</p>
+
+<h2>Shipping</h2>
+<p>Orders ship from Dallas, Texas. We aim to get orders out promptly but don't
+guarantee a specific delivery date.</p>
+
+<h2>Returns and issues</h2>
+<p>If your order arrives damaged, defective, or wrong, contact us at
+<a href="mailto:Contact@tooiicy.com">Contact@tooiicy.com</a> within 7 days of
+delivery and we'll make it right. Outside of that, sales are final — we don't
+currently offer returns for size or preference, so check the fit notes on the
+product page before ordering.</p>
+
+<h2>Limitation of liability</h2>
+<p>Tooiicy is provided as-is. To the extent permitted by law, we aren't liable
+for indirect or consequential damages arising from your use of this site or
+purchase of our products.</p>
+
+<h2>Changes</h2>
+<p>We may update these terms as the store changes. The date at the top of this
+page reflects the last update.</p>
+
+<h2>Governing law</h2>
+<p>These terms are governed by the laws of the State of Texas.</p>
+
+<h2>Contact</h2>
+<p>Questions: <a href="mailto:Contact@tooiicy.com">Contact@tooiicy.com</a></p>`;
+
+await writeFile('dist/terms.html', legalPage('Terms of Service', TERMS_BODY));
+console.log('built terms.html');
+
 const today = new Date().toISOString().slice(0, 10);
 await writeFile(
     'dist/sitemap.xml',
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     `  <url><loc>${SITE}/</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>\n` +
+    `  <url><loc>${SITE}/faq.html</loc><lastmod>${today}</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>\n` +
+    `  <url><loc>${SITE}/privacy.html</loc><lastmod>${today}</lastmod><changefreq>yearly</changefreq><priority>0.2</priority></url>\n` +
+    `  <url><loc>${SITE}/terms.html</loc><lastmod>${today}</lastmod><changefreq>yearly</changefreq><priority>0.2</priority></url>\n` +
     `</urlset>\n`,
 );
 
