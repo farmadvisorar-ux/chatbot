@@ -16,7 +16,6 @@
  * forbids automated checkout, which this does not go near.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -67,20 +66,7 @@ const byCount = (values) => {
 };
 
 const catalog = {
-    /**
-     * Which snapshot this was built from, as a hash of the snapshot itself.
-     *
-     * This was a wall-clock `generatedAt`, which was worse than useless: it
-     * changed on every build, so the file showed as modified after any `npm
-     * run build`, every commit carried a meaningless one-line diff, and the
-     * one reason to commit a generated file — that its diff is the record of
-     * what the supplier changed — was buried in timestamp noise.
-     *
-     * A hash of the source says the thing actually worth knowing (which
-     * snapshot produced this) and is stable across rebuilds, so building
-     * twice leaves the working tree clean. CI asserts exactly that.
-     */
-    snapshot: createHash('sha256').update(readFileSync(snapshotPath)).digest('hex').slice(0, 16),
+    generatedAt: new Date().toISOString(),
     supplier: DEALER.supplier.name,
     count: buildings.length,
     facets: {
