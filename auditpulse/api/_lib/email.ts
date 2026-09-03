@@ -70,7 +70,12 @@ export async function sendReportEmail(params: {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) return { ok: false, error: 'Email sending is not configured on this deployment.' };
 
-    const reportUrl = `${siteOrigin()}/report.html?token=${encodeURIComponent(params.shareToken)}`;
+    // /api/share/:token, not report.html directly — it's a bounce page that
+    // renders this scan's real grade/host into og:title/og:image (report.html
+    // is a static SPA shell shared by every report, so a link scraper reading
+    // it directly would show the same generic card for every audit) and then
+    // redirects straight to report.html for the human who clicks it.
+    const reportUrl = `${siteOrigin()}/api/share/${encodeURIComponent(params.shareToken)}`;
     const totalFindings = Object.values(params.summary).reduce((a, b) => a + b, 0);
 
     const rows = params.topFindings.map(f => `

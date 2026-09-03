@@ -2,7 +2,7 @@ function escapeXml(value: string): string {
     return value.replace(/[<>&'"]/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[char] as string));
 }
 
-function gradeColor(grade: string): string {
+export function gradeColor(grade: string): string {
     if (grade.startsWith('A')) return '#35e0a1';
     if (grade.startsWith('B')) return '#a3e035';
     if (grade.startsWith('C')) return '#ffcc4d';

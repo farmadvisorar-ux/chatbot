@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { error, json, requireMethod } from './_lib/http.js';
 import { getPool } from './_lib/db.js';
+import { getScanByToken } from './_lib/scanLookup.js';
 
 /**
  * Public, no-auth report view keyed on the unguessable share_token mailed to
@@ -15,20 +16,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
-    const pool = getPool();
-    const { rows: scanRows } = await pool.query(
-        `SELECT s.id, s.kind, s.status, s.score, s.grade, s.summary, s.started_at, s.completed_at,
-                t.url AS target_url, t.label AS target_label
-         FROM scans s JOIN targets t ON t.id = s.target_id
-         WHERE s.share_token = $1`,
-        [token],
-    );
-    const scan = scanRows[0];
+    const scan = await getScanByToken(token);
     if (!scan) {
         error(res, 404, 'Report not found.');
         return;
     }
 
+    const pool = getPool();
     const { rows: findings } = await pool.query(
         `SELECT title, severity, impact, description, evidence, remediation, reference_links, affected_url, fix_status, fix_pr_url FROM findings
          WHERE scan_id = $1

@@ -532,7 +532,9 @@ async function selectScan(scanId: string): Promise<void> {
         return;
     }
 
-    const reportUrl = `${window.location.origin}/report.html?token=${encodeURIComponent(scan.share_token)}`;
+    // /api/share/:token so the copied link unfurls with this scan's real
+    // grade/host card in Slack/iMessage/SMS/etc — see api/share/[token].ts.
+    const reportUrl = `${window.location.origin}/api/share/${encodeURIComponent(scan.share_token)}`;
     // All seven security headers patch the same vercel.json block, so fixing
     // them individually opens PRs that conflict with each other. Offer the
     // batch action whenever more than one fix is still outstanding.

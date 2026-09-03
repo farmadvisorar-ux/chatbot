@@ -84,6 +84,41 @@ svg:not([width]){width:16px;height:16px;display:inline-block;vertical-align:midd
 .chevron svg{width:13px;height:13px}
 
 /* ============================================================
+   Pulse line — animated heartbeat trace at the very top of every page.
+   A scrolling ECG waveform (P-QRS-T), like the vitals strip on an ER
+   monitor — literal brand reinforcement for "AuditPulse". Pure CSS: a
+   240x34 tile repeated via background-position scroll, so the loop is
+   seamless with no JS. Sticky so it stays visible while scrolling, one
+   layer above .appbar (see --pulse-h, which .appbar's sticky offset uses).
+   ============================================================ */
+:root{ --pulse-h:34px; }
+.pulse-line{
+  position:sticky;top:0;z-index:41;height:var(--pulse-h);overflow:hidden;
+  background:#070a0f;border-bottom:1px solid var(--line);
+  flex-shrink:0;
+}
+.pulse-line::before{
+  content:"";position:absolute;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='34' viewBox='0 0 240 34'%3E%3Cpath d='M0,17 L44,17 L50,11 L56,17 L74,17 L80,17 L85,23 L90,2 L95,30 L100,17 L118,17 L128,17 L136,7 L144,7 L152,17 L240,17' fill='none' stroke='%2335e0a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:repeat-x;background-size:240px var(--pulse-h);
+  animation:pulse-scroll 2.4s linear infinite, pulse-glow 1.2s ease-in-out infinite;
+}
+.pulse-line::after{
+  /* Fades the strip into the page background at both edges so the tile
+     boundary and viewport clip never read as a hard cut. */
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,#070a0f 0%,transparent 8%,transparent 92%,#070a0f 100%);
+}
+@keyframes pulse-scroll{to{background-position-x:-240px}}
+@keyframes pulse-glow{
+  0%,100%{filter:drop-shadow(0 0 2px rgba(53,224,161,.5))}
+  50%{filter:drop-shadow(0 0 6px rgba(53,224,161,.9))}
+}
+@media(prefers-reduced-motion:reduce){
+  .pulse-line::before{animation:none;filter:drop-shadow(0 0 2px rgba(53,224,161,.5))}
+}
+
+/* ============================================================
    App nav
    ============================================================ */
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:var(--s-6);padding:var(--s-4) 0}
@@ -91,7 +126,7 @@ svg:not([width]){width:16px;height:16px;display:inline-block;vertical-align:midd
    so the Pricing link falls back to the footer below this width. */
 @media (max-width:520px){.topbar{gap:var(--s-2)}.nav-pricing{display:none}}
 .appbar{
-  position:sticky;top:0;z-index:40;
+  position:sticky;top:var(--pulse-h);z-index:40;
   background:color-mix(in srgb,var(--bg) 88%,transparent);
   backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);
