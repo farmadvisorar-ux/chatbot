@@ -389,6 +389,24 @@ html = patch(
     `$1</div>${LEGAL_FCOL}$2`,
 );
 
+// "As seen on" style directory badge, sitting as its own row between the
+// footer columns and the copyright line.
+const PEERPUSH_BADGE = `
+    <div class="fbadge" style="text-align:center;padding:20px 0;">
+      <a href="https://peerpush.com/p/tooiicy-i-hope-the-worst-tea-shirt" target="_blank" rel="noopener">
+        <img src="https://peerpush.com/p/tooiicy-i-hope-the-worst-tea-shirt/badge.png"
+          alt="TOOIICY - I Hope the worst Tea-Shirt on PeerPush" width="230" height="54" loading="lazy"
+          style="width:230px;height:auto;">
+      </a>
+    </div>`;
+
+html = patch(
+    html,
+    'add PeerPush badge above footer copyright',
+    /<div class="fbot">/,
+    `${PEERPUSH_BADGE}\n    <div class="fbot">`,
+);
+
 const AGENT_WIDGET = `
 <script>
   window.TOOIICY_AGENT_URL='https://tooiicy-agent-wordwide-top-10.vercel.app';
