@@ -1,0 +1,9 @@
+{
+  "name": "tooiicy-analytics",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
+  }
+}

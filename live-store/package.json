@@ -1,0 +1,13 @@
+{
+  "name": "tooiicy-live-store",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "sharp": "^0.33.5"
+  }
+}

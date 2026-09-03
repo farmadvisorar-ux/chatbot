@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Tooiicy — Visitors</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root{--night:#050810;--panel:#0B111C;--panel2:#111A28;--blue:#2F86F0;--soft:#9FD8F5;
+--steel:#74869B;--paper:#E9F2F8;--line:rgba(233,242,248,.13);--ok:#8FE3A8;--warn:#F0662F}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:var(--paper);line-height:1.5;
+font-family:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+a{color:var(--soft)}
+.wrap{width:min(1240px,calc(100% - 32px));margin:0 auto;padding:24px 0 80px}
+h1{font-size:22px;letter-spacing:-.02em;margin:0}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--steel);margin:0 0 10px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
+padding-bottom:16px;border-bottom:1px solid var(--line)}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,select,input{font:inherit;border-radius:9px;border:1px solid var(--line);
+background:var(--panel2);color:var(--paper);padding:9px 13px}
+button{cursor:pointer}
+button.primary{background:var(--blue);color:#03121E;border-color:var(--blue);font-weight:700}
+button.on{border-color:var(--blue);color:var(--soft)}
+.pulse{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--steel)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 9px 2px rgba(143,227,168,.6)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:20px 0}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.kpi span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--steel)}
+.kpi b{display:block;font-size:28px;margin-top:6px;letter-spacing:-.02em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:6px 0;border-bottom:1px solid rgba(233,242,248,.06);vertical-align:middle}
+td:last-child{text-align:right;color:var(--soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:rgba(47,134,240,.16);border-radius:4px}
+.bar span{position:relative;padding-left:6px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chart{display:flex;align-items:flex-end;gap:3px;height:150px;margin-top:8px}
+.chart div{flex:1;background:var(--blue);border-radius:3px 3px 0 0;min-height:2px;opacity:.85}
+.chart div:hover{opacity:1}
+.fun{display:grid;gap:8px}
+.fstep{background:var(--panel2);border-radius:9px;padding:10px 12px;position:relative;overflow:hidden}
+.fstep i{position:absolute;inset:0;background:rgba(47,134,240,.18)}
+.fstep span{position:relative;display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.feed{max-height:420px;overflow:auto;font-size:12.5px}
+.feed div{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid rgba(233,242,248,.06)}
+.feed time{color:var(--steel);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tag{background:rgba(47,134,240,.16);color:var(--soft);border-radius:5px;padding:1px 7px;font-size:11px;white-space:nowrap}
+.tag.buy{background:rgba(143,227,168,.18);color:var(--ok)}
+.muted{color:var(--steel);font-size:13px}
+.err{background:rgba(240,102,47,.12);border:1px solid var(--warn);color:#FFC9B4;
+border-radius:9px;padding:12px 14px;font-size:13px;margin-top:14px}
+.login{max-width:400px;margin:14vh auto;background:var(--panel);border:1px solid var(--line);
+border-radius:16px;padding:26px}
+.login input{width:100%;margin:14px 0 12px}
+.login button{width:100%}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<section id="login" class="login">
+  <h1>Tooiicy visitors</h1>
+  <p class="muted">Enter the admin key to view analytics.</p>
+  <input id="key" type="password" placeholder="ADMIN_SECRET" autocomplete="current-password">
+  <button class="primary" id="signin">View dashboard</button>
+  <p id="loginerr" class="muted"></p>
+</section>
+
+<main id="app" class="wrap" hidden>
+  <div class="top">
+    <div>
+      <h1>Visitors</h1>
+      <p class="pulse"><i class="dot"></i><span id="online">—</span> active in the last 5 minutes</p>
+    </div>
+    <div class="controls">
+      <button data-days="7">7d</button>
+      <button data-days="30" class="on">30d</button>
+      <button data-days="90">90d</button>
+      <button id="refresh">Refresh</button>
+      <button id="out">Sign out</button>
+    </div>
+  </div>
+
+  <div id="error" class="err" hidden></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="card" style="grid-column:1/-1">
+      <h2>Visitors per day</h2>
+      <div class="chart" id="chart"></div>
+      <p class="muted" id="range"></p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Funnel</h2><div class="fun" id="funnel"></div></div>
+    <div class="card"><h2>Where they came from</h2><table id="referrers"></table></div>
+    <div class="card"><h2>Pages</h2><table id="paths"></table></div>
+    <div class="card"><h2>Countries</h2><table id="countries"></table></div>
+    <div class="card"><h2>Cities</h2><table id="cities"></table></div>
+    <div class="card"><h2>Devices</h2><table id="devices"></table></div>
+    <div class="card"><h2>Browsers</h2><table id="browsers"></table></div>
+    <div class="card"><h2>Sizes picked</h2><table id="sizes"></table></div>
+    <div class="card" style="grid-column:1/-1">
+      <h2>Live activity</h2><div class="feed" id="feed"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+var KEY='tooiicy_admin_key', key='', days=30, timer=null;
+var $=function(id){return document.getElementById(id)};
+
+// Everything rendered below can originate from a visitor's browser — a
+// referrer host in particular is whatever someone chose to send — so it is
+// escaped rather than trusted as markup.
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function num(n){return (n==null?0:n).toLocaleString('en-US');}
+
+function rows(el,list){
+  var max=list.reduce(function(m,r){return Math.max(m,r.n)},0)||1;
+  el.innerHTML=list.length?list.map(function(r){
+    return '<tr><td class="bar"><i style="width:'+(r.n/max*100).toFixed(1)+'%"></i>'+
+      '<span>'+esc(r.label)+'</span></td><td>'+num(r.n)+'</td></tr>';
+  }).join(''):'<tr><td class="muted">No data yet.</td></tr>';
+}
+
+function render(d){
+  $('online').textContent=num(d.onlineNow);
+  var t=d.totals||{};
+  $('kpis').innerHTML=[
+    ['Visitors',num(t.visitors)],['Sessions',num(t.sessions)],
+    ['Page views',num(t.pageviews)],['Events',num(t.events)]
+  ].map(function(k){return '<div class="kpi"><span>'+k[0]+'</span><b>'+k[1]+'</b></div>'}).join('');
+
+  var max=d.daily.reduce(function(m,r){return Math.max(m,r.visitors)},0)||1;
+  $('chart').innerHTML=d.daily.map(function(r){
+    return '<div style="height:'+(r.visitors/max*100).toFixed(1)+'%" title="'+
+      esc(r.day)+': '+r.visitors+' visitors, '+r.purchases+' purchases"></div>';
+  }).join('')||'<p class="muted">No data yet.</p>';
+  $('range').textContent=d.daily.length?d.daily[0].day+' → '+d.daily[d.daily.length-1].day:'';
+
+  $('funnel').innerHTML=d.funnel.map(function(s){
+    return '<div class="fstep"><i style="width:'+s.pct+'%"></i><span><b>'+esc(s.step)+
+      '</b><span>'+num(s.n)+' · '+s.pct+'%</span></span></div>';
+  }).join('');
+
+  var b=d.breakdowns;
+  rows($('referrers'),b.referrers); rows($('paths'),b.paths);
+  rows($('countries'),b.countries); rows($('cities'),b.cities);
+  rows($('devices'),b.devices); rows($('browsers'),b.browsers);
+  rows($('sizes'),b.sizes);
+
+  $('feed').innerHTML=d.recent.length?d.recent.map(function(r){
+    var p=r.props||{};
+    var extra=[r.city,r.country,r.device,r.browser].filter(Boolean).join(' · ');
+    var detail=[p.size?'size '+p.size:'',p.qty?'x'+p.qty:''].filter(Boolean).join(' ');
+    return '<div><time>'+esc(r.ts)+'</time><span class="tag'+
+      (r.event==='purchase'?' buy':'')+'">'+esc(r.event)+'</span>'+
+      '<span>'+esc(extra)+(detail?' — '+esc(detail):'')+
+      (r.referrer_host?' ← '+esc(r.referrer_host):'')+'</span></div>';
+  }).join(''):'<p class="muted">Nothing yet.</p>';
+}
+
+function load(){
+  $('error').hidden=true;
+  fetch('/api/stats?days='+days,{headers:{Authorization:'Bearer '+key}})
+    .then(function(r){return r.json().then(function(d){
+      if(!r.ok) throw new Error(d.error||('Request failed ('+r.status+')')); return d;});})
+    .then(render)
+    .catch(function(e){$('error').textContent=e.message;$('error').hidden=false;});
+}
+
+function open_(){
+  $('login').hidden=true; $('app').hidden=false;
+  load(); clearInterval(timer); timer=setInterval(load,30000);
+}
+
+$('signin').addEventListener('click',function(){
+  key=$('key').value.trim();
+  if(!key) return;
+  $('loginerr').textContent='Checking…';
+  fetch('/api/stats?days=1',{headers:{Authorization:'Bearer '+key}}).then(function(r){
+    if(r.ok){localStorage.setItem(KEY,key);$('loginerr').textContent='';open_();}
+    else{return r.json().catch(function(){return {}}).then(function(d){
+      $('loginerr').textContent=d.error||'That key was not accepted.';});}
+  }).catch(function(){$('loginerr').textContent='Could not reach the server.';});
+});
+$('key').addEventListener('keydown',function(e){if(e.key==='Enter')$('signin').click();});
+
+document.querySelectorAll('[data-days]').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('[data-days]').forEach(function(o){o.classList.remove('on')});
+    b.classList.add('on'); days=Number(b.dataset.days); load();
+  });
+});
+$('refresh').addEventListener('click',load);
+$('out').addEventListener('click',function(){
+  localStorage.removeItem(KEY); key=''; clearInterval(timer);
+  $('app').hidden=true; $('login').hidden=false; $('key').value='';
+});
+
+var saved=localStorage.getItem(KEY);
+if(saved){key=saved;open_();}
+</script>
+</body>
+</html>

@@ -38,11 +38,16 @@ const sql = neon(process.env[found]);
 const schema = readFileSync(join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
 
 // Split on statement terminators that end a line, which keeps the CHECK
-// constraints intact.
+// constraints intact. Strip leading SQL comments before filtering so that
+// CREATE TABLE statements preceded by block comments are not accidentally
+// dropped — the comment-only filter would otherwise exclude them.
 const statements = schema
     .split(/;\s*\n/)
     .map(statement => statement.trim())
-    .filter(statement => statement.length > 0 && !statement.startsWith('--'));
+    .filter(statement => {
+        const stripped = statement.replace(/^(--[^\n]*\n)*/m, '').trim();
+        return stripped.length > 0;
+    });
 
 try {
     await sql.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');

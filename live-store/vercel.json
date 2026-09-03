@@ -1,0 +1,32 @@
+{
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "headers": [
+        {
+            "source": "/(.*)",
+            "headers": [
+                { "key": "X-Content-Type-Options", "value": "nosniff" },
+                { "key": "X-Frame-Options", "value": "DENY" },
+                { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+            ]
+        },
+        {
+            "source": "/api/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "no-store" }
+            ]
+        },
+        {
+            "source": "/(.*)\\.(jpg|jpeg|png|svg|webp|ico)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+            ]
+        },
+        {
+            "source": "/(robots.txt|sitemap.xml|feed.xml|products.csv|llms.txt)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=3600" }
+            ]
+        }
+    ]
+}
