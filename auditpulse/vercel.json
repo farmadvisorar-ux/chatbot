@@ -16,7 +16,7 @@
                 { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
                 {
                     "key": "Content-Security-Policy",
-                    "value": "default-src 'self'; script-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://img.clerk.com https://*.clerk.accounts.dev; connect-src 'self' https://*.clerk.accounts.dev; worker-src 'self' blob:; frame-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+                    "value": "default-src 'self'; script-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https://img.clerk.com https://*.clerk.accounts.dev https://peerpush.com; connect-src 'self' https://*.clerk.accounts.dev; worker-src 'self' blob:; frame-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
                 }
             ]
         },
