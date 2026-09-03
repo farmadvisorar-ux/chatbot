@@ -98,7 +98,8 @@ svg:not([width]){width:16px;height:16px;display:inline-block;vertical-align:midd
 }
 .appbar-inner{display:flex;align-items:center;gap:var(--s-6);padding:var(--s-3) 0}
 .brand{display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:var(--ink);font-family:'Syne',sans-serif;font-weight:800;font-size:var(--t-lg);letter-spacing:-.04em;flex-shrink:0}
-.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:15px;font-weight:800}
+/* The mark carries its own shield silhouette and colour, so it needs no plate. */
+.brand-mark{width:30px;height:30px;display:block;flex-shrink:0}
 .nav-links{display:flex;align-items:center;gap:var(--s-1);margin-left:var(--s-2)}
 .nav-link{
   display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:var(--r-md);
