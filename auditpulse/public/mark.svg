@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AuditPulse">
   <title>AuditPulse</title>
+  <!-- Standalone mark, for avatars and the site header. -->
   <defs><linearGradient id="ap-mark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5cf0bb"/><stop offset="1" stop-color="#22c98c"/></linearGradient></defs>
   <path fill="url(#ap-mark)" d="M32 3.5 56.5 12.6V32c0 14.6-11.2 25.2-24.5 29.2C18.7 57.2 7.5 46.6 7.5 32V12.6Z"/>
   <path fill="none" stroke="#04140d" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round" d="M18 32.5h5l4.5-11L35 43l3.5-10.5h6.5"/>
