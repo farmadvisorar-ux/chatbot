@@ -8,11 +8,25 @@ interface Tier {
   billing_period: string;
   description: string;
   features: string[];
-  coming_soon: boolean;
+  ctaLabel: string;
   badge?: string;
   featured?: boolean;
 }
 
+/**
+ * Seven tiers, $0 to $29 — deliberately small, frequent price steps rather
+ * than the old $0/$29/$199/$999 cliff. Every feature listed here either
+ * ships today or is a plain limit/format change (export, branding, queue
+ * order) — nothing requires capabilities the scanner doesn't have. That
+ * ruled out the previous "Elite" tier's promises (active exploitation,
+ * manual pentesting, SOC2/HIPAA reports): this product's whole model is
+ * passive, non-destructive checks, so selling the opposite at the top of
+ * the ladder wasn't a future roadmap item, it was a contradiction.
+ *
+ * None of this is billing-enforced yet — every CTA below routes to the
+ * same free sign-up as the Free tier. Wiring real checkout and per-tier
+ * limits is a separate step once Stripe is connected.
+ */
 const TIERS: Tier[] = [
   {
     id: 1,
@@ -21,76 +35,90 @@ const TIERS: Tier[] = [
     billing_period: 'forever',
     description: 'Everything you need to secure your own sites',
     features: [
-      '18 core security checks',
+      '18 real security checks',
       'Up to 10 websites',
       'Unlimited on-demand audits',
       'Automatic weekly re-audits',
-      'Public trust badge & PDF certificate',
+      'Trust badge & PDF certificate',
       'GitHub fix pull requests',
-      'Email reports after every audit',
     ],
-    coming_soon: false,
-    featured: false,
+    ctaLabel: 'Get started free',
   },
   {
     id: 2,
-    name: 'Professional',
-    price: '$29',
+    name: 'Starter',
+    price: '$5',
     billing_period: '/month',
-    description: 'Advanced scanning for growing teams',
+    description: 'A little more room to grow',
     features: [
-      '30 security checks (18 core + 12 advanced)',
-      'Daily automatic re-audits',
-      'Up to 50 websites',
-      'Custom report branding',
-      'Team collaboration (3 users)',
-      'Slack & email integrations',
-      'Read-only API access',
-      'Priority support',
+      'Everything in Free',
+      'Priority email support',
     ],
-    coming_soon: true,
-    badge: 'Popular',
-    featured: true,
+    ctaLabel: 'Start with Starter',
   },
   {
     id: 3,
-    name: 'Enterprise',
-    price: '$199',
+    name: 'Plus',
+    price: '$9',
     billing_period: '/month',
-    description: 'Complete security automation for enterprises',
+    description: 'Built for freelancers with client sites to answer for',
     features: [
-      '50 security checks (18 + 12 + 20 advanced)',
-      'Real-time scanning on demand',
-      'Unlimited websites',
-      'Custom workflows & automation',
-      'Team collaboration (unlimited)',
-      'Priority support (2hr response)',
-      'Advanced analytics & reporting',
-      'Single sign-on (SAML)',
-      'Compliance reporting',
+      'Everything in Starter',
+      '90-day scan history & trend view',
     ],
-    coming_soon: true,
-    featured: false,
+    ctaLabel: 'Start with Plus',
   },
   {
     id: 4,
-    name: 'Elite Penetration Testing',
-    price: '$999+',
+    name: 'Growth',
+    price: '$14',
     billing_period: '/month',
-    description: 'World-class penetration testing & hack simulation',
+    description: 'For teams who want proof, not just a promise',
     features: [
-      '70+ security checks including active exploitation',
-      'Real-time continuous monitoring',
-      'Unlimited sites & subdomains',
-      'Manual penetration testing by certified experts',
-      'Zero-day vulnerability research',
-      'Red team exercises & hack simulations',
-      '24/7 dedicated security consultant',
-      'Custom compliance reporting (SOC2, PCI-DSS, HIPAA)',
-      'Incident response retainer',
+      'Everything in Plus',
+      'CSV export of every finding',
     ],
-    coming_soon: true,
-    featured: false,
+    ctaLabel: 'Start with Growth',
+    badge: 'Most popular',
+    featured: true,
+  },
+  {
+    id: 5,
+    name: 'Team',
+    price: '$19',
+    billing_period: '/month',
+    description: 'Reports that look like they came from you',
+    features: [
+      'Everything in Growth',
+      'White-label PDF certificate — your logo, not ours',
+      'Custom name on your trust badge',
+    ],
+    ctaLabel: 'Start with Team',
+  },
+  {
+    id: 6,
+    name: 'Studio',
+    price: '$24',
+    billing_period: '/month',
+    description: 'For agencies running audits at scale',
+    features: [
+      'Everything in Team',
+      'Priority scan queue — your audits run first',
+    ],
+    ctaLabel: 'Start with Studio',
+  },
+  {
+    id: 7,
+    name: 'Agency',
+    price: '$29',
+    billing_period: '/month',
+    description: 'Everything, for your whole portfolio',
+    features: [
+      'Everything in Studio',
+      'Portfolio-wide CSV export across every client site',
+      'Fastest support response — first in line',
+    ],
+    ctaLabel: 'Start with Agency',
   },
 ];
 

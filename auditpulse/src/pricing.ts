@@ -11,16 +11,13 @@ interface Tier {
     billing_period: string;
     description: string;
     features: string[];
-    coming_soon: boolean;
+    ctaLabel: string;
     badge?: string;
     featured?: boolean;
 }
 
 function tierCard(tier: Tier): string {
     const features = tier.features.map(feature => `<li>${escapeHtml(feature)}</li>`).join('');
-    const cta = tier.coming_soon
-        ? '<button type="button" class="tier-cta coming" disabled>Coming Soon</button>'
-        : '<a class="tier-cta" href="./dashboard.html">Get started free</a>';
     return `
         <article class="tier-card${tier.featured ? ' featured' : ''}">
             ${tier.badge ? `<span class="tier-badge">${escapeHtml(tier.badge)}</span>` : ''}
@@ -28,7 +25,7 @@ function tierCard(tier: Tier): string {
             <div class="tier-price">${escapeHtml(tier.price)}<small> ${escapeHtml(tier.billing_period)}</small></div>
             <p class="tier-desc">${escapeHtml(tier.description)}</p>
             <ul class="tier-features">${features}</ul>
-            ${cta}
+            <a class="tier-cta" href="./dashboard.html">${escapeHtml(tier.ctaLabel)}</a>
         </article>`;
 }
 
