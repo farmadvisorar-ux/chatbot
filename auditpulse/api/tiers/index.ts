@@ -14,18 +14,30 @@ interface Tier {
 }
 
 /**
- * Seven tiers, $0 to $29 — deliberately small, frequent price steps rather
- * than the old $0/$29/$199/$999 cliff. Every feature listed here either
- * ships today or is a plain limit/format change (export, branding, queue
- * order) — nothing requires capabilities the scanner doesn't have. That
- * ruled out the previous "Elite" tier's promises (active exploitation,
- * manual pentesting, SOC2/HIPAA reports): this product's whole model is
- * passive, non-destructive checks, so selling the opposite at the top of
- * the ladder wasn't a future roadmap item, it was a contradiction.
+ * Seven tiers, $0 to $29.
  *
- * None of this is billing-enforced yet — every CTA below routes to the
- * same free sign-up as the Free tier. Wiring real checkout and per-tier
- * limits is a separate step once Stripe is connected.
+ * The line between free and paid is deliberately NOT "how many checks" —
+ * every plan runs all 18, because a half-scan that hides the critical
+ * finding you needed is a worse product, not a cheaper one. Free finds
+ * what's wrong and will even open the fix PR.
+ *
+ * What money buys is time and attention: how fast you hear about a new
+ * problem (weekly -> daily -> hourly -> every deploy), how much of your
+ * surface is watched (5 pages -> 100 -> behind the login -> every
+ * subdomain), whether the fix happens without you, and whether the whole
+ * thing carries your name in front of a client.
+ *
+ * Every feature here extends something the scanner already does:
+ * cert expiry already computes daysLeft (tls.ts), subdomain discovery
+ * already reads Certificate Transparency logs (subdomainEnum.ts), the
+ * crawler already takes a page budget (crawl.ts), three auto-fixers
+ * already open PRs (lib/fixers/), and the webhook route already exists
+ * for adding providers. Nothing here needs a capability this scanner
+ * philosophically can't have — no exploitation, no manual pentesting,
+ * no compliance certifications it can't issue.
+ *
+ * Not billing-enforced yet: every CTA routes to the same free sign-up.
+ * See tiers.md for which of these ship today vs. are queued.
  */
 const TIERS: Tier[] = [
   {
@@ -33,14 +45,14 @@ const TIERS: Tier[] = [
     name: 'Free',
     price: '$0',
     billing_period: 'forever',
-    description: 'Everything you need to secure your own sites',
+    description: 'Find out what is actually wrong with your site.',
     features: [
-      '18 real security checks',
+      'All 18 security checks — no half-scans',
       'Up to 10 websites',
       'Unlimited on-demand audits',
-      'Automatic weekly re-audits',
+      'Weekly automatic re-audit',
       'Trust badge & PDF certificate',
-      'GitHub fix pull requests',
+      'One-click GitHub fix pull requests',
     ],
     ctaLabel: 'Get started free',
   },
@@ -49,10 +61,13 @@ const TIERS: Tier[] = [
     name: 'Starter',
     price: '$5',
     billing_period: '/month',
-    description: 'A little more room to grow',
+    description: 'Hear about it the day it breaks — not next Sunday.',
     features: [
-      'Everything in Free',
-      'Priority email support',
+      'Everything in Free, plus:',
+      'Daily re-audits — 7× faster detection',
+      'Instant alert the moment a new issue appears',
+      'Certificate expiry warnings at 30, 14, 7 and 1 day',
+      '25 pages crawled per audit, up from 5',
     ],
     ctaLabel: 'Start with Starter',
   },
@@ -61,10 +76,13 @@ const TIERS: Tier[] = [
     name: 'Plus',
     price: '$9',
     billing_period: '/month',
-    description: 'Built for freelancers with client sites to answer for',
+    description: 'Know the moment anything on your site changes.',
     features: [
-      'Everything in Starter',
-      '90-day scan history & trend view',
+      'Everything in Starter, plus:',
+      'Change alerts — a new third-party script, an altered header, a dropped CSP',
+      'New-subdomain alerts from Certificate Transparency logs',
+      '90-day history with a score trend chart',
+      '100 pages crawled per audit',
     ],
     ctaLabel: 'Start with Plus',
   },
@@ -73,10 +91,14 @@ const TIERS: Tier[] = [
     name: 'Growth',
     price: '$14',
     billing_period: '/month',
-    description: 'For teams who want proof, not just a promise',
+    description: 'Put security in the workflow your team already uses.',
     features: [
-      'Everything in Plus',
-      'CSV export of every finding',
+      'Everything in Plus, plus:',
+      'Slack, Discord and webhook alerts',
+      'REST API with your own keys',
+      'GitHub Action that fails the build on a new Critical or High',
+      'Hourly re-audits',
+      'CSV and JSON export of every finding',
     ],
     ctaLabel: 'Start with Growth',
     badge: 'Most popular',
@@ -87,11 +109,13 @@ const TIERS: Tier[] = [
     name: 'Team',
     price: '$19',
     billing_period: '/month',
-    description: 'Reports that look like they came from you',
+    description: 'Stop hand-fixing what a robot can fix for you.',
     features: [
-      'Everything in Growth',
-      'White-label PDF certificate — your logo, not ours',
-      'Custom name on your trust badge',
+      'Everything in Growth, plus:',
+      'Auto-fix — the pull request opens itself when a fixable issue appears',
+      'Authenticated scanning — audit the pages behind your login',
+      'Up to 50 websites and 5 teammates',
+      'Per-site repo mapping for multi-repo setups',
     ],
     ctaLabel: 'Start with Team',
   },
@@ -100,10 +124,13 @@ const TIERS: Tier[] = [
     name: 'Studio',
     price: '$24',
     billing_period: '/month',
-    description: 'For agencies running audits at scale',
+    description: 'Hand a client something with your name on it, not ours.',
     features: [
-      'Everything in Team',
-      'Priority scan queue — your audits run first',
+      'Everything in Team, plus:',
+      'White-label PDF, badge and reports — your logo, your name',
+      'Monthly client reports, emailed automatically',
+      'Read-only client dashboards, one per customer',
+      'A public security status page for every site',
     ],
     ctaLabel: 'Start with Studio',
   },
@@ -112,11 +139,14 @@ const TIERS: Tier[] = [
     name: 'Agency',
     price: '$29',
     billing_period: '/month',
-    description: 'Everything, for your whole portfolio',
+    description: 'Run the whole book of business from one screen.',
     features: [
-      'Everything in Studio',
-      'Portfolio-wide CSV export across every client site',
-      'Fastest support response — first in line',
+      'Everything in Studio, plus:',
+      'Continuous monitoring — a fresh audit on every deploy',
+      'Unlimited websites and client seats',
+      'Portfolio dashboard — every client scored, worst first',
+      'Security-questionnaire evidence pack, exported on demand',
+      'Priority scan queue and first-in-line support',
     ],
     ctaLabel: 'Start with Agency',
   },

@@ -17,7 +17,13 @@ interface Tier {
 }
 
 function tierCard(tier: Tier): string {
-    const features = tier.features.map(feature => `<li>${escapeHtml(feature)}</li>`).join('');
+    // "Everything in X, plus:" is a lead-in, not a feature — it gets no
+    // checkmark, so the tick column lines up with things you actually gain.
+    const features = tier.features
+        .map(feature => feature.endsWith('plus:')
+            ? `<li class="tier-inherit">${escapeHtml(feature)}</li>`
+            : `<li>${escapeHtml(feature)}</li>`)
+        .join('');
     return `
         <article class="tier-card${tier.featured ? ' featured' : ''}">
             ${tier.badge ? `<span class="tier-badge">${escapeHtml(tier.badge)}</span>` : ''}

@@ -134,6 +134,18 @@
             color: var(--accent);
             font-weight: 700;
         }
+        /* The "Everything in X, plus:" lead-in is not a feature you gain, so
+           it drops the tick and sits quieter than the list it introduces. */
+        .tier-features li.tier-inherit {
+            color: var(--muted);
+            font-weight: 600;
+            border-bottom: none;
+            padding-bottom: var(--s-1);
+        }
+        .tier-features li.tier-inherit::before {
+            content: "";
+            width: 0;
+        }
         .tier-cta {
             display: block;
             width: 100%;
@@ -165,8 +177,8 @@
 
     <main>
         <section class="pricing-hero wrap">
-            <h1>Seven plans. Zero cliffs.</h1>
-            <p>Most security tools jump from "free" to "call sales." Ours goes $0 → $5 → $9 → $14 → $19 → $24 → $29 — every step small enough to expense without asking anyone.</p>
+            <h1>Free finds it. Paid tells you the second it happens.</h1>
+            <p>Every plan runs all 18 checks — we don't hide the critical finding behind a paywall. What you're buying above is speed and attention: daily instead of weekly, an alert instead of a digest, a pull request that opens itself, and a report with your name on it. $0 → $5 → $9 → $14 → $19 → $24 → $29, no cliffs and no "call sales."</p>
         </section>
 
         <section class="pricing-grid" id="pricing-container">
