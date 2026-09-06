@@ -21,7 +21,11 @@ function loadClerk(): Promise<ClerkType | null> {
         if (!key) return null;
         const { Clerk } = await import('@clerk/clerk-js');
         clerk = new Clerk(key);
-        await clerk.load({ signInUrl: undefined, signUpUrl: undefined });
+        // afterSignOutUrl moved from UserButton's props to instance options in
+        // clerk-js v6. Capturing location.href here is equivalent to the old
+        // per-mount value: this is a multi-page app, so every navigation is a
+        // full page load that re-runs this loader against the new URL.
+        await clerk.load({ signInUrl: undefined, signUpUrl: undefined, afterSignOutUrl: window.location.href });
         clerk.addListener(renderHeaderControls);
         renderHeaderControls();
         return clerk;
@@ -64,7 +68,7 @@ function renderHeaderControls(): void {
             }
             const userButtonSlot = document.createElement('div');
             mountPoint.appendChild(userButtonSlot);
-            clerk.mountUserButton(userButtonSlot, { afterSignOutUrl: window.location.href });
+            clerk.mountUserButton(userButtonSlot);
             continue;
         }
         renderSignedOutControls(mountPoint, () => clerk?.openSignIn({}), () => clerk?.openSignUp({}));
