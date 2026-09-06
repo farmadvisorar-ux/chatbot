@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pricing — AuditPulse</title>
-    <meta name="description" content="Seven plans from $0 to $29 a month — no cliff-jump pricing. Start free, then grow one small step at a time as your site list does.">
+    <meta name="description" content="All 18 security checks, free forever. Six upgrade tiers from $5 to $29 are in active development — each one ships when it is genuinely complete, not before.">
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta property="og:title" content="Pricing — AuditPulse">
-    <meta property="og:description" content="Seven plans from $0 to $29 a month — no cliff-jump pricing. Start free, then grow one small step at a time.">
+    <meta property="og:description" content="All 18 security checks, free forever. Six upgrade tiers from $5 to $29 are in active development — each ships when it is genuinely complete.">
     <meta property="og:image" content="https://brokehealth.com/og-image.png">
     <meta property="og:image:secure_url" content="https://brokehealth.com/og-image.png">
     <meta property="og:image:type" content="image/png">
@@ -22,7 +22,7 @@
     <meta property="og:site_name" content="AuditPulse">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Pricing — AuditPulse">
-    <meta name="twitter:description" content="Seven plans from $0 to $29 a month — no cliff-jump pricing. Start free, then grow one small step at a time.">
+    <meta name="twitter:description" content="All 18 security checks, free forever. Six upgrade tiers from $5 to $29 are in active development — each ships when it is genuinely complete.">
     <meta name="twitter:image" content="https://brokehealth.com/og-image.png">
     <link rel="canonical" href="https://brokehealth.com/pricing.html">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -166,6 +166,62 @@
         .tier-cta:hover {
             background: #22c98c;
         }
+        /* Unreleased tiers read as deliberate, not broken: the card keeps its
+           full contrast so the roadmap stays legible, and only the button
+           steps back to an outline so nothing looks clickable that isn't. */
+        .tier-cta.coming {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent-line);
+            cursor: default;
+        }
+        .tier-cta.coming:hover {
+            background: transparent;
+        }
+        .tier-card.coming {
+            border-style: dashed;
+        }
+        .tier-badge-soon {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent-line);
+        }
+        .pricing-status {
+            display: flex;
+            gap: var(--s-4);
+            align-items: flex-start;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: var(--s-5) var(--s-6);
+            background: var(--surface);
+            border: 1px solid var(--accent-line);
+            border-left: 3px solid var(--accent);
+            border-radius: var(--r-lg);
+        }
+        .pricing-status p {
+            margin: 0;
+            font-size: var(--t-sm);
+            line-height: 1.7;
+            color: var(--ink-2);
+        }
+        .pricing-status strong {
+            color: var(--ink);
+        }
+        .pricing-status-tag {
+            flex-shrink: 0;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent-line);
+            border-radius: 999px;
+            padding: 4px 12px;
+            font-size: var(--t-xs);
+            font-weight: 800;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
+        @media (max-width: 620px) {
+            .pricing-status { flex-direction: column; gap: var(--s-3); }
+        }
     </style>
 </head>
 <body>
@@ -177,8 +233,15 @@
 
     <main>
         <section class="pricing-hero wrap">
-            <h1>Free finds it. Paid tells you the second it happens.</h1>
-            <p>Every plan runs all 18 checks — we don't hide the critical finding behind a paywall. What you're buying above is speed and attention: daily instead of weekly, an alert instead of a digest, a pull request that opens itself, and a report with your name on it. $0 → $5 → $9 → $14 → $19 → $24 → $29, no cliffs and no "call sales."</p>
+            <h1>All 18 checks. Free, forever.</h1>
+            <p>We don't hide the critical finding behind a paywall. What the paid tiers add is speed and reach — daily instead of weekly, an alert instead of a digest, a pull request that opens itself, and a report with your name on it. $5 → $9 → $14 → $19 → $24 → $29, no cliffs and no "call sales."</p>
+        </section>
+
+        <section class="wrap">
+            <div class="pricing-status">
+                <span class="pricing-status-tag">Building</span>
+                <p><strong>Every tier above Free is in active development.</strong> We're building each one to enterprise grade and rolling it out only when it is genuinely complete — a security feature that half-works is worse than one that doesn't exist yet. An alert that misses a change, or an auto-fix that opens a broken pull request, costs you more than it saves. So each tier ships when it's correct, not when it's announced. <strong>Free is live today, and it stays free.</strong></p>
+            </div>
         </section>
 
         <section class="pricing-grid" id="pricing-container">

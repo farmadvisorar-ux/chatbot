@@ -9,19 +9,21 @@ interface Tier {
   description: string;
   features: string[];
   ctaLabel: string;
+  coming_soon: boolean;
   badge?: string;
   featured?: boolean;
 }
 
 /**
- * Seven tiers, $0 to $29.
+ * Seven tiers, $0 to $29. Free is live; the six above it are marked
+ * coming_soon and ship one at a time as each is actually finished.
  *
  * The line between free and paid is deliberately NOT "how many checks" —
  * every plan runs all 18, because a half-scan that hides the critical
  * finding you needed is a worse product, not a cheaper one. Free finds
  * what's wrong and will even open the fix PR.
  *
- * What money buys is time and attention: how fast you hear about a new
+ * What money will buy is time and attention: how fast you hear about a new
  * problem (weekly -> daily -> hourly -> every deploy), how much of your
  * surface is watched (5 pages -> 100 -> behind the login -> every
  * subdomain), whether the fix happens without you, and whether the whole
@@ -36,8 +38,8 @@ interface Tier {
  * philosophically can't have — no exploitation, no manual pentesting,
  * no compliance certifications it can't issue.
  *
- * Not billing-enforced yet: every CTA routes to the same free sign-up.
- * See tiers.md for which of these ship today vs. are queued.
+ * Flip coming_soon to false only when the tier's features actually work.
+ * See tiers.md for what each one still needs.
  */
 const TIERS: Tier[] = [
   {
@@ -55,6 +57,9 @@ const TIERS: Tier[] = [
       'One-click GitHub fix pull requests',
     ],
     ctaLabel: 'Get started free',
+    coming_soon: false,
+    badge: 'Live now',
+    featured: true,
   },
   {
     id: 2,
@@ -69,7 +74,9 @@ const TIERS: Tier[] = [
       'Certificate expiry warnings at 30, 14, 7 and 1 day',
       '25 pages crawled per audit, up from 5',
     ],
-    ctaLabel: 'Start with Starter',
+    ctaLabel: 'Coming soon',
+    coming_soon: true,
+    badge: 'Shipping first',
   },
   {
     id: 3,
@@ -84,7 +91,8 @@ const TIERS: Tier[] = [
       '90-day history with a score trend chart',
       '100 pages crawled per audit',
     ],
-    ctaLabel: 'Start with Plus',
+    ctaLabel: 'Coming soon',
+    coming_soon: true,
   },
   {
     id: 4,
@@ -100,9 +108,8 @@ const TIERS: Tier[] = [
       'Hourly re-audits',
       'CSV and JSON export of every finding',
     ],
-    ctaLabel: 'Start with Growth',
-    badge: 'Most popular',
-    featured: true,
+    ctaLabel: 'Coming soon',
+    coming_soon: true,
   },
   {
     id: 5,
@@ -117,7 +124,8 @@ const TIERS: Tier[] = [
       'Up to 50 websites and 5 teammates',
       'Per-site repo mapping for multi-repo setups',
     ],
-    ctaLabel: 'Start with Team',
+    ctaLabel: 'Coming soon',
+    coming_soon: true,
   },
   {
     id: 6,
@@ -132,7 +140,8 @@ const TIERS: Tier[] = [
       'Read-only client dashboards, one per customer',
       'A public security status page for every site',
     ],
-    ctaLabel: 'Start with Studio',
+    ctaLabel: 'Coming soon',
+    coming_soon: true,
   },
   {
     id: 7,
@@ -148,7 +157,8 @@ const TIERS: Tier[] = [
       'Security-questionnaire evidence pack, exported on demand',
       'Priority scan queue and first-in-line support',
     ],
-    ctaLabel: 'Start with Agency',
+    ctaLabel: 'Coming soon',
+    coming_soon: true,
   },
 ];
 

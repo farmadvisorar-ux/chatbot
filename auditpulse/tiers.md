@@ -88,11 +88,25 @@ that's actually worth money — knowing sooner, and not having to act by hand.
 - Security-questionnaire evidence pack
 - Priority scan queue and first-in-line support
 
-## Build status
+## Release policy
 
-Everything in Free ships today. Nothing above it is billing-enforced yet —
-every CTA routes to the same free sign-up, so no one can pay for an
-unbuilt feature. Wiring checkout **must** come after the tier it sells.
+Free is live. **Every tier above it is marked `coming_soon: true` and shows
+"Coming soon" on the pricing page** — no checkout, no waitlist bait, no
+button that navigates somewhere unrelated to imply progress.
+
+A tier's `coming_soon` flag flips to `false` only when its features actually
+work end to end. This is not caution for its own sake: in a security tool a
+half-built feature is worse than an absent one. A change alert that misses a
+change, or an auto-fix that opens a broken pull request, teaches the customer
+to trust a signal that isn't earning it — and they find out during the
+incident it was supposed to prevent.
+
+Order of release, cheapest to ship first: **Starter → Plus → Growth → Team →
+Studio → Agency**. Starter carries the "Shipping first" badge on the page to
+say so out loud.
+
+Billing must be wired **per tier, after that tier is complete** — never
+ahead of it. Nothing can be charged for today, which is the point.
 
 Each queued item extends code that already exists, which is why they're
 sellable as a roadmap rather than fiction:

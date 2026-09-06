@@ -12,6 +12,7 @@ interface Tier {
     description: string;
     features: string[];
     ctaLabel: string;
+    coming_soon: boolean;
     badge?: string;
     featured?: boolean;
 }
@@ -24,14 +25,20 @@ function tierCard(tier: Tier): string {
             ? `<li class="tier-inherit">${escapeHtml(feature)}</li>`
             : `<li>${escapeHtml(feature)}</li>`)
         .join('');
+    // Unreleased tiers get a non-interactive button rather than a link: there
+    // is nothing to buy yet, and a CTA that navigates somewhere unrelated
+    // would be a worse lie than saying so plainly.
+    const cta = tier.coming_soon
+        ? `<button type="button" class="tier-cta coming" disabled>${escapeHtml(tier.ctaLabel)}</button>`
+        : `<a class="tier-cta" href="./dashboard.html">${escapeHtml(tier.ctaLabel)}</a>`;
     return `
-        <article class="tier-card${tier.featured ? ' featured' : ''}">
-            ${tier.badge ? `<span class="tier-badge">${escapeHtml(tier.badge)}</span>` : ''}
+        <article class="tier-card${tier.featured ? ' featured' : ''}${tier.coming_soon ? ' coming' : ''}">
+            ${tier.badge ? `<span class="tier-badge${tier.coming_soon ? ' tier-badge-soon' : ''}">${escapeHtml(tier.badge)}</span>` : ''}
             <h2 class="tier-name">${escapeHtml(tier.name)}</h2>
             <div class="tier-price">${escapeHtml(tier.price)}<small> ${escapeHtml(tier.billing_period)}</small></div>
             <p class="tier-desc">${escapeHtml(tier.description)}</p>
             <ul class="tier-features">${features}</ul>
-            <a class="tier-cta" href="./dashboard.html">${escapeHtml(tier.ctaLabel)}</a>
+            ${cta}
         </article>`;
 }
 
