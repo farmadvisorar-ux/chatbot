@@ -10,7 +10,7 @@
                 { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
                 { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
                 { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" },
-                { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://tooiicy-agent-wordwide-top-10.vercel.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://peerpush.com; connect-src 'self' https://tooiicy-analytics-wordwide-top-10.vercel.app https://tooiicy-agent-wordwide-top-10.vercel.app; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" }
+                { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://tooiicy-agent-wordwide-top-10.vercel.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://peerpush.com https://ph-files.imgix.net; connect-src 'self' https://tooiicy-analytics-wordwide-top-10.vercel.app https://tooiicy-agent-wordwide-top-10.vercel.app; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" }
             ]
         },
         {
