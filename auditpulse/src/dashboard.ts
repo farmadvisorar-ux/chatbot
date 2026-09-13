@@ -1,5 +1,5 @@
 import './styles.css';
-import { initAuth, resolveSession, requireSignIn } from './auth.js';
+import { initAuth, resolveSession, requireSignIn, getAuthToken } from './auth.js';
 import { apiFetch, ApiError } from './api-client.js';
 import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
 import { escapeHtml } from './escape-html.js';
@@ -9,7 +9,14 @@ import { trendChartHtml, initTrendChart } from './trend-chart.js';
 initAuth();
 
 /** Which tier this account is on, as reported by /api/targets. Null until the first load. */
-interface AccountTier { slug: string; name: string; trendChartDays: number | null }
+interface AccountTier {
+    slug: string;
+    name: string;
+    trendChartDays: number | null;
+    webhookAlerts?: boolean;
+    apiAccess?: boolean;
+    dataExport?: boolean;
+}
 let accountTier: AccountTier | null = null;
 
 interface Target {
@@ -17,6 +24,10 @@ interface Target {
     verified: boolean; verification_token: string; verification_method: string | null;
     last_scanned_at: string | null; next_rescan_at: string | null; auto_rescan: boolean;
     github_repo: string | null;
+    webhook_url: string | null;
+    webhook_kind: 'slack' | 'discord' | 'generic' | null;
+    webhook_failed_at: string | null;
+    webhook_last_error: string | null;
     latest_scan_id: string | null; latest_grade: string | null; latest_score: number | null;
     latest_summary: SeveritySummary | null; latest_scanned_at: string | null;
 }
@@ -354,6 +365,8 @@ async function renderDetail(): Promise<void> {
         </div>
     `;
 
+    const webhookBlock = renderWebhookBlock(target);
+
     const setupSummary = setupComplete
         ? `<span class="muted" style="font-weight:400;font-size:12px">— verified${githubDone ? ' · GitHub connected' : ''}</span>`
         : '';
@@ -363,6 +376,10 @@ async function renderDetail(): Promise<void> {
             <div class="setup-body">
                 ${verificationBlock}
                 ${githubBlock}
+                ${webhookBlock}
+                ${accountTier?.apiAccess ? `
+                <p class="muted" style="font-size:12px;margin-top:14px">Site id for the API and the CI gate:
+                    <code class="target-id">${escapeHtml(target.id)}</code></p>` : ''}
             </div>
         </details>
     `;
@@ -386,13 +403,19 @@ async function renderDetail(): Promise<void> {
             <span class="muted" style="font-size:12px">Score trend, last ${completedScans.length} audits</span>
         </div>` : '');
 
+    const canExport = Boolean(accountTier?.dataExport);
     const scansHtml = scans.length ? scans.map(s => `
         <div class="target-item scan-item ${s.id === selectedScanId ? 'active' : ''}" data-id="${s.id}">
-            <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
                 <div>
                     <h4>${s.kind === 'full' ? 'Full audit' : 'Quick check'} — ${fmtDate(s.started_at)}</h4>
                     <div class="meta">${s.status === 'running' ? 'Running…' : s.status === 'failed' ? 'Failed' : `Grade ${s.grade} · ${s.score}/100`} ${s.triggered_by === 'auto_rescan' ? '· auto' : ''}</div>
                 </div>
+                ${canExport && s.status === 'completed' ? `
+                <div class="scan-exports">
+                    <button type="button" class="text-button export-btn" data-scan="${s.id}" data-format="csv">CSV</button>
+                    <button type="button" class="text-button export-btn" data-scan="${s.id}" data-format="json">JSON</button>
+                </div>` : ''}
             </div>
         </div>`).join('') : '<div class="empty">No scans yet.</div>';
 
@@ -461,6 +484,15 @@ async function renderDetail(): Promise<void> {
     el<HTMLButtonElement>('verify-btn')?.addEventListener('click', () => checkVerification(target.id));
     el<HTMLButtonElement>('github-connect-btn')?.addEventListener('click', () => connectGithub(target.id));
     el<HTMLButtonElement>('github-disconnect-btn')?.addEventListener('click', () => disconnectGithub(target.id));
+    el<HTMLButtonElement>('webhook-connect-btn')?.addEventListener('click', () => connectWebhook(target.id));
+    el<HTMLButtonElement>('webhook-disconnect-btn')?.addEventListener('click', () => disconnectWebhook(target.id));
+    for (const button of detailPanel.querySelectorAll<HTMLButtonElement>('.export-btn')) {
+        // Stops the click from also selecting the scan row underneath.
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            void downloadExport(button.dataset.scan!, button.dataset.format!);
+        });
+    }
     el<HTMLButtonElement>('copy-badge-btn')?.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(embedSnippet);
@@ -515,6 +547,108 @@ async function disconnectGithub(targetId: string): Promise<void> {
     await apiFetch(`/targets/${targetId}?action=github`, { method: 'DELETE' });
     showToast('GitHub repo disconnected.');
     await renderDetail();
+}
+
+const WEBHOOK_KIND_LABEL: Record<string, string> = { slack: 'Slack', discord: 'Discord', generic: 'Webhook' };
+
+/**
+ * Alert routing for one site. Shown as a locked teaser below Growth rather
+ * than hidden: someone on Starter should be able to see what the upgrade
+ * actually does, without a button that leads nowhere.
+ */
+function renderWebhookBlock(target: Target): string {
+    if (!accountTier?.webhookAlerts) {
+        return `
+        <div class="card" style="background:var(--surface-2);margin:14px 0">
+            <strong>Slack, Discord and webhook alerts</strong>
+            <p class="muted" style="font-size:13px;margin-bottom:0">Send new findings, certificate expiry warnings and configuration changes straight to a channel. Part of the Growth plan.</p>
+        </div>`;
+    }
+
+    if (target.webhook_url) {
+        const kind = WEBHOOK_KIND_LABEL[target.webhook_kind ?? 'generic'] ?? 'Webhook';
+        const failing = target.webhook_failed_at ? `
+            <p class="status error" style="font-size:12px">Last delivery failed: ${escapeHtml(target.webhook_last_error || 'unknown error')}</p>` : '';
+        return `
+        <p class="status ok">✓ ${escapeHtml(kind)} alerts connected
+            <button type="button" class="text-button" id="webhook-disconnect-btn" style="text-decoration:underline;padding:0;font-size:12px">Remove</button></p>
+        ${failing}`;
+    }
+
+    return `
+        <div class="card" style="background:var(--surface-2);margin:14px 0">
+            <strong>Send alerts to Slack, Discord or your own endpoint</strong>
+            <p class="muted" style="font-size:13px">Paste an incoming-webhook URL. We post a test alert immediately — if it doesn't arrive, nothing is saved.</p>
+            <div class="field"><label for="webhook-url-input">Webhook URL</label><input id="webhook-url-input" type="url" placeholder="https://hooks.slack.com/services/…" autocomplete="off"></div>
+            <button type="button" id="webhook-connect-btn" class="mini-cta">Connect and send a test</button>
+            <span id="webhook-status" class="status" style="display:inline-block;margin-left:10px"></span>
+        </div>`;
+}
+
+async function connectWebhook(targetId: string): Promise<void> {
+    const statusEl = el<HTMLElement>('webhook-status');
+    const url = el<HTMLInputElement>('webhook-url-input').value.trim();
+    if (!url) {
+        statusEl.textContent = 'Paste a webhook URL first.';
+        statusEl.className = 'status error';
+        return;
+    }
+    statusEl.textContent = 'Sending a test alert…';
+    statusEl.className = 'status';
+    try {
+        const result = await apiFetch<{ kind: string; secret: string | null }>(
+            `/targets/${targetId}?action=webhook`,
+            { method: 'POST', body: { url } },
+        );
+        await renderDetail();
+        // The signing secret for a customer's own endpoint is returned once
+        // and never again, so it is surfaced before anything can re-render
+        // it away.
+        if (result.secret) {
+            window.prompt(
+                'Copy this signing secret — it is not shown again. Verify it as an HMAC-SHA256 of the request body, sent in the X-AuditPulse-Signature header.',
+                result.secret,
+            );
+        }
+        showToast(`${WEBHOOK_KIND_LABEL[result.kind] ?? 'Webhook'} alerts connected — check for the test message.`);
+    } catch (err) {
+        statusEl.textContent = err instanceof Error ? err.message : 'Could not connect that webhook.';
+        statusEl.className = 'status error';
+    }
+}
+
+async function disconnectWebhook(targetId: string): Promise<void> {
+    await apiFetch(`/targets/${targetId}?action=webhook`, { method: 'DELETE' });
+    showToast('Webhook alerts removed.');
+    await renderDetail();
+}
+
+/**
+ * Downloads an export. It goes through fetch rather than a plain link because
+ * the endpoint needs the Authorization header — an <a download> would arrive
+ * unauthenticated and get a 401 page saved as a .csv.
+ */
+async function downloadExport(scanId: string, format: string): Promise<void> {
+    try {
+        const token = await getAuthToken();
+        const response = await fetch(`/api/scans/${scanId}?action=export&format=${format}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.error || `Export failed (${response.status})`);
+        }
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `auditpulse-export.${format}`;
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Could not download the export.', true);
+    }
 }
 
 async function runScan(targetId: string): Promise<void> {

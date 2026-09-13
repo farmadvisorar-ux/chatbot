@@ -96,6 +96,24 @@ ALTER TABLE targets ADD COLUMN IF NOT EXISTS cert_expires_at TIMESTAMPTZ;
 ALTER TABLE targets ADD COLUMN IF NOT EXISTS baseline JSONB;
 ALTER TABLE targets ADD COLUMN IF NOT EXISTS baseline_at TIMESTAMPTZ;
 
+-- Growth webhook alerts. One destination per site, because the thing a
+-- customer routes by is the site: a client's channel should not receive
+-- another client's findings. `kind` is derived from the URL at save time
+-- rather than asked for, and pinned, so a Slack URL cannot later be
+-- reinterpreted as a generic receiver and start emitting a different shape.
+--
+-- The secret signs `generic` payloads (HMAC-SHA256, see api/_lib/notify.ts).
+-- It is encrypted at rest with the same AES-256-GCM key as GitHub PATs and
+-- shown to the customer exactly once, at creation.
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS webhook_url TEXT;
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS webhook_kind TEXT
+    CHECK (webhook_kind IN ('slack', 'discord', 'generic'));
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS webhook_secret_encrypted TEXT;
+-- Last delivery failure, so the dashboard can say "your webhook is broken"
+-- instead of letting alerts vanish silently into a revoked Slack URL.
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS webhook_failed_at TIMESTAMPTZ;
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS webhook_last_error TEXT;
+
 -- One run of the scan engine against one target. `share_token` lets the
 -- emailed report be opened by the client with no account (report.html?token=),
 -- so a non-technical stakeholder never has to sign up just to view findings.
@@ -189,3 +207,31 @@ CREATE TABLE IF NOT EXISTS email_captures (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS email_captures_email ON email_captures (lower(email));
 CREATE INDEX IF NOT EXISTS email_captures_ip ON email_captures (ip, created_at DESC);
+
+-- Growth REST API credentials. Only the SHA-256 of the key is stored, so a
+-- dump of this table cannot be replayed against the API — the plaintext
+-- exists exactly once, in the response that created it.
+--
+-- Hashing is a bare SHA-256 rather than bcrypt/argon2 deliberately: unlike a
+-- password, the key is 256 bits of CSPRNG output with no guessable structure,
+-- so there is nothing for a slow hash to defend against, and the API verifies
+-- one on every request where a 100ms KDF would be a self-inflicted rate limit.
+--
+-- `prefix` is the leading, non-secret slice kept in clear so the dashboard can
+-- show which key is which ("ap_live_3f9c…") without being able to reconstruct
+-- it. Revocation is a timestamp rather than a delete so a revoked key's
+-- last_used_at survives an audit question about when it was last exercised.
+CREATE TABLE IF NOT EXISTS api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    prefix TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+-- The authentication path looks a key up by hash on every API request, and
+-- only ever wants a live one.
+CREATE INDEX IF NOT EXISTS api_keys_live ON api_keys (token_hash) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS api_keys_owner ON api_keys (user_id, created_at DESC);

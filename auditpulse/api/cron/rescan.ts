@@ -24,14 +24,21 @@ const MAX_BATCH = 25;
 const TIME_BUDGET_MS = 45_000;
 
 /**
- * Re-audits every verified site whose weekly scan is due, then emails the
+ * Re-audits every verified site whose next scan is due, then emails the
  * report (with PDF) to the owner and any client recipients.
  *
- * Throughput is bounded by how often this is invoked. Vercel's Hobby plan
- * allows one cron run per day and a 60s function limit, which is only
- * enough for a handful of sites; point an external scheduler at this same
- * endpoint (with the CRON_SECRET bearer token) to run it more frequently,
- * or move to a plan with sub-daily crons. See the README.
+ * Runs hourly (vercel.json). The cadence a customer actually gets is set by
+ * their tier's rescanIntervalHours — weekly on Free, daily on Starter and
+ * Plus, hourly on Growth — and this job is simply the clock that is fast
+ * enough to honour the shortest of them. Hourly is therefore the floor for
+ * every promise on the pricing page; a schedule slower than the fastest tier
+ * would quietly make that tier a lie.
+ *
+ * Throughput per run is bounded by TIME_BUDGET_MS below rather than by the
+ * schedule: anything not reached stays due and is picked up an hour later,
+ * because next_rescan_at only moves forward once a scan finishes. Sub-daily
+ * crons need a Vercel plan above Hobby; an external scheduler pointed at this
+ * endpoint with the CRON_SECRET bearer token works too. See the README.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (!requireMethod(req, res, ['GET', 'POST'])) return;
@@ -103,6 +110,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
                     baseline: target.baseline,
                     cert_expires_at: target.cert_expires_at,
                     cert_expiry_notified_days: target.cert_expiry_notified_days,
+                    webhook_url: target.webhook_url,
+                    webhook_kind: target.webhook_kind,
+                    webhook_secret_encrypted: target.webhook_secret_encrypted,
                 },
                 scanId,
                 shareToken,

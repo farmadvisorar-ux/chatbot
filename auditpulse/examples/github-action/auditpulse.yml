@@ -1,0 +1,102 @@
+# AuditPulse security gate.
+#
+# Runs a full audit of your site after a deploy and fails the build if that
+# deploy introduced a Critical or High finding that the previous audit did not
+# have. Pre-existing findings never fail a build — see "Why 'new' and not
+# 'any'" in the README next to this file.
+#
+# Setup (one time):
+#   1. Dashboard -> API keys -> Create key. Copy it; it is shown once.
+#   2. Repo -> Settings -> Secrets and variables -> Actions
+#        Secret   AUDITPULSE_API_KEY   = the key you just copied
+#        Variable AUDITPULSE_TARGET_ID = the site's id, shown next to it in the dashboard
+#   3. Commit this file to .github/workflows/auditpulse.yml
+#
+# Requires the Growth plan or above.
+
+name: Security audit
+
+on:
+  # A gate is only meaningful against what is actually deployed, so this runs
+  # after your deploy workflow rather than on the pull request. Point the
+  # `workflows:` name at whatever your deploy workflow is called.
+  workflow_run:
+    workflows: ["Deploy"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # Auditing the site after a failed deploy grades the previous release and
+    # tells you nothing about this commit.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Run the audit
+        id: audit
+        env:
+          AUDITPULSE_API_KEY: ${{ secrets.AUDITPULSE_API_KEY }}
+          AUDITPULSE_TARGET_ID: ${{ vars.AUDITPULSE_TARGET_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AUDITPULSE_API_KEY:-}" ] || [ -z "${AUDITPULSE_TARGET_ID:-}" ]; then
+            echo "::error::Set the AUDITPULSE_API_KEY secret and the AUDITPULSE_TARGET_ID variable."
+            exit 1
+          fi
+
+          # --fail-with-body is deliberate: on a 4xx we still want the JSON
+          # error message, not just a non-zero exit with an empty file.
+          http_status=$(curl --silent --show-error \
+            --max-time 120 \
+            --retry 2 --retry-connrefused \
+            --output response.json \
+            --write-out '%{http_code}' \
+            --request POST 'https://brokehealth.com/api/scans' \
+            --header "Authorization: Bearer ${AUDITPULSE_API_KEY}" \
+            --header 'Content-Type: application/json' \
+            --data "{\"targetId\":\"${AUDITPULSE_TARGET_ID}\",\"gate\":true}")
+
+          if [ "$http_status" != "201" ]; then
+            echo "::error::AuditPulse returned HTTP ${http_status}: $(jq -r '.error // "no message"' response.json)"
+            exit 1
+          fi
+
+          available=$(jq -r '.gate.available // false' response.json)
+          if [ "$available" != "true" ]; then
+            echo "::error::$(jq -r '.gate.reason // "The CI gate is not available on this account."' response.json)"
+            exit 1
+          fi
+
+          score=$(jq -r '.gate.score' response.json)
+          grade=$(jq -r '.gate.grade' response.json)
+          passed=$(jq -r '.gate.passed' response.json)
+          baseline=$(jq -r '.gate.baseline' response.json)
+
+          {
+            echo "## AuditPulse — ${grade} (${score}/100)"
+            echo
+            if [ "$baseline" = "true" ]; then
+              echo "First audit of this site. Nothing to compare against yet, so this run establishes the baseline and passes."
+            elif [ "$passed" = "true" ]; then
+              echo "No new Critical or High findings since the last audit."
+              non_blocking=$(jq -r '.gate.new_non_blocking // 0' response.json)
+              if [ "$non_blocking" -gt 0 ]; then
+                echo "($non_blocking new finding(s) below High — reported, not blocking.)"
+              fi
+            else
+              echo "This deploy introduced findings that were not present in the previous audit:"
+              echo
+              jq -r '.gate.blocking[] | "- **\(.severity | ascii_upcase)** — \(.title)\n  - \(.remediation)"' response.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$passed" != "true" ]; then
+            jq -r '.gate.blocking[] | "::error title=\(.severity | ascii_upcase) — \(.title)::\(.remediation)"' response.json
+            exit 1
+          fi
+
+          echo "Audit passed: ${grade} (${score}/100)"

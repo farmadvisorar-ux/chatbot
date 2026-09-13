@@ -10,6 +10,8 @@ import { decryptSecret } from '../_lib/crypto.js';
 import { getRepo, GitHubApiError } from '../../lib/github.js';
 import { applyFixes, FixNotApplicableError } from '../../lib/fixers/index.js';
 import { generateAuditPdf } from '../../lib/pdf/report.js';
+import { tierForUser } from '../_lib/tier.js';
+import { toCsv, filenameSlug } from '../_lib/csv.js';
 
 export const config = { maxDuration: 30 };
 
@@ -19,6 +21,7 @@ export const config = { maxDuration: 30 };
  *   (no action)      -> GET scan detail + findings
  *   ?action=email     -> POST email the report (with PDF certificate) to a recipient
  *   ?action=fix-all    -> POST open one pull request fixing every auto-fixable finding
+ *   ?action=export     -> GET download every finding as CSV (&format=csv, default) or JSON
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     const user = await requireAuth(req, res);
@@ -33,6 +36,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
     if (action === 'fix-all') {
         await handleFixAll(req, res, user, pool, id);
+        return;
+    }
+    if (action === 'export') {
+        await handleExport(req, res, user, pool, id);
         return;
     }
     if (action) {
@@ -220,4 +227,97 @@ async function handleEmail(req: VercelRequest, res: VercelResponse, user: { user
     );
 
     json(res, 200, { sent: true });
+}
+
+/** Columns in the exported file. Order is the reading order of the report, not the table's. */
+const EXPORT_COLUMNS: { header: string; column: string }[] = [
+    { header: 'severity', column: 'severity' },
+    { header: 'title', column: 'title' },
+    { header: 'check_id', column: 'check_id' },
+    { header: 'affected_url', column: 'affected_url' },
+    { header: 'impact', column: 'impact' },
+    { header: 'description', column: 'description' },
+    { header: 'evidence', column: 'evidence' },
+    { header: 'remediation', column: 'remediation' },
+    { header: 'references', column: 'reference_links' },
+    { header: 'auto_fixable', column: 'auto_fixable' },
+    { header: 'fix_status', column: 'fix_status' },
+    { header: 'fix_pr_url', column: 'fix_pr_url' },
+];
+
+/**
+ * Every finding on one scan as a file, for a spreadsheet, a ticket importer or
+ * a customer's own warehouse.
+ *
+ * Deliberately a whole-scan export rather than a paginated endpoint: the thing
+ * being exported is a point-in-time audit, and a half-downloaded audit is a
+ * misleading one.
+ */
+async function handleExport(req: VercelRequest, res: VercelResponse, user: { userId: string }, pool: ReturnType<typeof getPool>, id: string): Promise<void> {
+    if (!requireMethod(req, res, ['GET'])) return;
+
+    const limits = await tierForUser(pool, user.userId);
+    if (!limits.dataExport) {
+        error(res, 402, 'CSV and JSON export are part of the Growth plan.');
+        return;
+    }
+
+    const { rows: scanRows } = await pool.query(
+        `SELECT s.id, s.score, s.grade, s.status, s.started_at, s.completed_at,
+                t.url AS target_url, t.hostname
+         FROM scans s JOIN targets t ON t.id = s.target_id
+         WHERE s.id = $1 AND s.user_id = $2`,
+        [id, user.userId],
+    );
+    const scan = scanRows[0];
+    if (!scan) {
+        error(res, 404, 'Scan not found.');
+        return;
+    }
+
+    const { rows: findings } = await pool.query(
+        `SELECT ${EXPORT_COLUMNS.map(c => c.column).join(', ')} FROM findings WHERE scan_id = $1 ORDER BY
+         CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, title`,
+        [id],
+    );
+
+    // The scan date, not today's: re-downloading last month's audit should
+    // produce the same filename it produced last month.
+    const stamp = new Date(scan.completed_at ?? scan.started_at).toISOString().slice(0, 10);
+    const base = `auditpulse-${filenameSlug(scan.hostname)}-${stamp}`;
+    const format = typeof req.query.format === 'string' ? req.query.format.toLowerCase() : 'csv';
+
+    if (format === 'json') {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${base}.json"`);
+        res.status(200).send(JSON.stringify({
+            scan: {
+                id: scan.id,
+                url: scan.target_url,
+                hostname: scan.hostname,
+                score: scan.score,
+                grade: scan.grade,
+                status: scan.status,
+                started_at: scan.started_at,
+                completed_at: scan.completed_at,
+            },
+            findings,
+        }, null, 2));
+        return;
+    }
+
+    if (format !== 'csv') {
+        error(res, 400, 'Supported formats are csv and json.');
+        return;
+    }
+
+    const csv = toCsv(
+        EXPORT_COLUMNS.map(c => c.header),
+        findings.map(row => EXPORT_COLUMNS.map(c => row[c.column])),
+    );
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${base}.csv"`);
+    // UTF-8 BOM: without it Excel on Windows decodes the file as the local
+    // codepage and mangles every non-ASCII character in a finding's text.
+    res.status(200).send(`\uFEFF${csv}`);
 }

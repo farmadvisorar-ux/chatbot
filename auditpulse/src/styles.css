@@ -480,3 +480,32 @@ button svg{width:15px;height:15px;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 footer{border-top:1px solid var(--line);padding:var(--s-8) 0;margin-top:var(--s-12);color:var(--faint);font-size:var(--t-sm);text-align:center}
+
+/* API keys table (account page, Growth+). Scrolls inside its own container on
+   narrow screens rather than widening the page — see the wrapper's overflow. */
+.key-table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+.key-table th{text-align:left;font-weight:600;font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted);padding:0 12px 8px 0;border-bottom:1px solid var(--line)}
+.key-table td{padding:10px 12px 10px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+.key-table tr:last-child td{border-bottom:none}
+.key-table code{font-size:12px}
+/* pre-wrap, not the default pre: a key the customer has to copy should never
+   sit behind a horizontal scrollbar on a phone. */
+.key-reveal-token{background:var(--paper);border:1px solid var(--line);border-radius:8px;
+  padding:10px;font-size:12px;margin:10px 0;white-space:pre-wrap;word-break:break-all;user-select:all}
+
+/* Below ~560px five columns cannot fit. What a phone needs is "which keys
+   exist" and "revoke that one"; Created and Last used are reference data that
+   can wait for a wider screen, and Revoke is the column that must stay
+   reachable without a sideways scroll. */
+@media (max-width:560px){
+  .key-table{min-width:0}
+  .key-table th:nth-child(3),.key-table td:nth-child(3),
+  .key-table th:nth-child(4),.key-table td:nth-child(4){display:none}
+}
+
+/* Per-scan export buttons and the copyable site id (Growth). */
+.scan-exports{display:flex;gap:10px;flex-shrink:0}
+.scan-exports .text-button{font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  padding:2px 0;text-decoration:underline}
+code.target-id{user-select:all;word-break:break-all}

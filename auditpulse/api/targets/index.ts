@@ -39,7 +39,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         // its own: Vercel's function budget is why several concerns already
         // share one handler here (see the ?action= dispatch on [id].ts).
         const limits = await tierForUser(pool, user.userId);
-        json(res, 200, { targets: rows, tier: { slug: limits.slug, name: limits.name, trendChartDays: limits.trendChartDays } });
+        json(res, 200, {
+            targets: rows,
+            tier: {
+                slug: limits.slug,
+                name: limits.name,
+                trendChartDays: limits.trendChartDays,
+                webhookAlerts: limits.webhookAlerts,
+                apiAccess: limits.apiAccess,
+                dataExport: limits.dataExport,
+            },
+        });
         return;
     }
 

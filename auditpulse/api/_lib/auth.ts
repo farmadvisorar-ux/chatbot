@@ -2,8 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken, createClerkClient } from '@clerk/backend';
 import { error } from './http.js';
 import { getPool } from './db.js';
+import { looksLikeApiKey, resolveApiKey, touchApiKey } from './apiKeys.js';
+import { limitsFor } from './tier.js';
 
-export type AuthedUser = { userId: string; email: string; name: string | null };
+export type AuthedUser = {
+    userId: string;
+    email: string;
+    name: string | null;
+    /** True when the caller authenticated with an API key rather than a browser session. */
+    viaApiKey?: boolean;
+};
 
 /**
  * Mirrors the caller into `users` so the row exists before anything
@@ -39,16 +47,21 @@ async function ensureUserRow(user: AuthedUser): Promise<void> {
  * written an error response) if the request isn't authenticated.
  */
 export async function requireAuth(req: VercelRequest, res: VercelResponse): Promise<AuthedUser | null> {
-    const secretKey = process.env.CLERK_SECRET_KEY;
-    if (!secretKey) {
-        error(res, 501, 'Sign-in is not configured on this deployment yet.');
-        return null;
-    }
-
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
     if (!token) {
         error(res, 401, 'Sign in to continue.');
+        return null;
+    }
+
+    // An API key is recognised by its prefix and never reaches Clerk: the two
+    // credential types are disjoint, so a malformed one of either kind cannot
+    // be probed against the other's verifier.
+    if (looksLikeApiKey(token)) return authenticateApiKey(res, token);
+
+    const secretKey = process.env.CLERK_SECRET_KEY;
+    if (!secretKey) {
+        error(res, 501, 'Sign-in is not configured on this deployment yet.');
         return null;
     }
 
@@ -69,4 +82,44 @@ export async function requireAuth(req: VercelRequest, res: VercelResponse): Prom
         error(res, 401, 'Your session has expired. Sign in again.');
         return null;
     }
+}
+
+/**
+ * Authenticates a Growth API key.
+ *
+ * The tier is re-checked on every request rather than at issue time: a key
+ * minted on Growth must stop working the moment the account drops below it,
+ * and the alternative — trusting a flag stamped into the key — would keep
+ * a lapsed customer's automation running indefinitely.
+ *
+ * Identity comes from the local users row, not Clerk. There is no session
+ * here, and calling Clerk on every API request would add a network round trip
+ * to a path meant for CI.
+ */
+async function authenticateApiKey(res: VercelResponse, token: string): Promise<AuthedUser | null> {
+    if (!process.env.DATABASE_URL) {
+        error(res, 501, 'The API is not configured on this deployment yet.');
+        return null;
+    }
+
+    const pool = getPool();
+    const owner = await resolveApiKey(pool, token);
+    if (!owner) {
+        error(res, 401, 'That API key is not valid, or has been revoked.');
+        return null;
+    }
+
+    const { rows } = await pool.query('SELECT email, name, tier FROM users WHERE id = $1', [owner.userId]);
+    const user = rows[0];
+    if (!user) {
+        error(res, 401, 'That API key is not valid, or has been revoked.');
+        return null;
+    }
+    if (!limitsFor(user.tier).apiAccess) {
+        error(res, 402, 'API access is part of the Growth plan. This key belongs to an account that is no longer on it.');
+        return null;
+    }
+
+    touchApiKey(pool, owner.keyId);
+    return { userId: owner.userId, email: user.email, name: user.name ?? null, viaApiKey: true };
 }

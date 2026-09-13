@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { error, json, requireMethod } from '../_lib/http.js';
 import { clean } from '../_lib/validate.js';
@@ -6,6 +7,8 @@ import { getPool } from '../_lib/db.js';
 import { verifyDomainOwnership } from '../_lib/verification.js';
 import { siteOrigin } from '../_lib/site.js';
 import { encryptSecret } from '../_lib/crypto.js';
+import { tierForUser } from '../_lib/tier.js';
+import { detectWebhookKind, validateWebhookUrl, deliverWebhook } from '../_lib/notify.js';
 import { getRepo, GitHubApiError } from '../../lib/github.js';
 import { renderBadgeSvg } from '../_lib/badge.js';
 
@@ -22,6 +25,7 @@ const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/;
  *   (no action)      -> GET detail / DELETE
  *   ?action=verify    -> POST check ownership verification
  *   ?action=github    -> POST connect / DELETE disconnect GitHub repo
+ *   ?action=webhook   -> POST set / DELETE remove the Slack/Discord/generic alert webhook
  *   ?action=badge-svg  -> GET embeddable trust badge image (public)
  *   ?action=badge-info -> GET public verification summary (public)
  * The badge actions are checked before requireAuth: they're meant to be
@@ -51,6 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
     if (action === 'github') {
         await handleGithub(req, res, user, pool, id);
+        return;
+    }
+    if (action === 'webhook') {
+        await handleWebhook(req, res, user, pool, id);
         return;
     }
     if (action) {
@@ -233,4 +241,86 @@ async function handleGithub(req: VercelRequest, res: VercelResponse, user: { use
         [id, repo, encryptSecret(token)],
     );
     json(res, 200, { connected: true, repo });
+}
+
+/**
+ * Sets or clears the alert webhook for one site.
+ *
+ * The destination is proved before it is stored: a test alert is delivered
+ * synchronously and a non-2xx response is returned to the caller as an error.
+ * A webhook that was never going to work is worth failing loudly at setup,
+ * when someone is watching, rather than at 3am during the incident it was
+ * meant to announce.
+ */
+async function handleWebhook(req: VercelRequest, res: VercelResponse, user: { userId: string }, pool: ReturnType<typeof getPool>, id: string): Promise<void> {
+    if (!requireMethod(req, res, ['POST', 'DELETE'])) return;
+
+    const { rows } = await pool.query(
+        'SELECT id, hostname, label FROM targets WHERE id = $1 AND user_id = $2',
+        [id, user.userId],
+    );
+    const target = rows[0];
+    if (!target) {
+        error(res, 404, 'Target not found.');
+        return;
+    }
+
+    if (req.method === 'DELETE') {
+        await pool.query(
+            `UPDATE targets SET webhook_url = NULL, webhook_kind = NULL, webhook_secret_encrypted = NULL,
+                    webhook_failed_at = NULL, webhook_last_error = NULL
+             WHERE id = $1`,
+            [id],
+        );
+        json(res, 200, { removed: true });
+        return;
+    }
+
+    const limits = await tierForUser(pool, user.userId);
+    if (!limits.webhookAlerts) {
+        error(res, 402, 'Slack, Discord and webhook alerts are part of the Growth plan.');
+        return;
+    }
+    if (!process.env.TOKEN_ENCRYPTION_KEY) {
+        error(res, 501, 'Webhook alerts are not configured on this deployment yet.');
+        return;
+    }
+
+    const validated = validateWebhookUrl(clean(req.body?.url, 500));
+    if (!validated.ok) {
+        error(res, 400, validated.reason);
+        return;
+    }
+
+    const kind = detectWebhookKind(validated.url);
+    // Slack and Discord authenticate by the unguessable URL itself, so a
+    // second shared secret would be ceremony with nothing behind it. Only a
+    // customer's own receiver gets one.
+    const secret = kind === 'generic' ? randomBytes(32).toString('base64url') : null;
+    const name = target.label || target.hostname;
+
+    const test = await deliverWebhook({ url: validated.url, kind, secret }, {
+        event: 'changes',
+        site: name,
+        hostname: target.hostname,
+        heading: 'Webhook connected',
+        intro: `This is a test alert from AuditPulse. Security alerts for ${name} will arrive here.`,
+        items: ['New issues found by an audit', 'TLS certificate expiry warnings', 'Security header and third-party script changes', 'New subdomains seen in Certificate Transparency logs'],
+        reportUrl: `${siteOrigin()}/dashboard.html`,
+    });
+    if (!test.ok) {
+        error(res, 400, `Could not deliver a test alert: ${test.error ?? 'the endpoint did not accept it'}.`);
+        return;
+    }
+
+    await pool.query(
+        `UPDATE targets SET webhook_url = $2, webhook_kind = $3, webhook_secret_encrypted = $4,
+                webhook_failed_at = NULL, webhook_last_error = NULL
+         WHERE id = $1`,
+        [id, validated.url, kind, secret ? encryptSecret(secret) : null],
+    );
+
+    // The signing secret is returned exactly once. It is stored encrypted and
+    // never read back out to the customer again.
+    json(res, 200, { connected: true, kind, secret });
 }

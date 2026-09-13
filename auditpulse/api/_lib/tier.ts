@@ -19,6 +19,12 @@ export interface TierLimits {
     subdomainAlerts: boolean;
     /** Show the score trend chart, over this many days of history. */
     trendChartDays: number | null;
+    /** Deliver the same alerts to a Slack, Discord or generic webhook. */
+    webhookAlerts: boolean;
+    /** Mint API keys and call the REST API with them (see api/keys/index.ts). */
+    apiAccess: boolean;
+    /** Download a scan's findings as CSV or JSON. */
+    dataExport: boolean;
 }
 
 /**
@@ -27,7 +33,8 @@ export interface TierLimits {
  * must be changed together: a tier whose limits aren't represented here is
  * being sold and not delivered.
  *
- * Only free/starter/plus are filled in, because only those three are built.
+ * Only free/starter/plus/growth are filled in, because only those four are
+ * built.
  * The rest inherit Plus's limits rather than free's, so that if an account is
  * ever set to a higher tier before its features ship it is over-served rather
  * than under-served — the failure mode that doesn't shortchange someone who
@@ -43,6 +50,9 @@ const FREE: TierLimits = {
     changeAlerts: false,
     subdomainAlerts: false,
     trendChartDays: null,
+    webhookAlerts: false,
+    apiAccess: false,
+    dataExport: false,
 };
 
 const STARTER: TierLimits = {
@@ -65,15 +75,28 @@ const PLUS: TierLimits = {
     trendChartDays: 90,
 };
 
+const GROWTH: TierLimits = {
+    ...PLUS,
+    slug: 'growth',
+    name: 'Growth',
+    // Hourly is the fastest the daily-batch design can honestly offer: the
+    // cron runs every hour (vercel.json) and picks up whatever is due, so the
+    // real floor is "within the hour", not "on the hour".
+    rescanIntervalHours: 1,
+    webhookAlerts: true,
+    apiAccess: true,
+    dataExport: true,
+};
+
 const TIERS: Record<TierSlug, TierLimits> = {
     free: FREE,
     starter: STARTER,
     plus: PLUS,
-    // Not built yet. See the note above on why these resolve to Plus.
-    growth: { ...PLUS, slug: 'growth', name: 'Growth' },
-    team: { ...PLUS, slug: 'team', name: 'Team' },
-    studio: { ...PLUS, slug: 'studio', name: 'Studio' },
-    agency: { ...PLUS, slug: 'agency', name: 'Agency' },
+    growth: GROWTH,
+    // Not built yet. See the note above on why these resolve to Growth.
+    team: { ...GROWTH, slug: 'team', name: 'Team' },
+    studio: { ...GROWTH, slug: 'studio', name: 'Studio' },
+    agency: { ...GROWTH, slug: 'agency', name: 'Agency' },
 };
 
 export function limitsFor(slug: string | null | undefined): TierLimits {

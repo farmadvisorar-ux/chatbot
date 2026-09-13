@@ -58,7 +58,7 @@ that's actually worth money — knowing sooner, and not having to act by hand.
 - 90-day history with a score trend chart
 - 100 pages crawled per audit
 
-### Tier 4: Growth — $14/month (Most popular)
+### Tier 4: Growth — $14/month
 *Put security in the workflow your team already uses.*
 - Slack, Discord and webhook alerts
 - REST API with your own keys
@@ -108,24 +108,41 @@ say so out loud.
 Billing must be wired **per tier, after that tier is complete** — never
 ahead of it. Nothing can be charged for today, which is the point.
 
+## Build status
+
+`users.tier` holds the account's tier and `api/_lib/tier.ts` turns it into
+enforced limits. Everything below is live in code and gated on that column.
+Until billing exists nothing can set it above `free`, so a tier is granted by
+hand: `UPDATE users SET tier = 'growth' WHERE email = '…';`
+
+| Tier | Status | Where it is enforced |
+| --- | --- | --- |
+| Free | Live | `tier.ts` `FREE` |
+| Starter | **Built** | daily cadence + 25-page crawl in `tier.ts`; alerts in `api/_lib/alerts.ts` |
+| Plus | **Built** | change/subdomain diffing in `alerts.ts`; chart in `src/trend-chart.ts` |
+| Growth | **Built** | `api/_lib/notify.ts`, `api/_lib/apiKeys.ts`, `api/keys/index.ts`, `api/_lib/csv.ts`, the gate in `api/scans/index.ts`, `examples/github-action/` |
+| Team | Not started | — |
+| Studio | Not started | — |
+| Agency | Not started | — |
+
+All six paid tiers still show "Coming soon" on the pricing page. That is not
+an oversight: nothing can set `tier` above `free` yet, so a buy button would
+lead nowhere.
+
+## Still to build
+
 Each queued item extends code that already exists, which is why they're
 sellable as a roadmap rather than fiction:
 
 | Feature | Foundation already in the repo | Work needed |
 | --- | --- | --- |
-| Daily / hourly / per-deploy cadence | `api/cron/rescan.ts`, Vercel cron | Read cadence from the user's tier; add cron entries |
-| Per-tier crawl depth | `crawl.ts` already takes a `maxPages` budget | Pass a tier-derived number |
-| Instant new-issue alerts | findings stored per scan; Resend wired | Diff against previous scan, send on delta |
-| Cert expiry warnings | `tls.ts` already computes `daysLeft` | Schedule threshold emails instead of only reporting at scan time |
-| Change alerts | `subresourceIntegrity.ts` / `headers.ts` inventory scripts and headers | Store a baseline, diff, alert |
-| New-subdomain alerts | `subdomainEnum.ts` already reads crt.sh | Persist the set, alert on additions |
-| Trend chart / 90-day history | every scan already persisted with score | Query + chart in the dashboard |
 | Auto-fix on detection | `lib/fixers/` opens PRs today, on click | Trigger from the scan pipeline |
-| Slack / Discord / webhooks | `api/webhooks/[provider].ts` is a dynamic route built for more providers | Outbound senders + per-site config |
-| REST API + keys | handlers exist; auth is Clerk-only | API key issuance and verification |
-| GitHub Action | `lib/github.ts` holds the API client | Publish an action that calls a scan endpoint |
-| CSV / JSON export | findings are already structured rows | Serializer + download route |
 | Site & seat limits | `MAX_TARGETS_PER_USER` is one uniform constant | Make it per-tier; add a users↔team model for seats |
 | White-label | `lib/pdf/report.ts`, `api/_lib/badge.ts` have fixed branding | Per-account logo/name overrides |
 | Authenticated scanning | `net.ts` performs the fetches | Credential storage + injection, gated on domain ownership |
 | Priority queue | scans run inline today | A real queue with tier-ordered dequeue |
+
+Per-deploy monitoring (Agency) is the one cadence item left: hourly is the
+floor the hourly cron can honour, and "on every deploy" needs the customer's
+own deploy to call us — which the Growth CI gate now makes possible, but as a
+build step rather than as monitoring.
