@@ -30,6 +30,21 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT CHECK (plan IN ('audit', 'a
 -- rather than resetting it (see the Stripe webhook).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 
+-- Which published tier the account is on (api/tiers/index.ts is the pricing
+-- page's source of truth; api/_lib/tier.ts turns a slug into enforced limits).
+--
+-- Deliberately a new column rather than a reuse of `plan` above: `plan` is
+-- CHECK-constrained to the older 'audit'/'audit_fix' model, which was never
+-- implemented (no Stripe code exists in this repo, only these columns), and
+-- silently widening it would conflate two pricing models that still need
+-- reconciling. The CHECK here lists all seven published slugs so shipping the
+-- remaining tiers needs no further migration.
+--
+-- Nothing sets this above 'free' yet: that is billing's job, and billing does
+-- not exist. Until it does, every account resolves to the free limits.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'free'
+    CHECK (tier IN ('free', 'starter', 'plus', 'growth', 'team', 'studio', 'agency'));
+
 -- A website the user wants audited. Scanning is gated on `verified` (proof of
 -- ownership/control) so the platform can't be used to run active checks
 -- against domains the caller doesn't control — see verification in
@@ -65,6 +80,21 @@ CREATE INDEX IF NOT EXISTS targets_due_for_rescan ON targets (next_rescan_at) WH
 ALTER TABLE targets ADD COLUMN IF NOT EXISTS github_repo TEXT; -- "owner/repo"
 ALTER TABLE targets ADD COLUMN IF NOT EXISTS github_token_encrypted TEXT;
 ALTER TABLE targets ADD COLUMN IF NOT EXISTS github_connected_at TIMESTAMPTZ;
+
+-- Starter+ certificate expiry warnings. Holds the smallest threshold (30/14/7/1)
+-- already emailed for the certificate currently installed, so a daily scan
+-- warns once per threshold instead of once per day. Reset to NULL when the
+-- observed expiry date moves, which is how a renewal re-arms the whole ladder.
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS cert_expiry_notified_days INTEGER;
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS cert_expires_at TIMESTAMPTZ;
+
+-- Plus change detection. The previous scan's observed inventory — response
+-- headers, external script hosts, and subdomains seen in Certificate
+-- Transparency logs — kept as the baseline the next scan is diffed against.
+-- Collected from requests the scan already makes (see lib/scanner/engine.ts),
+-- so carrying it costs no extra traffic against the target.
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS baseline JSONB;
+ALTER TABLE targets ADD COLUMN IF NOT EXISTS baseline_at TIMESTAMPTZ;
 
 -- One run of the scan engine against one target. `share_token` lets the
 -- emailed report be opened by the client with no account (report.html?token=),

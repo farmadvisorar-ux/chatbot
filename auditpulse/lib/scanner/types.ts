@@ -29,6 +29,39 @@ export interface ScanContext {
      * only fetching targetUrl.
      */
     additionalPages: string[];
+    /**
+     * Optional sink for facts a check already established that are worth
+     * carrying between scans, but which aren't findings in themselves — the
+     * full subdomain list, where the finding only quotes the first 15, or the
+     * certificate's expiry date, which produces no finding at all until it is
+     * under two weeks away. Optional so a check can stay unaware of it, and so
+     * callers that don't need change detection pay nothing.
+     */
+    observe?: (observation: ScanObservations) => void;
+}
+
+/** Partial observations reported by checks during a scan; merged into the fingerprint. */
+export interface ScanObservations {
+    /** Every subdomain seen in Certificate Transparency logs. */
+    subdomains?: string[];
+    /** The installed certificate's notAfter date, as reported by the TLS handshake. */
+    certExpiresAt?: string;
+}
+
+/**
+ * What a site looked like on one scan: enough to notice a meaningful change
+ * on the next one without re-requesting anything. Assembled from responses
+ * the scan already makes (lib/scanner/engine.ts).
+ */
+export interface SiteFingerprint {
+    /** Security-relevant response headers from the homepage, lowercased. */
+    headers: Record<string, string>;
+    /** Distinct hosts serving external <script src>, sorted. */
+    scriptHosts: string[];
+    /** Every subdomain seen in Certificate Transparency logs, sorted. */
+    subdomains: string[];
+    /** The installed certificate's notAfter date, when the TLS handshake reported one. */
+    certExpiresAt?: string;
 }
 
 export interface CheckOutcome {

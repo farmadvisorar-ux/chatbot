@@ -36,6 +36,10 @@ export const subdomainEnumCheck: CheckDefinition = {
             }
         }
 
+        // The findings below quote at most 15-20 names; change detection needs
+        // the whole set, so hand it over before any truncation.
+        ctx.observe?.({ subdomains: Array.from(subdomains) });
+
         const interesting = Array.from(subdomains).filter(name =>
             /^(dev|staging|test|uat|internal|admin|vpn|old|backup|beta|demo|preprod|sandbox)[.-]/.test(name),
         );

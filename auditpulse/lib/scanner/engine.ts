@@ -1,4 +1,4 @@
-import type { CheckDefinition, Finding, ScanContext } from './types.js';
+import type { CheckDefinition, Finding, ScanContext, SiteFingerprint } from './types.js';
 import { headersCheck } from './checks/headers.js';
 import { tlsCheck } from './checks/tls.js';
 import { cookiesCheck } from './checks/cookies.js';
@@ -42,6 +42,20 @@ const FULL_CHECKS: CheckDefinition[] = [
 
 const MAX_CRAWL_PAGES = 5;
 
+/** Headers worth diffing between scans; the rest (dates, request ids, cache state) change constantly and would be pure noise. */
+const FINGERPRINT_HEADERS = [
+    'content-security-policy',
+    'strict-transport-security',
+    'x-frame-options',
+    'x-content-type-options',
+    'referrer-policy',
+    'permissions-policy',
+    'cross-origin-opener-policy',
+    'access-control-allow-origin',
+];
+
+const SCRIPT_SRC_RE = /<script\s[^>]*src\s*=\s*["']([^"']+)["']/gi;
+
 export interface ScanRunResult {
     findings: Finding[];
     score: number;
@@ -49,6 +63,27 @@ export interface ScanRunResult {
     summary: Record<string, number>;
     checkErrors: { checkId: string; error: string }[];
     pagesScanned: number;
+    fingerprint: SiteFingerprint;
+}
+
+export interface ScanOptions {
+    /** Crawl budget for full scans. Defaults to the free tier's 5 pages. */
+    maxPages?: number;
+}
+
+/** External script hosts referenced by the homepage. Same-origin scripts are excluded: the interesting change is a *third party* appearing. */
+function externalScriptHosts(html: string, baseUrl: string): string[] {
+    const base = new URL(baseUrl);
+    const hosts = new Set<string>();
+    for (const match of html.matchAll(SCRIPT_SRC_RE)) {
+        try {
+            const url = new URL(match[1], baseUrl);
+            if (url.hostname && url.hostname !== base.hostname) hosts.add(url.hostname.toLowerCase());
+        } catch {
+            // A src we can't parse isn't a host we can meaningfully diff.
+        }
+    }
+    return Array.from(hosts).sort();
 }
 
 export function normalizeTargetUrl(input: string): { targetUrl: string; hostname: string } {
@@ -71,20 +106,36 @@ export function normalizeTargetUrl(input: string): { targetUrl: string; hostname
  * the site than just the homepage (mixed content, exposed secrets in JS
  * bundles, missing subresource integrity) read from ctx.additionalPages.
  */
-export async function runScan(rawUrl: string, kind: 'quick' | 'full'): Promise<ScanRunResult> {
+export async function runScan(rawUrl: string, kind: 'quick' | 'full', options: ScanOptions = {}): Promise<ScanRunResult> {
     const { targetUrl, hostname } = normalizeTargetUrl(rawUrl);
     await assertPublicHost(hostname);
 
     const checks = kind === 'quick' ? QUICK_CHECKS : FULL_CHECKS;
     const timeoutMs = 7000;
+    const maxPages = Math.max(1, options.maxPages ?? MAX_CRAWL_PAGES);
 
     let additionalPages: string[] = [targetUrl];
+    const fingerprint: SiteFingerprint = { headers: {}, scriptHosts: [], subdomains: [] };
     if (kind === 'full') {
-        const homepageHtml = await fetchHomepageHtml(targetUrl, timeoutMs);
-        additionalPages = homepageHtml ? await discoverPages(targetUrl, homepageHtml, MAX_CRAWL_PAGES) : [targetUrl];
+        const { html, headers } = await fetchHomepageHtml(targetUrl, timeoutMs);
+        additionalPages = html ? await discoverPages(targetUrl, html, maxPages) : [targetUrl];
+        for (const name of FINGERPRINT_HEADERS) {
+            if (headers[name] !== undefined) fingerprint.headers[name] = headers[name];
+        }
+        fingerprint.scriptHosts = externalScriptHosts(html, targetUrl);
     }
 
-    const ctx: ScanContext = { targetUrl, hostname, kind, timeoutMs, additionalPages };
+    const ctx: ScanContext = {
+        targetUrl,
+        hostname,
+        kind,
+        timeoutMs,
+        additionalPages,
+        observe: observation => {
+            if (observation.subdomains) fingerprint.subdomains = [...observation.subdomains].sort();
+            if (observation.certExpiresAt) fingerprint.certExpiresAt = observation.certExpiresAt;
+        },
+    };
 
     const results = await Promise.allSettled(checks.map(check => check.run(ctx)));
 
@@ -110,5 +161,6 @@ export async function runScan(rawUrl: string, kind: 'quick' | 'full'): Promise<S
         summary: summarizeBySeverity(findings),
         checkErrors,
         pagesScanned: additionalPages.length,
+        fingerprint,
     };
 }

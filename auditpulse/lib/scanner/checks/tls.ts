@@ -92,6 +92,10 @@ export const tlsCheck: CheckDefinition = {
         }
 
         if (info.validTo) {
+            // Reported regardless of how far out it is: the expiry-warning
+            // ladder starts at 30 days, while the finding below only fires
+            // under 14, so the date has to travel out of here on its own.
+            ctx.observe?.({ certExpiresAt: info.validTo });
             const daysLeft = Math.floor((new Date(info.validTo).getTime() - Date.now()) / 86_400_000);
             if (daysLeft < 0) {
                 findings.push({

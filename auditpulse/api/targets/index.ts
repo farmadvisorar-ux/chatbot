@@ -5,6 +5,7 @@ import { requireAuth } from '../_lib/auth.js';
 import { getPool } from '../_lib/db.js';
 import { generateVerificationToken } from '../_lib/verification.js';
 import { normalizeTargetUrl } from '../../lib/scanner/engine.js';
+import { tierForUser } from '../_lib/tier.js';
 
 /** Per-account cap. Weekly automatic re-audits mean every added site costs recurring scan capacity, so this is a real resource limit, not an upsell. */
 const MAX_TARGETS_PER_USER = 10;
@@ -34,7 +35,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
              WHERE t.user_id = $1 ORDER BY t.created_at DESC`,
             [user.userId],
         );
-        json(res, 200, { targets: rows });
+        // The tier rides along on this response rather than getting a route of
+        // its own: Vercel's function budget is why several concerns already
+        // share one handler here (see the ?action= dispatch on [id].ts).
+        const limits = await tierForUser(pool, user.userId);
+        json(res, 200, { targets: rows, tier: { slug: limits.slug, name: limits.name, trendChartDays: limits.trendChartDays } });
         return;
     }
 

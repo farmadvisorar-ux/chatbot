@@ -165,8 +165,17 @@ async function handleVerify(req: VercelRequest, res: VercelResponse, user: { use
 
     const result = await verifyDomainOwnership(target.hostname, target.verification_token);
     if (result.verified) {
+        // next_rescan_at is what puts a site into the cron's rotation, and it
+        // was previously only ever written after a scan finished — so a site
+        // that verified but was never manually scanned stayed NULL forever and
+        // the cron's `next_rescan_at IS NOT NULL` guard skipped it for good.
+        // Automatic re-audits are promised on every plan including Free, so
+        // arm the schedule the moment ownership is proven: due immediately,
+        // which makes the first audit land on the next cron run.
         await pool.query(
-            'UPDATE targets SET verified = true, verified_at = now(), verification_method = $2 WHERE id = $1',
+            `UPDATE targets SET verified = true, verified_at = now(), verification_method = $2,
+                    next_rescan_at = COALESCE(next_rescan_at, now())
+             WHERE id = $1`,
             [id, result.method],
         );
     }

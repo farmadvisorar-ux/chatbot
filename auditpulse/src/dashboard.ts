@@ -4,8 +4,13 @@ import { apiFetch, ApiError } from './api-client.js';
 import { renderFindings, gradeBadgeHtml, summaryChipsHtml, executiveSummaryHtml, type FindingRow, type SeveritySummary } from './findings-view.js';
 import { escapeHtml } from './escape-html.js';
 import { icons, renderIcons } from './icons.js';
+import { trendChartHtml, initTrendChart } from './trend-chart.js';
 
 initAuth();
+
+/** Which tier this account is on, as reported by /api/targets. Null until the first load. */
+interface AccountTier { slug: string; name: string; trendChartDays: number | null }
+let accountTier: AccountTier | null = null;
 
 interface Target {
     id: string; url: string; hostname: string; label: string | null;
@@ -156,8 +161,9 @@ function renderSparkline(canvas: HTMLCanvasElement, scores: number[]): void {
 // ---------------------------------------------------------- data loading --
 
 async function loadTargets(): Promise<void> {
-    const data = await apiFetch<{ targets: Target[] }>('/targets');
+    const data = await apiFetch<{ targets: Target[]; tier?: AccountTier }>('/targets');
     targets = data.targets;
+    accountTier = data.tier ?? null;
     renderStatTiles();
     renderTargetList();
     // Block the add flow at the cap rather than letting the request 409.
@@ -362,11 +368,23 @@ async function renderDetail(): Promise<void> {
     `;
 
     const completedScans = scans.filter(s => s.status === 'completed' && s.score !== null).slice().reverse();
-    const sparklineHtml = completedScans.length >= 2 ? `
+
+    // Plus gets the full trend chart; everyone keeps the compact sparkline, so
+    // the upgrade adds a view rather than taking the existing one away.
+    const trendDays = accountTier?.trendChartDays ?? null;
+    const windowStart = trendDays ? Date.now() - trendDays * 86_400_000 : null;
+    const inWindow = windowStart === null
+        ? completedScans
+        : completedScans.filter(s => new Date(s.started_at).getTime() >= windowStart);
+    const trendHtml = trendDays && inWindow.length >= 2
+        ? trendChartHtml(inWindow.map(s => ({ score: s.score!, grade: s.grade, at: s.started_at })), trendDays)
+        : '';
+
+    const sparklineHtml = trendHtml ? '' : (completedScans.length >= 2 ? `
         <div class="sparkline-row">
             <canvas id="score-sparkline" width="160" height="36"></canvas>
             <span class="muted" style="font-size:12px">Score trend, last ${completedScans.length} audits</span>
-        </div>` : '';
+        </div>` : '');
 
     const scansHtml = scans.length ? scans.map(s => `
         <div class="target-item scan-item ${s.id === selectedScanId ? 'active' : ''}" data-id="${s.id}">
@@ -424,13 +442,16 @@ async function renderDetail(): Promise<void> {
 
         <div class="card" style="margin-top:16px">
             <div class="card-title"><h3>Scan history</h3></div>
+            ${trendHtml}
             ${sparklineHtml}
             <div id="scan-list" style="margin-top:12px">${scansHtml}</div>
         </div>
         <div id="scan-detail" style="margin-top:16px"></div>
     `;
 
-    if (completedScans.length >= 2) {
+    if (trendHtml) {
+        initTrendChart(detailPanel);
+    } else if (completedScans.length >= 2) {
         renderSparkline(el<HTMLCanvasElement>('score-sparkline'), completedScans.map(s => s.score!));
     }
 

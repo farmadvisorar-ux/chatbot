@@ -7,6 +7,8 @@ import { sendReportEmail } from '../_lib/email.js';
 import { persistScanResult } from '../_lib/persistScan.js';
 import { generateAuditPdf } from '../../lib/pdf/report.js';
 import { siteOrigin } from '../_lib/site.js';
+import { limitsFor } from '../_lib/tier.js';
+import { runPostScanAlerts } from '../_lib/alerts.js';
 
 export const config = { maxDuration: 60 };
 
@@ -46,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const startedAt = Date.now();
     const pool = getPool();
     const { rows: due } = await pool.query(
-        `SELECT t.*, u.email AS owner_email, u.name AS owner_name
+        `SELECT t.*, u.email AS owner_email, u.name AS owner_name, u.tier AS owner_tier
          FROM targets t
          JOIN users u ON u.id = t.user_id
          WHERE t.auto_rescan AND t.verified
@@ -63,6 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         emailsSent?: number;
         emailsFailed?: number;
         emailError?: string;
+        alerts?: string[];
     }[] = [];
     let skippedForTime = 0;
 
@@ -78,13 +81,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         );
         const scanId = scanRows[0].id;
 
+        const limits = limitsFor(target.owner_tier);
+
         try {
-            const outcome = await runScan(target.url, 'full');
+            const outcome = await runScan(target.url, 'full', { maxPages: limits.crawlPages });
             await persistScanResult(pool, scanId, outcome);
             await pool.query(
-                `UPDATE targets SET last_scanned_at = now(), next_rescan_at = now() + interval '7 days' WHERE id = $1`,
-                [target.id],
+                `UPDATE targets SET last_scanned_at = now(), next_rescan_at = now() + make_interval(hours => $2) WHERE id = $1`,
+                [target.id, limits.rescanIntervalHours],
             );
+
+            // Monitoring alerts are what the paid tiers actually sell, so they
+            // run before the digest email: a new critical finding should reach
+            // the owner even if the (much heavier) PDF report send fails.
+            const alerts = await runPostScanAlerts(pool, {
+                target: {
+                    id: target.id,
+                    hostname: target.hostname,
+                    label: target.label,
+                    owner_email: target.owner_email,
+                    baseline: target.baseline,
+                    cert_expires_at: target.cert_expires_at,
+                    cert_expiry_notified_days: target.cert_expiry_notified_days,
+                },
+                scanId,
+                shareToken,
+                findings: outcome.findings,
+                fingerprint: outcome.fingerprint,
+                limits,
+            });
 
             const recipients = [target.owner_email, ...(target.client_emails || [])];
             const { rows: allFindings } = await pool.query(
@@ -132,12 +157,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             }
             if (emailError) console.error(`Re-audit report email failed for ${target.hostname}:`, emailError);
 
-            results.push({ targetId: target.id, ok: true, emailsSent, emailsFailed: recipients.length - emailsSent, emailError });
+            results.push({ targetId: target.id, ok: true, emailsSent, emailsFailed: recipients.length - emailsSent, emailError, alerts });
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Scan failed.';
             await pool.query(`UPDATE scans SET status = 'failed', error = $2, completed_at = now() WHERE id = $1`, [scanId, message]);
             // Push the schedule forward anyway so a permanently-broken target doesn't monopolize every run.
-            await pool.query(`UPDATE targets SET next_rescan_at = now() + interval '7 days' WHERE id = $1`, [target.id]);
+            await pool.query(`UPDATE targets SET next_rescan_at = now() + make_interval(hours => $2) WHERE id = $1`, [target.id, limits.rescanIntervalHours]);
             results.push({ targetId: target.id, ok: false, error: message });
         }
     }

@@ -47,6 +47,70 @@ export async function sendWelcomeEmail(toEmail: string, name: string | null): Pr
 }
 
 /**
+ * Sends a short "something changed on your site" alert — the Starter/Plus
+ * monitoring emails (a new issue, an expiring certificate, a changed header,
+ * a new subdomain). Deliberately separate from sendReportEmail: that one is a
+ * full findings digest a user asked to send to a client, this one is an
+ * unprompted nudge to the site owner and has to be skimmable on a phone.
+ *
+ * Never throws — a failed alert must not fail the scan that produced it.
+ */
+export async function sendAlertEmail(params: {
+    toEmail: string;
+    subject: string;
+    heading: string;
+    intro: string;
+    /** One line per changed thing. Rendered as a list; already-escaped by this function. */
+    bullets: string[];
+    reportUrl?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return { ok: false, error: 'Email sending is not configured on this deployment.' };
+
+    const items = params.bullets
+        .map(line => `<li style="margin-bottom:6px;color:#c9d1e0;">${escapeHtml(line)}</li>`)
+        .join('');
+
+    const html = `
+    <div style="font-family:'DM Sans',Arial,sans-serif;background:#0b0e14;color:#e8ecf4;padding:32px 16px;">
+      <div style="max-width:560px;margin:0 auto;background:#141922;border:1px solid #22283a;border-radius:16px;overflow:hidden;">
+        <div style="padding:22px 26px;border-bottom:1px solid #22283a;">
+          <div style="font-weight:800;font-size:17px;letter-spacing:-0.02em;">AuditPulse</div>
+          <div style="color:#93a0b5;font-size:13px;margin-top:2px;">${escapeHtml(params.heading)}</div>
+        </div>
+        <div style="padding:22px 26px;">
+          <p style="margin-top:0;">${escapeHtml(params.intro)}</p>
+          <ul style="padding-left:18px;margin:16px 0;font-size:14px;">${items}</ul>
+          ${params.reportUrl ? `<p style="margin-top:22px;">
+            <a href="${escapeHtml(params.reportUrl)}" style="display:inline-block;background:#35e0a1;color:#04140d;font-weight:800;padding:11px 18px;border-radius:10px;text-decoration:none;">View the full report →</a>
+          </p>` : ''}
+          <p style="color:#6b7385;font-size:12px;margin-top:26px;">You're getting this because automatic monitoring is on for this site. Turn it off any time from your AuditPulse dashboard.</p>
+        </div>
+      </div>
+    </div>`;
+
+    const text = `${params.heading}\n\n${params.intro}\n\n`
+        + params.bullets.map(line => `- ${line}`).join('\n')
+        + (params.reportUrl ? `\n\nFull report: ${params.reportUrl}\n` : '\n');
+
+    try {
+        const resend = new Resend(apiKey);
+        const { error } = await resend.emails.send({
+            from: SENDER,
+            to: params.toEmail,
+            replyTo: REPLY_TO,
+            subject: params.subject,
+            html,
+            text,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true };
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Unknown error' };
+    }
+}
+
+/**
  * Sends a formatted vulnerability report to a recipient the caller (an
  * authenticated AuditPulse user) explicitly typed in — this is a
  * transactional message on their behalf, not unsolicited outreach.

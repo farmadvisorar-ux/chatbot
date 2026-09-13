@@ -32,12 +32,21 @@ export async function discoverPages(baseUrl: string, homepageHtml: string, maxPa
     return Array.from(pages).slice(0, maxPages);
 }
 
-/** Best-effort homepage fetch for crawling purposes — callers treat a failure as "no extra pages found," not a scan failure. */
-export async function fetchHomepageHtml(targetUrl: string, timeoutMs: number): Promise<string> {
+/**
+ * Best-effort homepage fetch for crawling purposes — callers treat a failure
+ * as "no extra pages found," not a scan failure.
+ *
+ * Returns the response headers alongside the HTML because the fingerprint used
+ * for change detection needs them, and this request has already paid for them:
+ * gathering them here costs the target nothing extra.
+ */
+export async function fetchHomepageHtml(targetUrl: string, timeoutMs: number): Promise<{ html: string; headers: Record<string, string> }> {
     try {
         const res = await safeFetch(targetUrl, { timeoutMs });
-        return await res.text();
+        const headers: Record<string, string> = {};
+        res.headers.forEach((value, key) => { headers[key.toLowerCase()] = value; });
+        return { html: await res.text(), headers };
     } catch {
-        return '';
+        return { html: '', headers: {} };
     }
 }

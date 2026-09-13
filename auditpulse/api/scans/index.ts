@@ -6,10 +6,13 @@ import { getPool } from '../_lib/db.js';
 import { persistScanResult } from '../_lib/persistScan.js';
 import { runScan } from '../../lib/scanner/engine.js';
 import { DisallowedTargetError } from '../../lib/scanner/net.js';
+import { tierForUser } from '../_lib/tier.js';
 
 export const config = { maxDuration: 30 };
 
-const RESCAN_INTERVAL_DAYS = 7;
+// The re-audit interval is no longer a constant here — it comes from the
+// caller's tier (api/_lib/tier.ts), which is what makes daily re-audits a
+// paid difference rather than a number hardcoded for everyone.
 const RECENT_ACTIVITY_LIMIT = 20;
 
 /** GET recent activity across every site the user owns / POST run a new audit. Split out from api/scans/[id].ts because a bare `/api/scans` request (no id segment) doesn't reach a `[id].ts` dynamic route. */
@@ -52,12 +55,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     );
     const scan = scanRows[0];
 
+    const limits = await tierForUser(pool, user.userId);
+
     try {
-        const outcome = await runScan(target.url, 'full');
+        const outcome = await runScan(target.url, 'full', { maxPages: limits.crawlPages });
         await persistScanResult(pool, scan.id, outcome);
         await pool.query(
-            `UPDATE targets SET last_scanned_at = now(), next_rescan_at = now() + ($2 || ' days')::interval WHERE id = $1`,
-            [targetId, RESCAN_INTERVAL_DAYS],
+            `UPDATE targets SET last_scanned_at = now(), next_rescan_at = now() + make_interval(hours => $2) WHERE id = $1`,
+            [targetId, limits.rescanIntervalHours],
         );
         json(res, 201, { scanId: scan.id });
     } catch (err) {
