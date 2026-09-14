@@ -281,6 +281,29 @@ Two environment variables, and no dashboard setup:
    Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
 3. Redeploy.
 
+> **Tick the Production checkbox.** Vercel's environment-variable form has
+> separate Production / Preview / Development scopes, and a variable saved
+> without Production is invisible to the live site no matter how many times you
+> redeploy — the deployment succeeds and nothing changes, which looks identical
+> to the variable being wrong. `GET /api/health?check=config` (below) reports
+> which environment answered, so you can tell the two apart.
+
+## Checking configuration
+
+`GET /api/health?check=config` lists every capability the deployment expects,
+whether it is configured, which variable names are missing, and what breaks
+without them:
+
+```bash
+curl -s 'https://brokehealth.com/api/health?check=config' | jq
+```
+
+It reports presence only — never a value or any part of one — and discloses
+nothing new: each unconfigured capability already answers 501 with the same
+information when called directly. What it adds is seeing all of them at once,
+which is the difference between "checkout is broken" and "`STRIPE_SECRET_KEY`
+never reached the Production environment".
+
 **Products and prices create themselves.** The first checkout for a tier looks
 for its Stripe Price by lookup key (`auditpulse_<tier>_monthly`) and creates
 the Product and Price if they are missing — see `api/_lib/billing.ts`. There is
