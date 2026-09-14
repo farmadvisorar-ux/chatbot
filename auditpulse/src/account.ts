@@ -19,6 +19,13 @@ interface AccountTier {
     apiAccess?: boolean;
 }
 
+/** Tier-specific lines appended to the shared list, so a paid plan's page names what the money actually bought. */
+const TIER_EXTRAS: Record<string, string[]> = {
+    starter: ['Daily re-audits instead of weekly', '25 pages crawled per audit', 'Email the moment a new issue appears', 'Certificate expiry warnings at 30, 14, 7 and 1 day'],
+    plus: ['Everything in Starter', '100 pages crawled per audit', 'Alerts when headers or third-party scripts change', 'Alerts when a new subdomain appears in certificate logs', '90-day score trend chart'],
+    growth: ['Everything in Plus', 'Slack, Discord and webhook alerts', 'REST API with your own keys', 'GitHub Action that fails the build on a new Critical or High', 'Hourly re-audits', 'CSV and JSON export of every finding'],
+};
+
 interface ApiKey {
     id: string;
     name: string;
@@ -50,16 +57,44 @@ const formatDate = (value: string | null): string =>
 function renderPlan(): void {
     const email = currentUserEmail();
     const isFree = tier.slug === 'free';
+    const items = [...INCLUDED, ...(TIER_EXTRAS[tier.slug] ?? [])];
     planCard.innerHTML = `
         <div class="badge-pill badge-verified">${icons.check}${escapeHtml(tier.name)} plan — active</div>
         <h2 style="font-size:var(--t-xl);margin:14px 0 6px">${isFree ? 'Everything is included, at no cost.' : `You're on ${escapeHtml(tier.name)}.`}</h2>
         <p class="muted">${isFree
-            ? `AuditPulse is free to use. There's no billing to manage, no card on file, and no usage cap${email ? ` on <strong>${escapeHtml(email)}</strong>` : ''}.`
+            ? `The free plan has no card on file and no usage cap${email ? ` on <strong>${escapeHtml(email)}</strong>` : ''}. <a href="./pricing.html">See what the paid plans add →</a>`
             : `Your ${escapeHtml(tier.name)} features are active${email ? ` on <strong>${escapeHtml(email)}</strong>` : ''}.`}</p>
         <ul class="check-list" style="margin-top:18px">
-            ${INCLUDED.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            ${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
         </ul>
+        ${isFree ? '' : `
+        <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button type="button" id="billing-portal" class="mini-cta">Manage billing</button>
+            <span class="muted" style="font-size:12px">Change plan, update your card, download invoices, or cancel.</span>
+        </div>`}
         <p class="legal-note" style="margin-top:20px">Manage your email address, password, and connected sign-in methods from the account menu in the top-right.</p>`;
+
+    document.getElementById('billing-portal')?.addEventListener('click', openBillingPortal);
+}
+
+/**
+ * Hands the customer to Stripe's own billing page.
+ *
+ * Cancellation and plan changes live there rather than here on purpose: a
+ * cancel button we own would have to stay correct against proration, trials
+ * and partial periods, and getting that wrong takes money from someone who
+ * asked to stop paying.
+ */
+async function openBillingPortal(): Promise<void> {
+    const button = el<HTMLButtonElement>('billing-portal');
+    button.disabled = true;
+    try {
+        const { url } = await apiFetch<{ url: string }>('/tiers?action=portal', { method: 'POST' });
+        window.location.href = url;
+    } catch (err) {
+        note(err instanceof Error ? err.message : 'Could not open the billing portal.', true);
+        button.disabled = false;
+    }
 }
 
 /** The API keys panel, rendered only for tiers that include the REST API. */
@@ -147,6 +182,35 @@ async function createKey(): Promise<void> {
     }
 }
 
+/**
+ * Polls briefly for the tier the webhook is about to write.
+ *
+ * Bounded on purpose: if it hasn't landed in ~15 seconds something is wrong
+ * with webhook delivery, and telling the customer their payment went through
+ * and to reload beats an indicator that spins forever.
+ */
+async function confirmUpgrade(): Promise<void> {
+    for (let attempt = 0; attempt < 6; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        try {
+            const data = await apiFetch<{ tier?: AccountTier }>('/targets');
+            if (data.tier && data.tier.slug !== tier.slug) {
+                tier = data.tier;
+                renderPlan();
+                note(`You're on ${tier.name}. Everything it includes is active now.`);
+                if (tier.apiAccess) {
+                    el<HTMLElement>('keys-card').hidden = false;
+                    await loadKeys();
+                }
+                return;
+            }
+        } catch {
+            // Keep trying; a transient failure here is not worth reporting.
+        }
+    }
+    note('Payment received. Your plan will appear here shortly — reload the page in a minute if it has not.');
+}
+
 async function revokeKey(id: string, name: string): Promise<void> {
     // Revocation is immediate and irreversible, and the thing it breaks — a
     // CI pipeline — fails somewhere the person clicking may not be watching.
@@ -184,6 +248,16 @@ async function revokeKey(id: string, name: string): Promise<void> {
     }
 
     renderPlan();
+
+    // Stripe's webhook decides the tier, and it can land a second or two after
+    // the browser gets back from Checkout. Rather than show the old plan and
+    // let the customer wonder what they paid for, re-read once shortly after a
+    // successful checkout and re-render if it has changed.
+    if (new URLSearchParams(window.location.search).get('checkout') === 'success') {
+        note('Payment received — setting up your plan.');
+        void confirmUpgrade();
+    }
+
     if (tier.apiAccess) {
         el<HTMLElement>('keys-card').hidden = false;
         await loadKeys();

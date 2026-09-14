@@ -509,3 +509,7 @@ footer{border-top:1px solid var(--line);padding:var(--s-8) 0;margin-top:var(--s-
 .scan-exports .text-button{font-size:11px;letter-spacing:.04em;text-transform:uppercase;
   padding:2px 0;text-decoration:underline}
 code.target-id{user-select:all;word-break:break-all}
+
+/* Inline result line under a pricing CTA (checkout progress or failure). */
+.tier-cta-status{display:block;min-height:16px;margin-top:8px;font-size:12px;color:var(--muted);text-align:center}
+.tier-cta-status.error{color:var(--critical)}

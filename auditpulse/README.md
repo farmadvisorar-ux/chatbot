@@ -126,10 +126,15 @@ deployed preview to exercise `/api/*`.
    the PDF certificate, and the embeddable trust badge).
 5. Set up Clerk and Resend (below), then deploy. **Redeploy after
    adding/changing any env var** — Vite inlines `VITE_*` vars at build time.
-6. `vercel.json` registers a daily cron (`/api/cron/rescan`, 13:00 UTC) as a
-   backstop; the GitHub Actions workflow below is what actually drives the
-   schedule. Set `CRON_SECRET` so only authorised callers can trigger it —
-   Vercel sends it as a Bearer token automatically when the env var is set.
+6. `vercel.json` registers an **hourly** cron (`/api/cron/rescan`). Hourly is
+   the floor, not a preference: Growth sells hourly re-audits, and a schedule
+   slower than the fastest tier would make that tier a lie. Each run takes
+   whatever is due within a time budget and leaves the rest for the next hour.
+   Sub-daily crons need a plan above Hobby. Set `CRON_SECRET` so only
+   authorised callers can trigger it — Vercel sends it as a Bearer token
+   automatically when the env var is set.
+7. Set up billing (below) if you want the paid tiers to be purchasable. They
+   stay "Coming soon" on the pricing page until `STRIPE_SECRET_KEY` is set.
 
 ## Custom domain (brokehealth.com)
 
@@ -258,6 +263,55 @@ long, plus a way to honour deletion requests (`DELETE FROM email_captures
 WHERE lower(email) = ...`). The cookie is functional (it only records "this
 visitor already answered") rather than advertising, which is generally
 exempt from consent banners, but confirm that against your own jurisdiction.
+
+## Setting up billing (Stripe)
+
+Two environment variables, and no dashboard setup:
+
+| Variable | Where it comes from |
+|---|---|
+| `STRIPE_SECRET_KEY` | Stripe → Developers → API keys |
+| `STRIPE_WEBHOOK_SECRET` | the signing secret of the endpoint you add below |
+
+1. Set `STRIPE_SECRET_KEY`.
+2. Add a webhook endpoint at Stripe → Developers → Webhooks pointing to
+   `https://<your-domain>/api/webhooks/stripe`, subscribed to
+   `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated` and `customer.subscription.deleted`.
+   Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Redeploy.
+
+**Products and prices create themselves.** The first checkout for a tier looks
+for its Stripe Price by lookup key (`auditpulse_<tier>_monthly`) and creates
+the Product and Price if they are missing — see `api/_lib/billing.ts`. There is
+nothing to configure by hand and nothing to keep in sync between preview and
+production. Changing what a tier costs means archiving the old Price in Stripe
+and letting the next checkout create the new one; it can never silently
+re-price an existing customer, because Stripe Prices are immutable.
+
+**What grants a plan.** `users.tier` is written in exactly one place — the
+Stripe webhook — and only from the price a subscription actually carries. That
+means a customer who changes plan inside Stripe's billing portal lands on the
+right tier without us intercepting that flow, and nothing in the app can grant
+itself a paid plan. `past_due` deliberately keeps the paid tier: Stripe retries
+a failed payment for days, and cutting off monitoring the hour a card expires
+means the alert someone is paying for goes missing exactly when they aren't
+watching. Access ends on `customer.subscription.deleted`.
+
+**Which tiers are sellable** is the `PURCHASABLE` map in `api/_lib/billing.ts`,
+which contains only the tiers whose features are built. A tier not in that map
+has no code path that can take money for it, so the release policy in
+`tiers.md` is enforced by the code's shape rather than by remembering to flip a
+flag. The pricing page derives "Coming soon" from that map plus whether a
+Stripe key is configured, so a deployment without billing never shows a buy
+button that would fail.
+
+Granting a tier by hand (comps, support, testing) still works and bypasses
+Stripe entirely:
+
+```sql
+UPDATE users SET tier = 'growth' WHERE email = '...';
+```
 
 ## Setting up report emails (Resend)
 

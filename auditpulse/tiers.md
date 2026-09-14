@@ -102,18 +102,20 @@ to trust a signal that isn't earning it — and they find out during the
 incident it was supposed to prevent.
 
 Order of release, cheapest to ship first: **Starter → Plus → Growth → Team →
-Studio → Agency**. Starter carries the "Shipping first" badge on the page to
-say so out loud.
+Studio → Agency**. Whichever tier is next carries a "Shipping next" badge on
+the pricing page, so the build order stays public — move it as each one ships.
 
-Billing must be wired **per tier, after that tier is complete** — never
-ahead of it. Nothing can be charged for today, which is the point.
+Billing is wired **per tier, after that tier is complete** — never ahead of
+it. Adding a tier to `PURCHASABLE` is the last step of shipping it, not the
+first.
 
 ## Build status
 
 `users.tier` holds the account's tier and `api/_lib/tier.ts` turns it into
 enforced limits. Everything below is live in code and gated on that column.
-Until billing exists nothing can set it above `free`, so a tier is granted by
-hand: `UPDATE users SET tier = 'growth' WHERE email = '…';`
+Stripe sets it on purchase. Granting by hand (comps, support, testing) still
+works and bypasses Stripe entirely:
+`UPDATE users SET tier = 'growth' WHERE email = '…';`
 
 | Tier | Status | Where it is enforced |
 | --- | --- | --- |
@@ -125,9 +127,16 @@ hand: `UPDATE users SET tier = 'growth' WHERE email = '…';`
 | Studio | Not started | — |
 | Agency | Not started | — |
 
-All six paid tiers still show "Coming soon" on the pricing page. That is not
-an oversight: nothing can set `tier` above `free` yet, so a buy button would
-lead nowhere.
+Starter, Plus and Growth are **purchasable** via Stripe Checkout. Team, Studio
+and Agency still show "Coming soon", and cannot be bought by any code path:
+`PURCHASABLE` in `api/_lib/billing.ts` contains only the built tiers, so this
+policy is enforced by the code's shape rather than by a flag someone has to
+remember to keep in sync.
+
+`users.tier` is written in exactly one place — the Stripe webhook — and only
+from the price a subscription actually carries. Nothing in the app can grant
+itself a plan. A deployment with no `STRIPE_SECRET_KEY` shows every paid tier
+as "Coming soon" automatically, rather than offering a button that fails.
 
 ## Still to build
 
