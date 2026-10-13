@@ -6,7 +6,9 @@ import Link from 'next/link';
 const LINKS = [
     { href: '/', label: 'Valuate' },
     { href: '/compare', label: 'Compare' },
-    { href: '/bulk', label: 'Bulk Check' },
+    { href: '/bulk', label: 'Bulk Portfolio' },
+    { href: '/drops', label: 'Drop Radar' },
+    { href: '/extension', label: 'Browser Extension' },
     { href: '/suggest', label: 'Name Ideas' },
     { href: '/how-it-works', label: 'Methodology' },
     { href: '/pricing', label: 'Pricing' },

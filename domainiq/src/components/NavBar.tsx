@@ -16,7 +16,9 @@ export default async function NavBar() {
                 <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-300 md:flex">
                     <Link href="/" className="hover:text-brand-600">Valuate</Link>
                     <Link href="/compare" className="hover:text-brand-600">Compare</Link>
-                    <Link href="/bulk" className="hover:text-brand-600">Bulk Check</Link>
+                    <Link href="/bulk" className="hover:text-brand-600">Bulk Portfolio</Link>
+                    <Link href="/drops" className="hover:text-brand-600">Drop Radar</Link>
+                    <Link href="/extension" className="hover:text-brand-600">Extension</Link>
                     <Link href="/suggest" className="hover:text-brand-600">Name Ideas</Link>
                     <Link href="/how-it-works" className="hover:text-brand-600">Methodology</Link>
                     <Link href="/pricing" className="hover:text-brand-600">Pricing</Link>
