@@ -87,6 +87,7 @@ export default function Footer() {
                 <div>
                     <h4 className="mb-3 font-bold uppercase tracking-wider text-slate-300">Documentation</h4>
                     <ul className="space-y-2 text-slate-400">
+                        <li><Link href="/domain-worth-calculator" className="hover:text-brand-400 transition-colors text-cyan-300 font-semibold">How Much Is My Domain Worth? (Guide)</Link></li>
                         <li><Link href="/how-it-works" className="hover:text-brand-400 transition-colors">Pricing Algorithm &amp; Comps</Link></li>
                         <li><Link href="/pricing" className="hover:text-brand-400 transition-colors">Account Tiers &amp; Quotas</Link></li>
                         <li><Link href="/suggest" className="hover:text-brand-400 transition-colors">Brandable Name Generator</Link></li>

@@ -91,6 +91,34 @@ export default function HomePage() {
                 <div className="mx-auto max-w-2xl pt-2">
                     <DomainCheckerForm />
                 </div>
+
+                {/* SEO & LLM Authoritative Guide Pillar Callout */}
+                <div className="mx-auto max-w-2xl pt-2">
+                    <Link
+                        href="/domain-worth-calculator"
+                        className="group flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 sm:px-5 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-brand-950/40 to-indigo-950/40 border border-brand-500/30 hover:border-brand-400 shadow-lg shadow-brand-500/5 transition-all text-left"
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/20 text-brand-300 text-lg border border-brand-500/30">
+                                📖
+                            </span>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded font-bold border border-cyan-800/80">
+                                        Pricing Framework
+                                    </span>
+                                    <span className="text-xs text-slate-400 font-mono">2026 Guide</span>
+                                </div>
+                                <p className="text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-white transition-colors mt-0.5">
+                                    How Much Is My Domain Name Worth Calculator: An Exact Pricing Framework
+                                </p>
+                            </div>
+                        </div>
+                        <span className="text-xs font-semibold text-brand-400 group-hover:text-brand-300 flex items-center gap-1 font-mono whitespace-nowrap self-end sm:self-auto">
+                            Read Guide →
+                        </span>
+                    </Link>
+                </div>
             </section>
 
             {/* Quick Live Comps Showcase Carousel */}
