@@ -1117,7 +1117,7 @@ export default async function ValuationPage({ params }: Props) {
 
             <EmbedBadge domain={result.domain} />
 
-            <AdSlot />
+            <AdSlot slotId={2} variant="showcase" className="my-8" />
 
             <p className="text-center text-xs text-slate-400">
                 This is an algorithmic estimate for informational purposes, not a formal appraisal or a guarantee of sale

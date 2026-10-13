@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import DomainCheckerForm from '@/components/DomainCheckerForm';
+import AdSlot from '@/components/AdSlot';
 
 export const metadata: Metadata = {
     title: 'How to Value & Sell a Domain Name for Maximum Profit (2026 Masterclass Guide)',
@@ -342,6 +343,9 @@ export default function DomainWorthCalculatorPage() {
                         </span>
                     </div>
                 </section>
+
+                {/* Ad Box #3 Algorithmic Guide & Calculator Tile */}
+                <AdSlot slotId={3} variant="tile" className="my-6" />
 
                 {/* ========================================================================= */}
                 {/* PART 1: THE EXACT PRICING FRAMEWORK BLOG POST                             */}

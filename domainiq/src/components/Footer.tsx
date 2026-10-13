@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import NewsletterSignup from './NewsletterSignup';
+import AdSlot from './AdSlot';
 
 const MARKETPLACES = [
     { name: 'Sedo', href: 'https://sedo.com', blurb: 'Largest international domain marketplace' },
@@ -10,8 +11,13 @@ const MARKETPLACES = [
 export default function Footer() {
     return (
         <footer className="border-t border-slate-800/80 bg-slate-950 mt-24">
+            {/* Ad Box #4 Sitewide Banner */}
+            <div className="mx-auto max-w-6xl px-4 pt-8">
+                <AdSlot slotId={4} variant="banner" className="my-0" />
+            </div>
+
             {/* Newsletter Banner */}
-            <div className="mx-auto max-w-6xl px-4 pt-10">
+            <div className="mx-auto max-w-6xl px-4 pt-8">
                 <div className="card flex flex-col gap-5 p-6 sm:p-8 sm:flex-row sm:items-center sm:justify-between border-brand-500/20 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
@@ -91,13 +97,18 @@ export default function Footer() {
                         <li><Link href="/how-it-works" className="hover:text-brand-400 transition-colors">Pricing Algorithm &amp; Comps</Link></li>
                         <li><Link href="/pricing" className="hover:text-brand-400 transition-colors">Account Tiers &amp; Quotas</Link></li>
                         <li><Link href="/suggest" className="hover:text-brand-400 transition-colors">Brandable Name Generator</Link></li>
+                        <li><Link href="/advertise" className="hover:text-amber-300 transition-colors text-amber-400 font-semibold flex items-center gap-1"><span>★ Advertise on DomainIQ</span></Link></li>
                     </ul>
                 </div>
             </div>
 
             {/* Bottom Copyright Bar */}
-            <div className="border-t border-slate-900 py-6 text-center text-xs text-slate-500">
-                <p>© {new Date().getFullYear()} DomainIQ Inc. Algorithmic estimates for informational decision intelligence, not guaranteed appraisal warrants.</p>
+            <div className="border-t border-slate-900 py-6 text-center text-xs text-slate-500 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+                <span>© {new Date().getFullYear()} DomainIQ Inc. Algorithmic estimates for informational decision intelligence, not guaranteed appraisal warrants.</span>
+                <span className="text-slate-700">•</span>
+                <Link href="/admin" className="text-slate-400 hover:text-brand-300 font-mono transition-colors">
+                    Admin Terminal
+                </Link>
             </div>
         </footer>
     );

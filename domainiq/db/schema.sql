@@ -92,3 +92,44 @@ CREATE TABLE IF NOT EXISTS newsletter_subscribers (
 );
 
 CREATE INDEX IF NOT EXISTS idx_newsletter_active ON newsletter_subscribers(email) WHERE unsubscribed_at IS NULL;
+
+-- 4 Dedicated Public Advertisement Boxes with Live Link Push
+CREATE TABLE IF NOT EXISTS ad_slots (
+    id                  INTEGER PRIMARY KEY, -- 1, 2, 3, 4
+    name                TEXT NOT NULL,
+    title               TEXT NOT NULL,
+    description         TEXT NOT NULL,
+    image_url           TEXT,
+    destination_url     TEXT NOT NULL,
+    cta_text            TEXT NOT NULL DEFAULT 'Learn More →',
+    sponsor_name        TEXT NOT NULL DEFAULT 'DomainIQ Partner',
+    badge               TEXT NOT NULL DEFAULT 'Featured Sponsor',
+    is_active           BOOLEAN NOT NULL DEFAULT true,
+    impressions         INTEGER NOT NULL DEFAULT 0,
+    clicks              INTEGER NOT NULL DEFAULT 0,
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Tracking system for advertisers purchasing ad space
+CREATE TABLE IF NOT EXISTS ad_purchases (
+    id                  SERIAL PRIMARY KEY,
+    slot_id             INTEGER NOT NULL,
+    advertiser_name     TEXT NOT NULL,
+    company             TEXT NOT NULL,
+    email               TEXT NOT NULL,
+    amount_usd          DOUBLE PRECISION NOT NULL DEFAULT 0,
+    status              TEXT NOT NULL CHECK (status IN ('active', 'pending', 'expired', 'canceled')),
+    start_date          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expiry_date         TIMESTAMPTZ,
+    destination_url     TEXT NOT NULL,
+    notes               TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_purchases_slot ON ad_purchases(slot_id, status);
+
+CREATE TABLE IF NOT EXISTS admin_settings (
+    key                 TEXT PRIMARY KEY,
+    value               TEXT NOT NULL,
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);

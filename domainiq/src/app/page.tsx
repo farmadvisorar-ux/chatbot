@@ -224,7 +224,7 @@ export default function HomePage() {
                 </div>
             </section>
 
-            <AdSlot className="mx-auto max-w-3xl" />
+            <AdSlot slotId={1} variant="billboard" className="mx-auto max-w-4xl my-8" />
 
             {/* Bottom Call to Action */}
             <section className="card p-8 sm:p-12 text-center space-y-6 relative overflow-hidden border-brand-500/30">
