@@ -14,6 +14,7 @@ import PitchGenerator from '@/components/PitchGenerator';
 import LeaseCalculatorWidget from '@/components/LeaseCalculatorWidget';
 import TriangulationMatrix from '@/components/TriangulationMatrix';
 import ValuationLedger from '@/components/ValuationLedger';
+import AffiliateSpotlight from '@/components/AffiliateSpotlight';
 
 export const dynamic = 'force-dynamic';
 
@@ -263,6 +264,14 @@ export default async function ValuationPage({ params }: Props) {
                 domain={result.domain}
             />
 
+            {/* Strategic Partner Action Spotlight (Randomized Monetization / Registrar / Marketplace Offer) */}
+            <AffiliateSpotlight
+                domain={result.domain}
+                slotIndex={0}
+                variant="featured"
+                className="my-6"
+            />
+
             {/* Multi-Channel Pricing Matrix (Phase 1) */}
             <section className="card p-8">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
@@ -382,6 +391,14 @@ export default async function ValuationPage({ params }: Props) {
                 <div className="mt-6">
                     <LeaseCalculatorWidget channelPricing={result.channelPricing} domain={result.domain} />
                 </div>
+
+                {/* Marketplace Listing & Liquidity Partner Spotlight */}
+                <AffiliateSpotlight
+                    domain={result.domain}
+                    slotIndex={1}
+                    variant="inline"
+                    className="mt-6"
+                />
             </section>
 
             {/* Valuation Trust, Confidence & Liquidity Profile (Phase 1) */}
@@ -453,6 +470,14 @@ export default async function ValuationPage({ params }: Props) {
                     <span>Valuation Spread Volatility Band: &plusmn;{result.volatilityBandPercent}%</span>
                     <span>Multi-factor algorithmic weighting verified</span>
                 </div>
+
+                {/* Liquidity Acceleration & Brokerage Partner Spotlight */}
+                <AffiliateSpotlight
+                    domain={result.domain}
+                    slotIndex={2}
+                    variant="banner"
+                    className="mt-6"
+                />
             </section>
 
             {/* Linguistic Breakdown Section */}
@@ -503,6 +528,14 @@ export default async function ValuationPage({ params }: Props) {
                         </div>
                     )}
                 </div>
+
+                {/* Registrar, Portfolio & Hosting Partner Spotlight */}
+                <AffiliateSpotlight
+                    domain={result.domain}
+                    slotIndex={3}
+                    variant="inline"
+                    className="mt-6"
+                />
             </section>
 
             {/* Due Diligence & Risk Radar (Phase 2 Intelligence) */}
@@ -781,6 +814,14 @@ export default async function ValuationPage({ params }: Props) {
                         </div>
                     </div>
                 </div>
+
+                {/* Transaction Security & Escrow Protection Partner Spotlight */}
+                <AffiliateSpotlight
+                    domain={result.domain}
+                    slotIndex={4}
+                    variant="banner"
+                    className="mt-6"
+                />
             </section>
 
             {/* Cross-Extension Intelligence & Collision Radar (Phase 3) */}
