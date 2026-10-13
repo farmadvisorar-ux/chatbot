@@ -11,6 +11,8 @@ import { getVerticalInfo, type VerticalInfo } from './verticals';
 import { computeChannelPricing, computeOutboundFitScore, type ChannelPricing } from './channel-pricing';
 import { checkTrademarkRisk, type TrademarkResult } from './trademark';
 import { generateGtmStrategy, type GtmStrategy } from './gtm';
+import { lookupArchiveHistory, type ArchiveHistoryResult } from './archive';
+import { computeSeoEquity, type SeoEquityResult } from './seo-equity';
 import { getPool } from '../db';
 import { COMPS } from '@/data/comps-seed';
 
@@ -70,13 +72,15 @@ export interface ValuationResult {
     channelPricing: ChannelPricing;
     outboundFitScore: number;
     trademark: TrademarkResult;
+    archive: ArchiveHistoryResult | null;
+    seoEquity: SeoEquityResult;
     gtm: GtmStrategy;
     generatedAt: string;
 }
 
 export async function evaluateDomain(
     input: string,
-    opts: { lookupAge?: boolean; checkTrademark?: boolean } = {},
+    opts: { lookupAge?: boolean; lookupArchive?: boolean; checkTrademark?: boolean } = {},
 ): Promise<ValuationResult> {
     const domain = normalizeDomain(input);
     if (!isValidDomain(domain)) {
@@ -131,10 +135,33 @@ export async function evaluateDomain(
     const keywordMultiplier = keywordMatch?.multiplier ?? 1.0;
 
     let age: RdapResult | null = null;
-    if (opts.lookupAge) {
-        age = await lookupDomainAge(domain);
-    }
-    const ageMultiplier = age?.ageYears ? 1 + Math.min(0.4, age.ageYears * 0.02) : 1;
+    const agePromise = opts.lookupAge ? lookupDomainAge(domain) : Promise.resolve(null);
+    const trademarkPromise = opts.checkTrademark === false
+        ? Promise.resolve({
+            checked: false,
+            source: 'heuristic-only' as const,
+            riskLevel: 'unknown' as const,
+            udrpRiskScore: 0,
+            udrpRating: 'Minimal Risk' as const,
+            matches: [],
+            links: {
+                usptoUrl: `https://tmsearch.uspto.gov/search/search-results?query=${encodeURIComponent(label)}`,
+                wipoUrl: `https://www.wipo.int/amc/en/domains/search/index.jsp?q=${encodeURIComponent(label)}`,
+                euipoUrl: `https://euipo.europa.eu/eSearch/#basic/1+1+1+1/${encodeURIComponent(label)}`,
+            },
+            disclaimer: 'Trademark screening skipped for this request.',
+        })
+        : checkTrademarkRisk(label);
+
+    const [resolvedAge, trademark] = await Promise.all([agePromise, trademarkPromise]);
+    age = resolvedAge;
+
+    const archive = (opts.lookupArchive !== false && opts.lookupAge !== false)
+        ? await lookupArchiveHistory(domain, age?.registrationDate ?? null)
+        : null;
+
+    const effectiveAgeYears = Math.max(age?.ageYears ?? 0, archive?.archiveAgeYears ?? 0);
+    const ageMultiplier = effectiveAgeYears > 0 ? 1 + Math.min(0.4, effectiveAgeYears * 0.02) : 1;
 
     const formulaPrice = linguisticBase * tldInfo.multiplier * keywordMultiplier * ageMultiplier;
 
@@ -204,6 +231,8 @@ export async function evaluateDomain(
         linguisticScore,
         compositionScore,
         keywordMatch,
+        archive,
+        trademark,
     });
 
     const lowUsd = Math.max(50, Math.round(midUsd * (1 - (volatilityBandPercent / 100) * 0.75)));
@@ -217,19 +246,36 @@ export async function evaluateDomain(
         isSingleWord,
         compositionScore,
         tldAuthority: tldInfo.authority,
+        trademark,
+        archive,
     });
 
     const channelPricing = computeChannelPricing({ lowUsd, midUsd: Math.round(midUsd), highUsd, vertical });
-    const outboundFitScore = computeOutboundFitScore({
+    let outboundFitScore = computeOutboundFitScore({
         vertical,
         hasKeywordMatch: Boolean(keywordMatch),
         compositionScore,
         tldAuthority: tldInfo.authority,
     });
+    if (trademark.riskLevel === 'severe') {
+        outboundFitScore = Math.min(2.0, outboundFitScore * 0.2);
+    } else if (trademark.riskLevel === 'elevated') {
+        outboundFitScore = Math.min(4.5, outboundFitScore * 0.6);
+    }
 
-    const trademark = opts.checkTrademark === false
-        ? { checked: false, source: 'heuristic-only' as const, riskLevel: 'unknown' as const, matches: [], disclaimer: 'Trademark screening skipped for this request.' }
-        : await checkTrademarkRisk(label);
+    const hasTrademarkCollision = trademark.riskLevel === 'elevated' || trademark.riskLevel === 'severe';
+    const seoEquity = computeSeoEquity({
+        domain,
+        tld,
+        charCount,
+        wordCount: wordCountTag,
+        isSingleWord,
+        linguisticScore,
+        tldAuthority: tldInfo.authority,
+        archiveAgeYears: archive?.archiveAgeYears ?? age?.ageYears ?? null,
+        hasSnapshots: archive?.hasSnapshots ?? false,
+        hasTrademarkCollision,
+    });
 
     const compositionQuality: 'strong' | 'moderate' | 'weak' = compositionScore >= 80 ? 'strong' : compositionScore >= 50 ? 'moderate' : 'weak';
     const gtm = generateGtmStrategy({
@@ -268,6 +314,8 @@ export async function evaluateDomain(
         channelPricing,
         outboundFitScore,
         trademark,
+        archive,
+        seoEquity,
         gtm,
         generatedAt: new Date().toISOString(),
     };
@@ -282,15 +330,17 @@ function computeConfidence(params: {
     linguisticScore: number;
     compositionScore: number;
     keywordMatch: { keyword: string; tier: string; multiplier: number } | null;
+    archive: ArchiveHistoryResult | null;
+    trademark: TrademarkResult;
 }): {
     confidence: Confidence;
     confidenceScore: number;
     confidenceFactors: ConfidenceFactor[];
     volatilityBandPercent: number;
 } {
-    const { exactComp, comps, compsWeight, tldAuthority, tld, linguisticScore, compositionScore, keywordMatch } = params;
+    const { exactComp, comps, compsWeight, tldAuthority, tld, linguisticScore, compositionScore, keywordMatch, archive, trademark } = params;
 
-    // Factor 1: Comparable Sales Evidence (Weight 35%)
+    // Factor 1: Comparable Sales Evidence (Weight 30%)
     let compScore = 35;
     let compDesc = 'Limited historical sales data in this exact bracket; baseline valuation relying primarily on heuristics.';
     let compImpact: 'positive' | 'neutral' | 'negative' = 'negative';
@@ -317,7 +367,7 @@ function computeConfidence(params: {
         }
     }
 
-    // Factor 2: Extension Stability & Liquidity (Weight 25%)
+    // Factor 2: Extension Stability & Liquidity (Weight 20%)
     let tldScore = Math.round(tldAuthority);
     let tldDesc = `.${tld} has established secondary market liquidity and institutional recognition.`;
     let tldImpact: 'positive' | 'neutral' | 'negative' = 'neutral';
@@ -350,7 +400,7 @@ function computeConfidence(params: {
         lexImpact = 'negative';
     }
 
-    // Factor 4: Commercial Demand & Commercial Search Intent (Weight 20%)
+    // Factor 4: Commercial Demand & Commercial Search Intent (Weight 15%)
     let comScore = 50;
     let comDesc = 'General consumer/brandable interest without high CPC keyword concentration.';
     let comImpact: 'positive' | 'neutral' | 'negative' = 'neutral';
@@ -378,20 +428,52 @@ function computeConfidence(params: {
         comImpact = 'neutral';
     }
 
+    // Factor 5: Historical Due Diligence & Legal Cleanliness (Weight 15%)
+    let ddScore = 75;
+    let ddDesc = 'Clean legal screening with no recorded brand collisions or UDRP red flags.';
+    let ddImpact: 'positive' | 'neutral' | 'negative' = 'positive';
+
+    if (trademark.riskLevel === 'severe') {
+        ddScore = 15;
+        ddDesc = `Severe trademark conflict: "${trademark.matches[0]?.mark}". High risk of UDRP dispute or forfeiture.`;
+        ddImpact = 'negative';
+    } else if (trademark.riskLevel === 'elevated') {
+        ddScore = 45;
+        ddDesc = `Trademark caution: overlaps with registered brand "${trademark.matches[0]?.mark}". Legal friction risk.`;
+        ddImpact = 'negative';
+    } else if (archive?.historicalContinuity === 'longstanding') {
+        ddScore = 95;
+        ddDesc = `Verified ${archive.archiveAgeYears?.toFixed(0)}+ year continuous web archive footprint with clean standing.`;
+        ddImpact = 'positive';
+    } else if (archive?.historicalContinuity === 'virgin') {
+        ddScore = 80;
+        ddDesc = 'Virgin unindexed asset: clean slate with zero legacy spam, penalties, or PBN footprint.';
+        ddImpact = 'positive';
+    } else if (archive?.historicalContinuity === 'drop-risk') {
+        ddScore = 60;
+        ddDesc = `Historical registration gap: live in ${archive.firstSeenYear}, current cycle re-registered.`;
+        ddImpact = 'neutral';
+    }
+
     const confidenceFactors: ConfidenceFactor[] = [
-        { name: 'Comparable Sales Evidence', score: compScore, weight: 0.35, impact: compImpact, description: compDesc },
-        { name: 'Extension Authority & Liquidity', score: tldScore, weight: 0.25, impact: tldImpact, description: tldDesc },
+        { name: 'Comparable Sales Evidence', score: compScore, weight: 0.30, impact: compImpact, description: compDesc },
+        { name: 'Extension Authority & Liquidity', score: tldScore, weight: 0.20, impact: tldImpact, description: tldDesc },
         { name: 'Lexical Clarity & Phonetics', score: lexScore, weight: 0.20, impact: lexImpact, description: lexDesc },
-        { name: 'Commercial Search & Industry Demand', score: comScore, weight: 0.20, impact: comImpact, description: comDesc },
+        { name: 'Commercial Search & Industry Demand', score: comScore, weight: 0.15, impact: comImpact, description: comDesc },
+        { name: 'Historical & Legal Due Diligence', score: ddScore, weight: 0.15, impact: ddImpact, description: ddDesc },
     ];
 
     const rawScore = confidenceFactors.reduce((sum, f) => sum + f.score * f.weight, 0);
-    const confidenceScore = Math.max(20, Math.min(99, Math.round(rawScore)));
+    let confidenceScore = Math.max(15, Math.min(99, Math.round(rawScore)));
 
     let confidence: Confidence = 'low';
     let volatilityBandPercent = 70;
 
-    if (confidenceScore >= 75 || exactComp) {
+    if (trademark.riskLevel === 'severe') {
+        confidence = 'low';
+        confidenceScore = Math.min(35, confidenceScore);
+        volatilityBandPercent = 85;
+    } else if (confidenceScore >= 75 || exactComp) {
         confidence = 'high';
         volatilityBandPercent = 28;
     } else if (confidenceScore >= 50) {
@@ -410,8 +492,20 @@ function computeLiquidity(params: {
     isSingleWord: boolean;
     compositionScore: number;
     tldAuthority: number;
+    trademark?: TrademarkResult;
+    archive?: ArchiveHistoryResult | null;
 }): LiquidityProfile {
-    const { domain, tld, charCount, wordCount, isSingleWord, compositionScore, tldAuthority } = params;
+    const { domain, tld, charCount, wordCount, isSingleWord, compositionScore, tldAuthority, trademark } = params;
+
+    if (trademark && trademark.riskLevel === 'severe') {
+        return {
+            rating: 'Niche / Illiquid',
+            score: 15,
+            estimatedDaysToSell: 'Not Recommended',
+            turnoverVelocity: 'slow',
+            rationale: `Active trademark conflict against "${trademark.matches[0]?.mark}" presents critical UDRP forfeiture risk, preventing open commercial liquidity.`,
+        };
+    }
 
     const isCom = tld === 'com';
     const isTechLiquid = ['ai', 'io'].includes(tld);

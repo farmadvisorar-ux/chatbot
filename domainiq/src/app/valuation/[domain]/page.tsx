@@ -51,9 +51,58 @@ const HEAT_STYLE: Record<string, string> = {
 };
 
 const RISK_STYLE: Record<string, string> = {
-    elevated: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    low: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    unknown: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    severe: 'bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-300 dark:border-red-800',
+    elevated: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800',
+    low: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+    unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700',
+};
+
+const UDRP_RATING_STYLE: Record<string, string> = {
+    'Critical UDRP Forfeiture Risk': 'bg-red-600 text-white',
+    'Elevated Infringement Risk': 'bg-rose-500 text-white',
+    'Caution (Generic Overlap)': 'bg-amber-500 text-white',
+    'Minimal Risk': 'bg-emerald-600 text-white',
+};
+
+const CONTINUITY_CONFIG: Record<string, { label: string; badge: string; icon: string }> = {
+    longstanding: {
+        label: 'Longstanding Archive Vintage',
+        badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+        icon: '🟢',
+    },
+    established: {
+        label: 'Established Archive History',
+        badge: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800',
+        icon: '🏛️',
+    },
+    recent: {
+        label: 'Recent Archive Record',
+        badge: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700',
+        icon: '📅',
+    },
+    'drop-risk': {
+        label: 'Re-Registration / Drop Gap',
+        badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800',
+        icon: '⚠️',
+    },
+    virgin: {
+        label: 'Fresh / Virgin Slate',
+        badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700',
+        icon: '🆕',
+    },
+};
+
+const EQUITY_TIER_STYLE: Record<string, string> = {
+    'Elite Brand Authority': 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800',
+    'Established Digital Asset': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+    'Commercial Brand Equity': 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800',
+    'Emerging Clean Slate': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700',
+};
+
+const INDEXABILITY_STYLE: Record<string, string> = {
+    Optimal: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+    Standard: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800',
+    Caution: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800',
 };
 
 export default async function ValuationPage({ params }: Props) {
@@ -114,6 +163,16 @@ export default async function ValuationPage({ params }: Props) {
                     <span className={`label-pill px-3 py-1 ${HEAT_STYLE[result.vertical.heat]}`}>
                         {result.outboundFitScore}/10 Outbound Fit — {result.vertical.label}
                     </span>
+                    {result.trademark.riskLevel !== 'low' && result.trademark.riskLevel !== 'unknown' && (
+                        <span className="label-pill px-3 py-1 font-semibold bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-300 dark:border-red-700">
+                            ⚖️ {result.trademark.udrpRating.toUpperCase()} ({result.trademark.udrpRiskScore}/100)
+                        </span>
+                    )}
+                    {result.archive?.firstSeenYear && (
+                        <span className="label-pill px-3 py-1 font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700">
+                            🏛️ {result.archive.archiveAgeYears ? `${result.archive.archiveAgeYears}y Wayback Vintage` : `First Seen ${result.archive.firstSeenYear}`}
+                        </span>
+                    )}
                 </div>
 
                 <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
@@ -368,30 +427,282 @@ export default async function ValuationPage({ params }: Props) {
                 </div>
             </section>
 
-            {/* Trademark Section */}
+            {/* Due Diligence & Risk Radar (Phase 2 Intelligence) */}
             <section className="card p-8">
-                <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-xl font-bold">Trademark &amp; Legal Screening</h2>
-                    <span className={`label-pill ${RISK_STYLE[result.trademark.riskLevel]}`}>
-                        {result.trademark.riskLevel === 'unknown' ? 'Not fully checked' : result.trademark.riskLevel === 'elevated' ? 'Elevated risk' : 'Low risk'}
-                    </span>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+                    <div>
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <span>Due Diligence &amp; Risk Radar</span>
+                            <span className="text-xs bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-800 px-2.5 py-0.5 rounded-full font-semibold">
+                                Live Risk Intelligence
+                            </span>
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Deep inspection of historical web archives, trademark conflicts, UDRP forfeiture risk, and digital asset equity.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Archive status badge */}
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${CONTINUITY_CONFIG[result.archive?.historicalContinuity ?? 'virgin']?.badge || 'bg-slate-100 text-slate-700'}`}>
+                            {CONTINUITY_CONFIG[result.archive?.historicalContinuity ?? 'virgin']?.icon} {CONTINUITY_CONFIG[result.archive?.historicalContinuity ?? 'virgin']?.label}
+                        </span>
+
+                        {/* UDRP risk badge */}
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${RISK_STYLE[result.trademark.riskLevel]}`}>
+                            ⚖️ UDRP: {result.trademark.udrpRating} ({result.trademark.udrpRiskScore}/100)
+                        </span>
+
+                        {/* Equity tier badge */}
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${EQUITY_TIER_STYLE[result.seoEquity.equityTier] || 'bg-slate-100 text-slate-700'}`}>
+                            🌐 {result.seoEquity.equityTier}
+                        </span>
+                    </div>
                 </div>
-                {result.trademark.matches.length > 0 ? (
-                    <ul className="space-y-2 text-sm">
-                        {result.trademark.matches.map((m) => (
-                            <li key={m.mark} className="rounded-lg bg-red-50 px-3 py-2 text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                                <strong>{m.mark}</strong> — {m.note}
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="text-sm text-slate-500">
-                        {result.trademark.checked ? 'No matching marks found in the live USPTO search.' : 'Not flagged by the basic famous-mark check.'}
-                    </p>
-                )}
-                <p className="mt-3 text-xs text-slate-400">
-                    {result.trademark.checked ? 'Source: live USPTO search.' : 'Source: heuristic check only, no live database queried.'} {result.trademark.disclaimer}
-                </p>
+
+                <div className="grid gap-6 lg:grid-cols-3">
+                    {/* Panel 1: Wayback Machine Footprint */}
+                    <div className="rounded-xl border border-slate-200 p-5 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">🏛️</span>
+                                    <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Web Archive Footprint</h3>
+                                </div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Wayback CDX</span>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                                <div>
+                                    <span className="text-xs text-slate-500 block">First Recorded Snapshot</span>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                                            {result.archive?.firstSeenYear ? `${result.archive.firstSeenYear}` : 'No archive found'}
+                                        </span>
+                                        {result.archive?.archiveAgeYears && (
+                                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                                (~{result.archive.archiveAgeYears} yrs online)
+                                            </span>
+                                        )}
+                                    </div>
+                                    {result.archive?.firstSeenDate && (
+                                        <span className="text-[11px] text-slate-400 block mt-0.5">
+                                            Recorded {result.archive.firstSeenDate}
+                                            {result.archive.lastSeenYear ? ` · Active to ${result.archive.lastSeenYear}` : ''}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded border border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">Continuity</span>
+                                        <strong className="text-slate-800 dark:text-slate-200 text-xs font-bold capitalize">
+                                            {result.archive?.historicalContinuity ?? 'virgin'}
+                                        </strong>
+                                    </div>
+                                    <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded border border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">Due Diligence</span>
+                                        <strong className={`text-xs font-bold ${result.archive?.riskStatus === 'high-risk-drop' ? 'text-rose-600 dark:text-rose-400' : result.archive?.riskStatus === 'dormant-gap' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                            {result.archive?.riskStatus ? result.archive.riskStatus.replace('-', ' ') : 'virgin domain'}
+                                        </strong>
+                                    </div>
+                                </div>
+
+                                <div className="pt-2">
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                        {result.archive?.summary ?? 'No prior historical archive record captured on Wayback Machine.'}
+                                    </p>
+                                    {result.archive?.details && (
+                                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                            {result.archive.details}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                            <a
+                                href={result.archive?.waybackUrl ?? `https://web.archive.org/web/*/${encodeURIComponent(result.domain)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center justify-between group"
+                            >
+                                <span>Inspect snapshots on Wayback Machine</span>
+                                <span className="group-hover:translate-x-0.5 transition-transform">↗</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Panel 2: Trademark & UDRP Legal Scanner */}
+                    <div className="rounded-xl border border-slate-200 p-5 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">⚖️</span>
+                                    <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Trademark &amp; UDRP Scanner</h3>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${UDRP_RATING_STYLE[result.trademark.udrpRating] || 'bg-slate-200 text-slate-800'}`}>
+                                    {result.trademark.udrpRating}
+                                </span>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                                <div>
+                                    <div className="flex items-center justify-between text-xs mb-1">
+                                        <span className="text-slate-500 font-medium">UDRP Bad-Faith Risk Index</span>
+                                        <strong className="text-slate-900 dark:text-slate-100 font-bold">{result.trademark.udrpRiskScore}/100</strong>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full ${
+                                                result.trademark.udrpRiskScore >= 70
+                                                    ? 'bg-red-500'
+                                                    : result.trademark.udrpRiskScore >= 40
+                                                    ? 'bg-amber-500'
+                                                    : result.trademark.udrpRiskScore >= 20
+                                                    ? 'bg-blue-500'
+                                                    : 'bg-emerald-500'
+                                            }`}
+                                            style={{ width: `${Math.max(4, result.trademark.udrpRiskScore)}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {result.trademark.matches.length > 0 ? (
+                                    <div className="space-y-2">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Potential Mark Conflicts ({result.trademark.matches.length})</span>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                            {result.trademark.matches.map((m, idx) => (
+                                                <div key={idx} className="rounded-lg bg-red-50 dark:bg-red-950/40 p-2.5 border border-red-200 dark:border-red-900/40 text-xs">
+                                                    <div className="flex items-center justify-between font-bold text-red-800 dark:text-red-300">
+                                                        <span>{m.mark}</span>
+                                                        <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 bg-red-200 dark:bg-red-900 rounded">
+                                                            {m.matchType}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-1 text-red-700 dark:text-red-300 text-[11px] leading-relaxed">
+                                                        {m.note}
+                                                    </p>
+                                                    {m.category && (
+                                                        <p className="mt-0.5 text-[10px] text-red-500 dark:text-red-400">Sector: {m.category}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-800 dark:text-emerald-300">
+                                        <div className="font-bold flex items-center gap-1.5">
+                                            <span>✓</span>
+                                            <span>No Famous Marks Detected</span>
+                                        </div>
+                                        <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-300/80 leading-relaxed">
+                                            Clean clearance against high-frequency tech, finance, pharma, and global retail brands.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <p className="text-[11px] text-slate-400 leading-normal">
+                                    {result.trademark.disclaimer}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 pt-3 border-t border-slate-200 dark:border-slate-800">
+                            <div className="flex items-center justify-between text-xs">
+                                <span className="text-slate-400 text-[11px]">Direct Legal Search:</span>
+                                <div className="flex items-center gap-2">
+                                    <a
+                                        href={result.trademark.links.usptoUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-brand-600 hover:text-brand-700 dark:text-brand-400 font-semibold text-[11px]"
+                                    >
+                                        USPTO ↗
+                                    </a>
+                                    <span className="text-slate-300 dark:text-slate-700">·</span>
+                                    <a
+                                        href={result.trademark.links.wipoUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-brand-600 hover:text-brand-700 dark:text-brand-400 font-semibold text-[11px]"
+                                    >
+                                        WIPO ↗
+                                    </a>
+                                    <span className="text-slate-300 dark:text-slate-700">·</span>
+                                    <a
+                                        href={result.trademark.links.euipoUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-brand-600 hover:text-brand-700 dark:text-brand-400 font-semibold text-[11px]"
+                                    >
+                                        EUIPO ↗
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Panel 3: Digital Asset & SEO Authority */}
+                    <div className="rounded-xl border border-slate-200 p-5 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">🌐</span>
+                                    <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Asset &amp; SEO Authority</h3>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${INDEXABILITY_STYLE[result.seoEquity.indexabilityStatus] || 'bg-slate-100 text-slate-700'}`}>
+                                    {result.seoEquity.indexabilityStatus} Index
+                                </span>
+                            </div>
+
+                            <div className="mt-4 space-y-3">
+                                <div>
+                                    <div className="flex items-center justify-between text-xs mb-1">
+                                        <span className="text-slate-500 font-medium">Domain Authority Composite</span>
+                                        <strong className="text-slate-900 dark:text-slate-100 font-bold">{result.seoEquity.authorityScore}/100</strong>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-indigo-600"
+                                            style={{ width: `${Math.max(4, result.seoEquity.authorityScore)}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded border border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">Radio Test</span>
+                                        <strong className="text-slate-800 dark:text-slate-200 font-bold text-sm block mt-0.5">
+                                            {result.seoEquity.radioTestScore}/100
+                                        </strong>
+                                    </div>
+                                    <div className="bg-white dark:bg-slate-800/80 p-2.5 rounded border border-slate-200 dark:border-slate-700">
+                                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">Search Clarity</span>
+                                        <strong className="text-slate-800 dark:text-slate-200 text-sm font-bold block mt-0.5">
+                                            {result.seoEquity.brandSearchability}/100
+                                        </strong>
+                                    </div>
+                                </div>
+
+                                <div className="pt-2">
+                                    <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                                        {result.seoEquity.summary}
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        {result.seoEquity.details}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 pt-3 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                            <span>Equity Category:</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">{result.seoEquity.equityTier}</span>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             {/* Go-To-Market Section */}

@@ -28,12 +28,12 @@ export async function performValuation(domainInput: string): Promise<ValuationRe
         if (!allowed) {
             return { error: 'Free anonymous limit reached for today. Sign up (free) for unlimited valuations.', status: 429 };
         }
-        const result = await evaluateDomain(domainInput, { lookupAge: true });
+        const result = await evaluateDomain(domainInput, { lookupAge: true, lookupArchive: true, checkTrademark: true });
         await recordValuation(result);
         return { result, remainingFree: remaining };
     }
 
-    const result = await evaluateDomain(domainInput, { lookupAge: true });
+    const result = await evaluateDomain(domainInput, { lookupAge: true, lookupArchive: true, checkTrademark: true });
     await recordValuation(result);
     return { result, remainingFree: null };
 }
