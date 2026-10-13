@@ -33,6 +33,8 @@ export default function Footer() {
                         <li><Link href="/" className="hover:text-brand-600">Instant valuation</Link></li>
                         <li><Link href="/compare" className="hover:text-brand-600">Compare domains</Link></li>
                         <li><Link href="/bulk" className="hover:text-brand-600">Bulk portfolio check</Link></li>
+                        <li><Link href="/extension" className="hover:text-brand-600">Browser extension</Link></li>
+                        <li><Link href="/api-docs" className="hover:text-brand-600">API Documentation</Link></li>
                         <li><Link href="/dashboard" className="hover:text-brand-600">Watchlist &amp; alerts</Link></li>
                     </ul>
                 </div>

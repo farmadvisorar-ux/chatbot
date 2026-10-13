@@ -14,24 +14,36 @@ export async function checkAndConsumeRateLimit(
     limit: number = ANONYMOUS_DAILY_LIMIT,
     category: string = 'valuate',
 ): Promise<{ allowed: boolean; remaining: number }> {
-    const pool = getPool();
-    const { rows } = await pool.query<{ count: string }>(
-        `SELECT count(*) FROM rate_limit_events
-         WHERE bucket = $1 AND client_key = $2 AND created_at > now() - ($3 || ' minutes')::interval`,
-        [category, ip, WINDOW_MINUTES],
-    );
-    const current = Number(rows[0]?.count ?? 0);
+    try {
+        if (!process.env.DATABASE_URL) {
+            return { allowed: true, remaining: limit };
+        }
+        const pool = getPool();
+        const { rows } = await pool.query<{ count: string }>(
+            `SELECT count(*) FROM rate_limit_events
+             WHERE bucket = $1 AND client_key = $2 AND created_at > now() - ($3 || ' minutes')::interval`,
+            [category, ip, WINDOW_MINUTES],
+        );
+        const current = Number(rows[0]?.count ?? 0);
 
-    if (current >= limit) {
-        return { allowed: false, remaining: 0 };
+        if (current >= limit) {
+            return { allowed: false, remaining: 0 };
+        }
+
+        await pool.query('INSERT INTO rate_limit_events (bucket, client_key) VALUES ($1, $2)', [category, ip]);
+        return { allowed: true, remaining: limit - current - 1 };
+    } catch {
+        // Fall back gracefully if database table is missing or unreachable
+        return { allowed: true, remaining: limit };
     }
-
-    await pool.query('INSERT INTO rate_limit_events (bucket, client_key) VALUES ($1, $2)', [category, ip]);
-    return { allowed: true, remaining: limit - current - 1 };
 }
 
 export function getClientIp(headers: Headers): string {
-    const forwarded = headers.get('x-forwarded-for');
-    if (forwarded) return forwarded.split(',')[0]!.trim();
-    return headers.get('x-real-ip') ?? 'unknown';
+    try {
+        const forwarded = headers.get('x-forwarded-for');
+        if (forwarded) return forwarded.split(',')[0]!.trim();
+        return headers.get('x-real-ip') ?? 'unknown';
+    } catch {
+        return 'unknown';
+    }
 }

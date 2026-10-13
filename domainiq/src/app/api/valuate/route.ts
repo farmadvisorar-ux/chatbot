@@ -6,11 +6,18 @@ async function handle(domainInput: string | null) {
         return NextResponse.json({ error: 'Missing "domain" parameter' }, { status: 400 });
     }
 
-    const { result, remainingFree, error, status } = await performValuation(domainInput);
-    if (error) {
-        return NextResponse.json({ error }, { status: status ?? 400 });
+    try {
+        const { result, remainingFree, error, status } = await performValuation(domainInput);
+        if (error) {
+            return NextResponse.json({ error }, { status: status ?? 400 });
+        }
+        return NextResponse.json({ result, remainingFree });
+    } catch (err) {
+        return NextResponse.json(
+            { error: err instanceof Error ? err.message : 'Evaluation failed' },
+            { status: 500 },
+        );
     }
-    return NextResponse.json({ result, remainingFree });
 }
 
 export async function GET(req: NextRequest) {

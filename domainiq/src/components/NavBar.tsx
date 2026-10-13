@@ -19,7 +19,7 @@ export default async function NavBar() {
                     <Link href="/bulk" className="hover:text-brand-600">Bulk Portfolio</Link>
                     <Link href="/drops" className="hover:text-brand-600">Drop Radar</Link>
                     <Link href="/extension" className="hover:text-brand-600">Extension</Link>
-                    <Link href="/suggest" className="hover:text-brand-600">Name Ideas</Link>
+                    <Link href="/api-docs" className="hover:text-brand-600">API Docs</Link>
                     <Link href="/how-it-works" className="hover:text-brand-600">Methodology</Link>
                     <Link href="/pricing" className="hover:text-brand-600">Pricing</Link>
                     {session && <Link href="/dashboard" className="hover:text-brand-600">Dashboard</Link>}

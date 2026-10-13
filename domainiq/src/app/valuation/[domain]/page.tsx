@@ -120,23 +120,37 @@ const BUYER_URGENCY_STYLE: Record<string, string> = {
 
 export default async function ValuationPage({ params }: Props) {
     const domain = decodeURIComponent(params.domain);
-    const { result, error } = await performValuation(domain);
+    let result: import('@/lib/valuation/engine').ValuationResult | undefined;
+    let error: string | undefined;
+
+    try {
+        const valReq = await performValuation(domain);
+        result = valReq.result;
+        error = valReq.error;
+    } catch (err) {
+        error = err instanceof Error ? err.message : 'Valuation service encountered an unexpected error.';
+    }
 
     if (error || !result) {
         return (
-            <div className="mx-auto max-w-xl text-center">
+            <div className="mx-auto max-w-xl text-center py-12">
                 <h1 className="text-2xl font-bold">Couldn&apos;t evaluate that domain</h1>
-                <p className="mt-2 text-slate-500">{error}</p>
+                <p className="mt-2 text-slate-500">{error ?? 'Please check the domain name and try again.'}</p>
                 <Link href="/" className="btn-primary mt-6 inline-flex">Try another domain</Link>
             </div>
         );
     }
 
-    const session = await getSession();
+    let session = null;
     let alreadySaved = false;
-    if (session) {
-        const { rows } = await getPool().query('SELECT 1 FROM watchlist WHERE user_id = $1 AND domain = $2', [session.id, result.domain]);
-        alreadySaved = rows.length > 0;
+    try {
+        session = await getSession();
+        if (session && process.env.DATABASE_URL) {
+            const { rows } = await getPool().query('SELECT 1 FROM watchlist WHERE user_id = $1 AND domain = $2', [session.id, result.domain]);
+            alreadySaved = rows.length > 0;
+        }
+    } catch {
+        // Safe fallback if database is unavailable
     }
 
     return (
@@ -191,6 +205,9 @@ export default async function ValuationPage({ params }: Props) {
                 <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
                     <SaveToWatchlistButton domain={result.domain} signedIn={Boolean(session)} initiallySaved={alreadySaved} />
                     <ShareButton domain={result.domain} priceLabel={`${formatUsd(result.lowUsd)}–${formatUsd(result.highUsd)}`} />
+                    <Link href={`/valuation/${encodeURIComponent(result.domain)}/certificate`} className="btn-secondary">
+                        📄 Certificate
+                    </Link>
                     <Link href={`/compare?a=${encodeURIComponent(result.domain)}`} className="btn-secondary">Compare</Link>
                     <a
                         href={`https://dan.com/buy-domain/${encodeURIComponent(result.domain)}`}

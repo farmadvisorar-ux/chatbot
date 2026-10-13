@@ -9,6 +9,7 @@ const LINKS = [
     { href: '/bulk', label: 'Bulk Portfolio' },
     { href: '/drops', label: 'Drop Radar' },
     { href: '/extension', label: 'Browser Extension' },
+    { href: '/api-docs', label: 'API Docs' },
     { href: '/suggest', label: 'Name Ideas' },
     { href: '/how-it-works', label: 'Methodology' },
     { href: '/pricing', label: 'Pricing' },
