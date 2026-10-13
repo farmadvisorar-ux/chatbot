@@ -335,10 +335,34 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div className="card p-6 sm:p-8 rounded-2xl border-brand-500/30 bg-slate-900/90 shadow-2xl relative overflow-hidden">
-                        <form onSubmit={handleLogin} className="space-y-5">
-                            <div className="space-y-2">
+                        {/* Credentials Help Banner */}
+                        <div className="p-3.5 mb-5 rounded-xl bg-brand-950/70 border border-brand-800/80 text-xs font-mono space-y-1">
+                            <div className="text-brand-300 font-bold flex items-center gap-1.5">
+                                <span>🔑</span> Admin Login Credentials:
+                            </div>
+                            <div className="text-slate-300">
+                                Username: <span className="font-bold text-white">admin</span> (or <span className="text-white">admin@domainiq.com</span>)
+                            </div>
+                            <div className="text-slate-300">
+                                Password: <span className="font-bold text-emerald-400">domainiq-admin-2026</span>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 block">
-                                    Terminal Passcode
+                                    Admin Username
+                                </label>
+                                <input
+                                    type="text"
+                                    defaultValue="admin"
+                                    className="input w-full font-mono text-sm bg-slate-950 border-slate-800 focus:border-brand-500"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 block">
+                                    Admin Password / Passcode
                                 </label>
                                 <input
                                     type="password"
@@ -370,7 +394,7 @@ export default function AdminDashboardPage() {
                                 onClick={() => setPasscode('domainiq-admin-2026')}
                                 className="w-full text-center text-[11px] font-mono text-slate-400 hover:text-brand-300 transition-colors pt-2"
                             >
-                                ⚡ Fill Default Passcode (<span className="text-slate-300">domainiq-admin-2026</span>)
+                                ⚡ Click to Fill Password (<span className="text-slate-300">domainiq-admin-2026</span>)
                             </button>
                         </form>
                     </div>

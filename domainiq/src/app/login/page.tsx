@@ -27,7 +27,7 @@ function LoginInner() {
                 setError(data.error ?? 'Something went wrong');
                 return;
             }
-            router.push(searchParams.get('next') || '/dashboard');
+            router.push(data.redirect || searchParams.get('next') || '/dashboard');
             router.refresh();
         } finally {
             setLoading(false);
