@@ -3,29 +3,79 @@
 @tailwind utilities;
 
 :root {
-    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 body {
-    @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    @apply bg-slate-950 text-slate-100 antialiased selection:bg-brand-500/30 selection:text-brand-200;
+    background-image: 
+        radial-gradient(at 50% 0%, rgba(30, 58, 138, 0.15) 0px, transparent 60%),
+        radial-gradient(at 100% 0%, rgba(15, 23, 42, 0.5) 0px, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
 }
 
+/* Premium Card with Subtle Glass & Top Highlight */
 .card {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+    @apply relative rounded-2xl border border-slate-800/90 bg-slate-900/80 backdrop-blur-md shadow-xl transition-all duration-200;
 }
 
+.card:hover {
+    @apply border-slate-700/80;
+}
+
+/* Buttons with tactile feedback and micro-glow */
 .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2.5 font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 via-indigo-600 to-brand-600 bg-[length:200%_auto] px-5 py-2.5 font-semibold text-white shadow-lg shadow-brand-600/25 transition-all duration-300 hover:bg-[position:right_center] hover:shadow-brand-500/35 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
 }
 
 .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800;
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-700/80 bg-slate-800/60 backdrop-blur-sm px-4 py-2.5 font-medium text-slate-200 shadow-sm transition-all duration-200 hover:border-slate-600 hover:bg-slate-700/60 hover:text-white active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
 }
 
+/* Sleek Terminal Input */
 .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100;
+    @apply w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-4 py-3 text-slate-100 placeholder:text-slate-500 shadow-inner transition-all duration-200 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30;
 }
 
 .label-pill {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-wide;
+}
+
+/* Live Marquee Ticker */
+@keyframes ticker {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+
+.animate-ticker {
+    animation: ticker 40s linear infinite;
+}
+
+/* Subtle Tech Grid Pattern */
+.bg-tech-grid {
+    background-size: 32px 32px;
+    background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* Custom Smooth Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #090d16;
+}
+::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #334155;
 }

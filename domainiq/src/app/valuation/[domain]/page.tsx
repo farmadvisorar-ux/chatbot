@@ -11,6 +11,7 @@ import AlternativeNames from '@/components/AlternativeNames';
 import EmbedBadge from '@/components/EmbedBadge';
 import AdSlot from '@/components/AdSlot';
 import PitchGenerator from '@/components/PitchGenerator';
+import LeaseCalculatorWidget from '@/components/LeaseCalculatorWidget';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,16 +154,38 @@ export default async function ValuationPage({ params }: Props) {
         // Safe fallback if database is unavailable
     }
 
+    const assetGrade =
+        result.midUsd >= 10000000
+            ? { grade: 'AAA+ Apex Asset', blurb: 'Generational Category-Defining Asset', color: 'border-emerald-500/40 bg-emerald-950/70 text-emerald-300' }
+            : result.midUsd >= 1000000
+            ? { grade: 'AAA Institutional', blurb: 'Seven-Figure Digital Real Estate', color: 'border-emerald-500/40 bg-emerald-950/70 text-emerald-300' }
+            : result.midUsd >= 100000
+            ? { grade: 'AA Prime Commercial', blurb: 'High-Demand Enterprise Brand', color: 'border-blue-500/40 bg-blue-950/70 text-blue-300' }
+            : result.midUsd >= 20000
+            ? { grade: 'A Strategic Asset', blurb: 'Liquid Mid-Market Commercial', color: 'border-brand-500/40 bg-brand-950/70 text-brand-300' }
+            : result.midUsd >= 5000
+            ? { grade: 'B+ Investment Tier', blurb: 'High-Turnover Brandable', color: 'border-purple-500/40 bg-purple-950/70 text-purple-300' }
+            : { grade: 'B Emerging Asset', blurb: 'Affordable Entry Opportunity', color: 'border-slate-600/40 bg-slate-900/70 text-slate-300' };
+
     return (
         <div className="mx-auto max-w-4xl space-y-10">
             {/* Hero Valuation Card */}
-            <section className="card p-8 text-center relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-500 via-indigo-500 to-emerald-500" />
-                <p className="text-sm font-medium text-slate-500">Estimated Fair Market Value for</p>
-                <h1 className="mt-1 text-3xl sm:text-4xl font-black tracking-tight">{result.domain}</h1>
+            <section className="card p-8 sm:p-10 text-center relative overflow-hidden border-brand-500/30 bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950/30">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-500 via-indigo-500 to-emerald-400" />
+                
+                {/* Asset Grade Pill */}
+                <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border px-3.5 py-1 text-xs font-mono font-bold shadow-sm backdrop-blur-md">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="tracking-wide">GRADE: {assetGrade.grade}</span>
+                    <span className="text-slate-500">·</span>
+                    <span className="text-slate-400 font-sans font-normal">{assetGrade.blurb}</span>
+                </div>
+
+                <p className="text-xs uppercase tracking-wider font-semibold text-slate-400">Estimated Fair Market Value for</p>
+                <h1 className="mt-1 text-3xl sm:text-5xl font-black tracking-tight text-white font-mono">{result.domain}</h1>
 
                 {result.exactComp && (
-                    <div className="mx-auto mt-4 max-w-md rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-2">
+                    <div className="mx-auto mt-4 max-w-md rounded-xl bg-emerald-950/50 border border-emerald-800/80 px-4 py-2.5 text-xs text-emerald-300 flex items-center justify-center gap-2 shadow-inner">
                         <span>📌</span>
                         <span>
                             Exact recorded sale: <strong>{formatUsdExact(result.exactComp.sale_price_usd)}</strong>
@@ -171,12 +194,12 @@ export default async function ValuationPage({ params }: Props) {
                     </div>
                 )}
 
-                <div className="mt-6 text-5xl sm:text-6xl font-black text-brand-600 tracking-tight">
+                <div className="mt-6 text-5xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-brand-300 tracking-tight font-mono">
                     {formatUsd(result.midUsd)}
                 </div>
-                <p className="mt-2 text-sm text-slate-500">
-                    Expected Range: <strong className="text-slate-800 dark:text-slate-200">{formatUsd(result.lowUsd)}</strong> – <strong className="text-slate-800 dark:text-slate-200">{formatUsd(result.highUsd)}</strong>
-                    <span className="ml-2 text-xs text-slate-400">(&plusmn;{result.volatilityBandPercent}% Volatility Band)</span>
+                <p className="mt-2 text-sm text-slate-400">
+                    Expected Range: <strong className="text-slate-200">{formatUsd(result.lowUsd)}</strong> – <strong className="text-slate-200">{formatUsd(result.highUsd)}</strong>
+                    <span className="ml-2 text-xs text-slate-500 font-mono">(&plusmn;{result.volatilityBandPercent}% Volatility Band)</span>
                 </p>
 
                 {/* Trust & Liquidity Highlights */}
@@ -333,6 +356,11 @@ export default async function ValuationPage({ params }: Props) {
                             Maximum upside · 6–18mo cycle
                         </div>
                     </div>
+                </div>
+
+                {/* Interactive Financing & Lease-to-Own Modeling Widget */}
+                <div className="mt-6">
+                    <LeaseCalculatorWidget channelPricing={result.channelPricing} domain={result.domain} />
                 </div>
             </section>
 
