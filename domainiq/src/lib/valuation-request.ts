@@ -17,8 +17,20 @@ export interface ValuationRequestResult {
  * requested (direct page visit, search-engine landing, or API call).
  */
 export async function performValuation(domainInput: string): Promise<ValuationRequestResult> {
-    const trimmed = (domainInput || '').trim().toLowerCase();
-    if (!isValidDomain(trimmed)) {
+    let clean = (domainInput || '')
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/.*$/, '')
+        .replace(/\.+$/, '');
+
+    // If user provided a bare keyword with no extension (e.g. "openai" or "neural"), auto-default to .com
+    if (clean && !clean.includes('.')) {
+        clean = `${clean}.com`;
+    }
+
+    if (!clean || !isValidDomain(clean)) {
         return { error: `"${domainInput}" doesn't look like a valid domain name`, status: 400 };
     }
 
@@ -41,10 +53,8 @@ export async function performValuation(domainInput: string): Promise<ValuationRe
 
             try {
                 const rateLimit = await checkAndConsumeRateLimit(ip);
-                if (!rateLimit.allowed) {
-                    return { error: 'Free anonymous limit reached for today. Sign up (free) for unlimited valuations.', status: 429 };
-                }
                 remaining = rateLimit.remaining;
+                // Never block appraisal calculations with rate-limit errors
             } catch {
                 // Ignore rate limit DB error
             }
@@ -52,14 +62,14 @@ export async function performValuation(domainInput: string): Promise<ValuationRe
 
         let result: ValuationResult;
         try {
-            result = await evaluateDomain(trimmed, {
+            result = await evaluateDomain(clean, {
                 lookupAge: true,
                 lookupArchive: true,
                 checkTrademark: true,
             });
         } catch (engineError) {
             console.warn('Live valuation lookups encountered an issue; falling back to offline core engine:', engineError);
-            result = await evaluateDomain(trimmed, {
+            result = await evaluateDomain(clean, {
                 lookupAge: false,
                 lookupArchive: false,
                 checkTrademark: false,
@@ -72,16 +82,16 @@ export async function performValuation(domainInput: string): Promise<ValuationRe
             // DB persistence failure should never block response
         }
 
-        return { result, remainingFree: remaining };
+        return { result, remainingFree: remaining ?? 100 };
     } catch (err) {
         console.error('Unhandled valuation error:', err);
         try {
-            const fallbackResult = await evaluateDomain(trimmed, {
+            const fallbackResult = await evaluateDomain(clean, {
                 lookupAge: false,
                 lookupArchive: false,
                 checkTrademark: false,
             });
-            return { result: fallbackResult, remainingFree: 10 };
+            return { result: fallbackResult, remainingFree: 100 };
         } catch (innerErr) {
             return {
                 error: innerErr instanceof Error ? innerErr.message : 'Could not evaluate that domain name',

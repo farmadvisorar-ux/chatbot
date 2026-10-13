@@ -76,10 +76,11 @@ export default function AffiliateSpotlight({
             return AFFILIATE_PARTNERS.find((p) => p.id === partnerId) ?? AFFILIATE_PARTNERS[0]!;
         }
         const effectiveOffset = mounted ? slotIndex + clientOffset : slotIndex;
-        return getAffiliatePartner(domain, effectiveOffset);
+        return getAffiliatePartner(domain || 'domain.com', effectiveOffset) ?? AFFILIATE_PARTNERS[0]!;
     }, [domain, slotIndex, partnerId, mounted, clientOffset]);
 
-    const theme = THEME_STYLES[partner.theme];
+    const theme = (partner && THEME_STYLES[partner.theme]) ? THEME_STYLES[partner.theme] : THEME_STYLES.brand;
+    const safeDomain = domain || 'domain.com';
 
     if (variant === 'banner') {
         return (
@@ -98,10 +99,10 @@ export default function AffiliateSpotlight({
                             <span className="text-[10px] text-slate-500 font-mono">Sponsored Partner</span>
                         </div>
                         <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                            {partner.headline(domain)}
+                            {partner.headline(safeDomain)}
                         </h4>
                         <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
-                            {partner.description(domain)}
+                            {partner.description(safeDomain)}
                         </p>
                     </div>
 
@@ -136,16 +137,16 @@ export default function AffiliateSpotlight({
                             </span>
                         </div>
                         <span className="text-[11px] text-slate-400 font-mono">
-                            Recommended Action for {domain}
+                            Recommended Action for {safeDomain}
                         </span>
                     </div>
 
                     <div className="space-y-2">
                         <h3 className="text-lg sm:text-2xl font-black text-white tracking-tight">
-                            {partner.headline(domain)}
+                            {partner.headline(safeDomain)}
                         </h3>
                         <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
-                            {partner.description(domain)}
+                            {partner.description(safeDomain)}
                         </p>
                     </div>
 
@@ -184,10 +185,10 @@ export default function AffiliateSpotlight({
                         <span className="text-[10px] text-slate-500 font-mono">Partner Spotlight</span>
                     </div>
                     <h5 className="text-sm font-bold text-white">
-                        {partner.headline(domain)}
+                        {partner.headline(safeDomain)}
                     </h5>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                        {partner.description(domain)}
+                        {partner.description(safeDomain)}
                     </p>
                 </div>
 

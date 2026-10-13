@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { performValuation } from '@/lib/valuation-request';
+import { evaluateDomain } from '@/lib/valuation/engine';
 import { getSession } from '@/lib/auth';
 import { getPool } from '@/lib/db';
 import { formatUsd, formatUsdExact } from '@/lib/format';
@@ -123,7 +124,16 @@ const BUYER_URGENCY_STYLE: Record<string, string> = {
 };
 
 export default async function ValuationPage({ params }: Props) {
-    const domain = decodeURIComponent(params.domain);
+    let domain = decodeURIComponent(params.domain || '').trim().toLowerCase();
+    domain = domain
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/.*$/, '')
+        .replace(/\.+$/, '');
+    if (domain && !domain.includes('.')) {
+        domain = `${domain}.com`;
+    }
+
     let result: import('@/lib/valuation/engine').ValuationResult | undefined;
     let error: string | undefined;
 
@@ -135,7 +145,22 @@ export default async function ValuationPage({ params }: Props) {
         error = err instanceof Error ? err.message : 'Valuation service encountered an unexpected error.';
     }
 
-    if (error || !result) {
+    // Emergency fail-safe: if performValuation produced an error or no result,
+    // evaluate directly via the deterministic core valuation engine
+    if (!result && domain) {
+        try {
+            result = await evaluateDomain(domain, {
+                lookupAge: false,
+                lookupArchive: false,
+                checkTrademark: false,
+            });
+            error = undefined;
+        } catch (innerErr) {
+            console.error('Core engine emergency fallback failed:', innerErr);
+        }
+    }
+
+    if (!result) {
         return (
             <div className="mx-auto max-w-xl text-center py-12">
                 <h1 className="text-2xl font-bold">Couldn&apos;t evaluate that domain</h1>

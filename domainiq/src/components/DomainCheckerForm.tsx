@@ -37,16 +37,22 @@ export default function DomainCheckerForm({
     }, []);
 
     function executeValuation(targetDomain: string) {
-        const clean = targetDomain
+        let clean = targetDomain
             .trim()
             .toLowerCase()
             .replace(/^https?:\/\//, '')
             .replace(/^www\./, '')
-            .replace(/\/.*$/, '');
+            .replace(/\/.*$/, '')
+            .replace(/\.+$/, '');
 
-        if (!clean || !clean.includes('.')) {
-            setError('Enter a valid domain name (e.g. quantum.ai or brand.com)');
+        if (!clean) {
+            setError('Please enter a domain name to evaluate (e.g. quantum.ai or brand.com)');
             return;
+        }
+
+        // Auto-default to .com if user enters a bare name with no TLD (e.g. "openai" or "neural")
+        if (!clean.includes('.')) {
+            clean = `${clean}.com`;
         }
 
         try {

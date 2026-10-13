@@ -19,7 +19,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CertificatePage({ params }: Props) {
-    const domain = decodeURIComponent(params.domain);
+    let domain = decodeURIComponent(params.domain || '').trim().toLowerCase();
+    domain = domain
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/.*$/, '')
+        .replace(/\.+$/, '');
+    if (domain && !domain.includes('.')) {
+        domain = `${domain}.com`;
+    }
+
     let result: import('@/lib/valuation/engine').ValuationResult | undefined;
     let error: string | undefined;
 
@@ -31,7 +40,21 @@ export default async function CertificatePage({ params }: Props) {
         error = err instanceof Error ? err.message : 'Unable to generate certificate at this time.';
     }
 
-    if (error || !result) {
+    if (!result && domain) {
+        try {
+            const { evaluateDomain } = await import('@/lib/valuation/engine');
+            result = await evaluateDomain(domain, {
+                lookupAge: false,
+                lookupArchive: false,
+                checkTrademark: false,
+            });
+            error = undefined;
+        } catch (innerErr) {
+            console.error('Certificate emergency fallback failed:', innerErr);
+        }
+    }
+
+    if (!result) {
         return (
             <div className="mx-auto max-w-xl text-center py-16">
                 <h1 className="text-2xl font-bold">Unable to generate certificate</h1>

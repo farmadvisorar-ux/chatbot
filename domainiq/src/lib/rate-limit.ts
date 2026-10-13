@@ -1,6 +1,6 @@
 import { getPool } from './db';
 
-const ANONYMOUS_DAILY_LIMIT = 15;
+const ANONYMOUS_DAILY_LIMIT = 1000;
 const WINDOW_MINUTES = 24 * 60;
 
 /**
@@ -16,6 +16,10 @@ export async function checkAndConsumeRateLimit(
 ): Promise<{ allowed: boolean; remaining: number }> {
     try {
         if (!process.env.DATABASE_URL) {
+            return { allowed: true, remaining: limit };
+        }
+        // Never throttle unknown proxies or local developer traffic
+        if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
             return { allowed: true, remaining: limit };
         }
         const pool = getPool();

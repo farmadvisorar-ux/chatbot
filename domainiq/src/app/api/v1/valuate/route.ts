@@ -29,10 +29,21 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleValuationRequest(rawDomain: string, req: NextRequest) {
-    const domain = rawDomain.trim().toLowerCase();
-    if (!isValidDomain(domain)) {
+    let domain = rawDomain
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/\/.*$/, '')
+        .replace(/\.+$/, '');
+
+    if (domain && !domain.includes('.')) {
+        domain = `${domain}.com`;
+    }
+
+    if (!domain || !isValidDomain(domain)) {
         return NextResponse.json(
-            { status: 'error', error: `"${domain}" is not a valid domain name` },
+            { status: 'error', error: `"${rawDomain}" is not a valid domain name` },
             { status: 400 },
         );
     }
