@@ -12,6 +12,8 @@ import EmbedBadge from '@/components/EmbedBadge';
 import AdSlot from '@/components/AdSlot';
 import PitchGenerator from '@/components/PitchGenerator';
 import LeaseCalculatorWidget from '@/components/LeaseCalculatorWidget';
+import TriangulationMatrix from '@/components/TriangulationMatrix';
+import ValuationLedger from '@/components/ValuationLedger';
 
 export const dynamic = 'force-dynamic';
 
@@ -223,6 +225,9 @@ export default async function ValuationPage({ params }: Props) {
                             🏛️ {result.archive.archiveAgeYears ? `${result.archive.archiveAgeYears}y Wayback Vintage` : `First Seen ${result.archive.firstSeenYear}`}
                         </span>
                     )}
+                    <span className="label-pill px-3 py-1 font-semibold bg-cyan-100 text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-700">
+                        💎 {result.structuralArchetype.label} ({result.structuralArchetype.rarity})
+                    </span>
                 </div>
 
                 <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
@@ -242,6 +247,21 @@ export default async function ValuationPage({ params }: Props) {
                     </a>
                 </div>
             </section>
+
+            {/* Quad-Model Consensus Triangulation Matrix (Engine v3.0) */}
+            <TriangulationMatrix
+                triangulation={result.triangulation}
+                structuralArchetype={result.structuralArchetype}
+                economicArbitrage={result.economicArbitrage}
+                domain={result.domain}
+            />
+
+            {/* Audited Valuation Ledger (XVAL Explainable Audit) */}
+            <ValuationLedger
+                ledger={result.valuationLedger}
+                consensusFmvUsd={result.midUsd}
+                domain={result.domain}
+            />
 
             {/* Multi-Channel Pricing Matrix (Phase 1) */}
             <section className="card p-8">

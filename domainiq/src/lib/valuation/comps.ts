@@ -13,6 +13,7 @@ export interface CompRow {
 }
 
 export interface MatchedComp extends CompRow {
+    present_value_usd: number;
     similarity: number;
     matchReason: string;
     compTier: 'high-relevance' | 'medium-relevance' | 'directional';
@@ -25,13 +26,8 @@ export interface CompsResult {
 }
 
 /**
- * Finds the most relevant historical sales for a target domain and
- * derives an implied price via similarity-weighted averaging.
- *
- * Gating each comp's contribution by how close its sale price is to
- * the model's own independent estimate keeps an average domain from getting
- * distorted by headline mega-sales while heavily rewarding verified
- * real-market comps of similar quality.
+ * Finds the most relevant historical sales for a target domain using
+ * multivariate KNN similarity regression with 2026 present-value time normalization.
  */
 export async function findComps(params: {
     tld: string;
@@ -39,6 +35,8 @@ export async function findComps(params: {
     wordCount: number;
     category: string | null;
     referencePriceUsd: number;
+    structuralArchetypeKey?: string;
+    label?: string;
 }): Promise<CompsResult> {
     let rows: CompRow[] = [];
 
@@ -70,41 +68,62 @@ export async function findComps(params: {
     }
 
     const scored: MatchedComp[] = rows.map((row) => {
-        const priceRatio = Math.max(row.sale_price_usd, 1) / Math.max(params.referencePriceUsd, 1);
-        const logRatio = Math.abs(Math.log10(priceRatio));
-        const priceSimilarity = Math.max(0, 100 - logRatio * 45);
+        // 1. Time-Decayed Present-Value Normalization (3.2% compound index up to 2026)
+        const saleYear = row.sale_year ?? 2020;
+        const yearsElapsed = Math.max(0, 2026 - saleYear);
+        const inflationFactor = Math.pow(1.032, yearsElapsed);
+        const presentValueUsd = Math.round(row.sale_price_usd * inflationFactor);
 
+        // 2. Price proximity ratio against present-value adjusted comp
+        const priceRatio = Math.max(presentValueUsd, 1) / Math.max(params.referencePriceUsd, 1);
+        const logRatio = Math.abs(Math.log10(priceRatio));
+        const priceSimilarity = Math.max(0, 100 - logRatio * 38);
+
+        // 3. Characteristic distance metrics
         let characteristics = 0;
         const reasons: string[] = [];
 
+        // Exact or sister TLD match
         if (row.tld === params.tld) {
             characteristics += 35;
             reasons.push(`Exact .${row.tld} match`);
         } else if (isPremiumGroup(row.tld) && isPremiumGroup(params.tld)) {
-            characteristics += 14;
-            reasons.push(`Top-tier TLD group (.${row.tld})`);
+            characteristics += 18;
+            reasons.push(`Top-tier TLD sister group (.${row.tld})`);
         }
 
+        // Category/Industry match
         if (params.category && row.category === params.category) {
-            characteristics += 32;
+            characteristics += 30;
             reasons.push(`Same ${params.category} sector`);
         }
 
+        // Length similarity
         const lenDiff = Math.abs(row.char_count - params.charCount);
-        if (lenDiff <= 1) {
-            characteristics += 20;
+        if (lenDiff === 0) {
+            characteristics += 25;
+            reasons.push(`Exact ${row.char_count}-character length`);
+        } else if (lenDiff <= 1) {
+            characteristics += 18;
             reasons.push(`Equivalent length (${row.char_count} chars)`);
         } else if (lenDiff <= 3) {
-            characteristics += 12;
+            characteristics += 10;
             reasons.push(`Similar length`);
         }
 
+        // Word pattern & structural archetype match
         if (row.word_count === params.wordCount) {
-            characteristics += 13;
-            reasons.push(`${row.word_count === 1 ? 'Single word' : row.word_count === 2 ? 'Two-word compound' : 'Brandable pattern'}`);
+            characteristics += 15;
+            reasons.push(row.word_count === 1 ? 'Single word' : row.word_count === 2 ? 'Two-word compound' : 'Brandable pattern');
         }
 
-        const similarity = Math.round(priceSimilarity * 0.52 + characteristics * 0.48);
+        // Special short-character investor archetype matching
+        if (params.charCount <= 3 && row.char_count <= 3 && params.tld === 'com' && row.tld === 'com') {
+            characteristics += 25;
+            reasons.push('Liquid short .com asset class');
+        }
+
+        const similarity = Math.min(99, Math.round(priceSimilarity * 0.45 + characteristics * 0.55));
 
         let compTier: 'high-relevance' | 'medium-relevance' | 'directional' = 'directional';
         if (similarity >= 75) compTier = 'high-relevance';
@@ -114,6 +133,7 @@ export async function findComps(params: {
 
         return {
             ...row,
+            present_value_usd: presentValueUsd,
             similarity,
             matchReason,
             compTier,
@@ -121,19 +141,20 @@ export async function findComps(params: {
     });
 
     scored.sort((a, b) => b.similarity - a.similarity);
-    const top = scored.filter((c) => c.similarity >= 40).slice(0, 8);
+    const top = scored.filter((c) => c.similarity >= 38).slice(0, 8);
 
     if (top.length === 0) {
         return { matches: scored.slice(0, 3), impliedPriceUsd: null, weight: 0 };
     }
 
     const totalWeight = top.reduce((sum, c) => sum + c.similarity, 0);
-    const impliedPriceUsd = top.reduce((sum, c) => sum + c.sale_price_usd * c.similarity, 0) / totalWeight;
+    // Implied price is calculated on present-value adjusted benchmarks
+    const impliedPriceUsd = top.reduce((sum, c) => sum + c.present_value_usd * c.similarity, 0) / totalWeight;
 
-    // Weight grows with number of decent matches and their average similarity.
+    // Weight grows with quality and similarity of top comps
     const avgSimilarity = totalWeight / top.length;
     const countFactor = Math.min(1, top.length / 4);
-    const weight = Math.min(0.65, (avgSimilarity / 100) * countFactor);
+    const weight = Math.min(0.70, (avgSimilarity / 100) * countFactor);
 
     return { matches: top, impliedPriceUsd, weight };
 }

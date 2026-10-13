@@ -124,6 +124,12 @@ export default async function CertificatePage({ params }: Props) {
 
                 {/* Core Valuation Figures Banner */}
                 <div className="p-6 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-center my-6">
+                    <div className="mb-2 inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-mono font-bold bg-brand-100 dark:bg-brand-950 text-brand-700 dark:text-brand-300 border border-brand-300 dark:border-brand-800 uppercase">
+                        <span>🏛️ Archetype:</span>
+                        <span>{result.structuralArchetype.label}</span>
+                        <span>·</span>
+                        <span>{result.structuralArchetype.rarity}</span>
+                    </div>
                     <span className="text-xs uppercase font-bold tracking-wider text-slate-500 block">
                         Estimated Fair Market Valuation (Baseline Secondary Market)
                     </span>
@@ -134,6 +140,15 @@ export default async function CertificatePage({ params }: Props) {
                         Expected Liquidity Range: <strong>{formatUsd(result.lowUsd)}</strong> – <strong>{formatUsd(result.highUsd)}</strong>
                         <span className="text-[11px] text-slate-400 ml-1">(&plusmn;{result.volatilityBandPercent}% Volatility Spread)</span>
                     </p>
+                    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 flex flex-wrap items-center justify-center gap-3 font-mono">
+                        <span>Structural: <strong>{formatUsd(result.triangulation.structuralValueUsd)}</strong></span>
+                        <span>·</span>
+                        <span>Comps Regression: <strong>{result.triangulation.compsValueUsd ? formatUsd(result.triangulation.compsValueUsd) : 'Directional'}</strong></span>
+                        <span>·</span>
+                        <span>Search CAC: <strong>{formatUsd(result.triangulation.economicValueUsd)}</strong></span>
+                        <span>·</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">Agreement: {result.triangulation.modelAgreementScore}%</span>
+                    </div>
                 </div>
 
                 {/* 3-Channel Valuation Breakdown */}

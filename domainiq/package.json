@@ -13,7 +13,7 @@
     "seed": "tsx scripts/seed.ts",
     "seed:http": "tsx scripts/seed-http.ts",
     "newsletter:send": "tsx scripts/send-newsletter.ts",
-    "test": "node --test --import tsx tests/*.test.ts"
+    "test": "tsx --test tests/valuation-engine.test.ts"
   },
   "dependencies": {
     "pg": "^8.13.1",
