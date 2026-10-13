@@ -12,8 +12,27 @@ import { computeChannelPricing, computeOutboundFitScore, type ChannelPricing } f
 import { checkTrademarkRisk, type TrademarkResult } from './trademark';
 import { generateGtmStrategy, type GtmStrategy } from './gtm';
 import { getPool } from '../db';
+import { COMPS } from '@/data/comps-seed';
 
 export type Confidence = 'low' | 'medium' | 'high';
+
+export interface ConfidenceFactor {
+    name: string;
+    score: number; // 0-100
+    weight: number; // fraction of overall confidence (sums to 1.0)
+    impact: 'positive' | 'neutral' | 'negative';
+    description: string;
+}
+
+export type LiquidityRating = 'Ultra-Liquid' | 'High Liquidity' | 'Moderate Liquidity' | 'Niche / Illiquid';
+
+export interface LiquidityProfile {
+    rating: LiquidityRating;
+    score: number; // 0-100
+    estimatedDaysToSell: string;
+    turnoverVelocity: 'fast' | 'moderate' | 'slow';
+    rationale: string;
+}
 
 export interface FactorBreakdown {
     key: string;
@@ -44,6 +63,10 @@ export interface ValuationResult {
     midUsd: number;
     highUsd: number;
     confidence: Confidence;
+    confidenceScore: number; // 0-100 quantitative trust rating
+    confidenceFactors: ConfidenceFactor[];
+    liquidity: LiquidityProfile;
+    volatilityBandPercent: number; // e.g. 28% for tight bands, 70% for wide
     channelPricing: ChannelPricing;
     outboundFitScore: number;
     trademark: TrademarkResult;
@@ -115,9 +138,42 @@ export async function evaluateDomain(
 
     const formulaPrice = linguisticBase * tldInfo.multiplier * keywordMultiplier * ageMultiplier;
 
-    const { rows: exactCompRows } = await getPool().query<MatchedComp>('SELECT * FROM comps WHERE domain = $1', [domain]);
-    const exactCompRow = exactCompRows[0];
-    const exactComp = exactCompRow ? { ...exactCompRow, similarity: 100 } : null;
+    let exactComp: MatchedComp | null = null;
+    try {
+        const { rows: exactCompRows } = await getPool().query<MatchedComp>('SELECT * FROM comps WHERE domain = $1', [domain]);
+        const exactCompRow = exactCompRows[0];
+        if (exactCompRow) {
+            exactComp = {
+                ...exactCompRow,
+                similarity: 100,
+                matchReason: 'Exact historical domain sale record',
+                compTier: 'high-relevance',
+            };
+        }
+    } catch {
+        // Fallback to static seed data
+    }
+
+    if (!exactComp) {
+        const seedExact = COMPS.find((c) => c.domain.toLowerCase() === domain.toLowerCase());
+        if (seedExact) {
+            const parts = seedExact.domain.split('.');
+            const label = parts[0] ?? '';
+            exactComp = {
+                domain: seedExact.domain,
+                tld: parts.slice(1).join('.'),
+                sale_price_usd: seedExact.salePriceUsd,
+                sale_year: seedExact.saleYear,
+                word_count: seedExact.wordCount,
+                char_count: label.length,
+                category: seedExact.category,
+                source_note: seedExact.sourceNote,
+                similarity: 100,
+                matchReason: 'Exact historical domain sale record',
+                compTier: 'high-relevance',
+            };
+        }
+    }
 
     const compsResult = await findComps({
         tld,
@@ -139,20 +195,29 @@ export async function evaluateDomain(
             : formulaPrice;
     }
 
-    let confidence: Confidence = 'low';
-    if (exactComp) confidence = 'high';
-    else if (compsWeight >= 0.4 && tldInfo.authority >= 50) confidence = 'high';
-    else if (compsWeight >= 0.15 || tldInfo.authority >= 60) confidence = 'medium';
+    const { confidence, confidenceScore, confidenceFactors, volatilityBandPercent } = computeConfidence({
+        exactComp,
+        comps: compsResult.matches,
+        compsWeight,
+        tldAuthority: tldInfo.authority,
+        tld,
+        linguisticScore,
+        compositionScore,
+        keywordMatch,
+    });
 
-    const rangeFactors: Record<Confidence, [number, number]> = {
-        high: [0.65, 1.5],
-        medium: [0.5, 2.0],
-        low: [0.3, 3.2],
-    };
-    const [lowFactor, highFactor] = rangeFactors[confidence];
+    const lowUsd = Math.max(50, Math.round(midUsd * (1 - (volatilityBandPercent / 100) * 0.75)));
+    const highUsd = Math.round(midUsd * (1 + (volatilityBandPercent / 100) * 1.35));
 
-    const lowUsd = Math.round(midUsd * lowFactor);
-    const highUsd = Math.round(midUsd * highFactor);
+    const liquidity = computeLiquidity({
+        domain,
+        tld,
+        charCount,
+        wordCount: wordCountTag,
+        isSingleWord,
+        compositionScore,
+        tldAuthority: tldInfo.authority,
+    });
 
     const channelPricing = computeChannelPricing({ lowUsd, midUsd: Math.round(midUsd), highUsd, vertical });
     const outboundFitScore = computeOutboundFitScore({
@@ -196,6 +261,10 @@ export async function evaluateDomain(
         midUsd: Math.round(midUsd),
         highUsd,
         confidence,
+        confidenceScore,
+        confidenceFactors,
+        liquidity,
+        volatilityBandPercent,
         channelPricing,
         outboundFitScore,
         trademark,
@@ -204,10 +273,213 @@ export async function evaluateDomain(
     };
 }
 
+function computeConfidence(params: {
+    exactComp: MatchedComp | null;
+    comps: MatchedComp[];
+    compsWeight: number;
+    tldAuthority: number;
+    tld: string;
+    linguisticScore: number;
+    compositionScore: number;
+    keywordMatch: { keyword: string; tier: string; multiplier: number } | null;
+}): {
+    confidence: Confidence;
+    confidenceScore: number;
+    confidenceFactors: ConfidenceFactor[];
+    volatilityBandPercent: number;
+} {
+    const { exactComp, comps, compsWeight, tldAuthority, tld, linguisticScore, compositionScore, keywordMatch } = params;
+
+    // Factor 1: Comparable Sales Evidence (Weight 35%)
+    let compScore = 35;
+    let compDesc = 'Limited historical sales data in this exact bracket; baseline valuation relying primarily on heuristics.';
+    let compImpact: 'positive' | 'neutral' | 'negative' = 'negative';
+
+    if (exactComp) {
+        compScore = 100;
+        compDesc = `Verified historical recorded sale of this exact domain (${exactComp.domain}).`;
+        compImpact = 'positive';
+    } else if (comps.length > 0) {
+        const topComp = comps[0];
+        const topSimilarity = topComp?.similarity ?? 0;
+        if (topSimilarity >= 80 && compsWeight >= 0.35 && topComp) {
+            compScore = Math.min(95, Math.round(topSimilarity * 0.95 + comps.length * 2));
+            compDesc = `Strong comparable evidence: ${comps.length} close market sales (top comp: ${topComp.domain} at ${topSimilarity}% match).`;
+            compImpact = 'positive';
+        } else if (topSimilarity >= 60 || compsWeight >= 0.2) {
+            compScore = Math.min(80, Math.round(55 + topSimilarity * 0.3));
+            compDesc = `Moderate comparable support: ${comps.length} sales with similar length/niche profile.`;
+            compImpact = 'neutral';
+        } else {
+            compScore = Math.max(40, Math.round(topSimilarity * 0.7));
+            compDesc = `Directional comps only; fewer direct market transactions recorded for this specific profile.`;
+            compImpact = 'negative';
+        }
+    }
+
+    // Factor 2: Extension Stability & Liquidity (Weight 25%)
+    let tldScore = Math.round(tldAuthority);
+    let tldDesc = `.${tld} has established secondary market liquidity and institutional recognition.`;
+    let tldImpact: 'positive' | 'neutral' | 'negative' = 'neutral';
+    if (tld === 'com') {
+        tldScore = 98;
+        tldDesc = '.com represents universal global standard and maximum commercial buyer liquidity.';
+        tldImpact = 'positive';
+    } else if (['ai', 'io', 'org', 'net', 'co'].includes(tld)) {
+        tldScore = Math.max(78, tldAuthority);
+        tldDesc = `.${tld} is a liquid premium tier extension with established tech/institutional aftermarket.`;
+        tldImpact = 'positive';
+    } else if (tldAuthority < 50) {
+        tldScore = Math.min(55, Math.max(25, tldAuthority));
+        tldDesc = `.${tld} experiences lower aftermarket transaction volume; price discovery wider.`;
+        tldImpact = 'negative';
+    }
+
+    // Factor 3: Lexical & Phonetic Determinism (Weight 20%)
+    const lexScore = Math.min(100, Math.max(20, Math.round(compositionScore * 0.6 + linguisticScore * 0.4)));
+    let lexDesc = 'Clean, dictionary-aligned spelling eliminates confusion and anchors perceived value.';
+    let lexImpact: 'positive' | 'neutral' | 'negative' = 'positive';
+    if (lexScore >= 80) {
+        lexDesc = 'High clarity: standard vocabulary or intuitive brandable composition with zero radio-test ambiguity.';
+        lexImpact = 'positive';
+    } else if (lexScore >= 55) {
+        lexDesc = 'Moderate lexical clarity: recognizable pattern, though partly reliant on brand positioning.';
+        lexImpact = 'neutral';
+    } else {
+        lexDesc = 'Unconventional spelling, length, or invented construction creates wider variance in buyer valuation.';
+        lexImpact = 'negative';
+    }
+
+    // Factor 4: Commercial Demand & Commercial Search Intent (Weight 20%)
+    let comScore = 50;
+    let comDesc = 'General consumer/brandable interest without high CPC keyword concentration.';
+    let comImpact: 'positive' | 'neutral' | 'negative' = 'neutral';
+    if (keywordMatch) {
+        if (keywordMatch.tier === '1') {
+            comScore = 95;
+            comDesc = `High-intent commercial keyword ("${keywordMatch.keyword}") with active industry advertiser bidding.`;
+            comImpact = 'positive';
+        } else if (keywordMatch.tier === '2') {
+            comScore = 80;
+            comDesc = `Established industry keyword ("${keywordMatch.keyword}") with verifiable commercial utility.`;
+            comImpact = 'positive';
+        } else {
+            comScore = 65;
+            comDesc = `Recognized commercial keyword ("${keywordMatch.keyword}").`;
+            comImpact = 'neutral';
+        }
+    } else if (compositionScore >= 85 && tld === 'com') {
+        comScore = 78;
+        comDesc = 'Category-defining single dictionary word commanding universal commercial utility.';
+        comImpact = 'positive';
+    } else {
+        comScore = 45;
+        comDesc = 'No direct commercial advertiser bidding data; value is predominantly brandable.';
+        comImpact = 'neutral';
+    }
+
+    const confidenceFactors: ConfidenceFactor[] = [
+        { name: 'Comparable Sales Evidence', score: compScore, weight: 0.35, impact: compImpact, description: compDesc },
+        { name: 'Extension Authority & Liquidity', score: tldScore, weight: 0.25, impact: tldImpact, description: tldDesc },
+        { name: 'Lexical Clarity & Phonetics', score: lexScore, weight: 0.20, impact: lexImpact, description: lexDesc },
+        { name: 'Commercial Search & Industry Demand', score: comScore, weight: 0.20, impact: comImpact, description: comDesc },
+    ];
+
+    const rawScore = confidenceFactors.reduce((sum, f) => sum + f.score * f.weight, 0);
+    const confidenceScore = Math.max(20, Math.min(99, Math.round(rawScore)));
+
+    let confidence: Confidence = 'low';
+    let volatilityBandPercent = 70;
+
+    if (confidenceScore >= 75 || exactComp) {
+        confidence = 'high';
+        volatilityBandPercent = 28;
+    } else if (confidenceScore >= 50) {
+        confidence = 'medium';
+        volatilityBandPercent = 48;
+    }
+
+    return { confidence, confidenceScore, confidenceFactors, volatilityBandPercent };
+}
+
+function computeLiquidity(params: {
+    domain: string;
+    tld: string;
+    charCount: number;
+    wordCount: number;
+    isSingleWord: boolean;
+    compositionScore: number;
+    tldAuthority: number;
+}): LiquidityProfile {
+    const { domain, tld, charCount, wordCount, isSingleWord, compositionScore, tldAuthority } = params;
+
+    const isCom = tld === 'com';
+    const isTechLiquid = ['ai', 'io'].includes(tld);
+    const label = domain.split('.')[0] ?? '';
+    const hasHyphenOrNumbers = /[-0-9]/.test(label);
+
+    const is2LCom = isCom && charCount === 2 && !hasHyphenOrNumbers;
+    const is3LCom = isCom && charCount === 3 && !hasHyphenOrNumbers;
+    const is4LCom = isCom && charCount === 4 && !hasHyphenOrNumbers;
+    const isSingleWordCom = isCom && isSingleWord;
+
+    if (is2LCom || is3LCom || (isSingleWordCom && compositionScore >= 90)) {
+        return {
+            rating: 'Ultra-Liquid',
+            score: 96,
+            estimatedDaysToSell: '7 - 30 days',
+            turnoverVelocity: 'fast',
+            rationale: is3LCom || is2LCom
+                ? `${charCount}-letter .coms have an established floor price in wholesale auctions and trade instantly among portfolio investors.`
+                : 'Top-tier dictionary .com words have constant inbound buyer demand and liquidate rapidly through wholesale dealer networks.',
+        };
+    }
+
+    if (is4LCom || (isTechLiquid && isSingleWord) || (isCom && wordCount === 2 && compositionScore >= 80)) {
+        return {
+            rating: 'High Liquidity',
+            score: 82,
+            estimatedDaysToSell: '30 - 90 days',
+            turnoverVelocity: 'fast',
+            rationale: is4LCom
+                ? '4-letter .com domains maintain active daily liquidity in wholesale auctions and investor forums.'
+                : isTechLiquid
+                ? `Single-word .${tld} assets have high turnover among funded startups and tech incubators.`
+                : 'Clean two-word .coms with clear commercial meaning attract steady inbound offers and wholesale bids.',
+        };
+    }
+
+    if (isCom || isTechLiquid || (tldAuthority >= 65 && wordCount <= 2)) {
+        if (!hasHyphenOrNumbers && charCount <= 14) {
+            return {
+                rating: 'Moderate Liquidity',
+                score: 58,
+                estimatedDaysToSell: '3 - 12 months',
+                turnoverVelocity: 'moderate',
+                rationale: 'Solid commercial potential with regular aftermarket inquiries; typical hold period for a fair-market end-user sale.',
+            };
+        }
+    }
+
+    return {
+        rating: 'Niche / Illiquid',
+        score: 32,
+        estimatedDaysToSell: '1 - 3+ years',
+        turnoverVelocity: 'slow',
+        rationale: hasHyphenOrNumbers
+            ? 'Hyphens or digits significantly reduce secondary market liquidity and require patient buyer discovery.'
+            : 'Longer phrasing or alternative TLD extensions typically trade through specialized outbound outreach rather than organic inbound velocity.',
+    };
+}
+
 export async function recordValuation(result: ValuationResult): Promise<void> {
-    await getPool().query(
-        `INSERT INTO valuations (domain, score, low_usd, mid_usd, high_usd, confidence, breakdown_json)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [result.domain, result.linguisticScore, result.lowUsd, result.midUsd, result.highUsd, result.confidence, JSON.stringify(result)],
-    );
+    try {
+        await getPool().query(
+            `INSERT INTO valuations (domain, score, low_usd, mid_usd, high_usd, confidence, breakdown_json)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [result.domain, result.linguisticScore, result.lowUsd, result.midUsd, result.highUsd, result.confidence, JSON.stringify(result)],
+        );
+    } catch {
+        // Safe in-memory/offline execution
+    }
 }

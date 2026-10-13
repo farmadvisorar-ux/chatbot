@@ -1,4 +1,5 @@
 import { getPool } from '../db';
+import { COMPS } from '@/data/comps-seed';
 
 export interface CompRow {
     domain: string;
@@ -13,6 +14,8 @@ export interface CompRow {
 
 export interface MatchedComp extends CompRow {
     similarity: number;
+    matchReason: string;
+    compTier: 'high-relevance' | 'medium-relevance' | 'directional';
 }
 
 export interface CompsResult {
@@ -25,15 +28,10 @@ export interface CompsResult {
  * Finds the most relevant historical sales for a target domain and
  * derives an implied price via similarity-weighted averaging.
  *
- * `referencePriceUsd` — the engine's own independent formula-only
- * estimate — is a required input, not just metadata. Without it, TLD and
- * length alone can match an ordinary domain against a wildly-unrelated
- * headline sale that merely happens to be a similar length .com (this
- * dataset's real comps skew toward famous, multi-million-dollar deals,
- * since those are what's publicly documented). Gating each comp's
- * contribution by how close its sale price is to the model's own
- * independent estimate keeps a $9k-quality domain from getting dragged
- * toward a $35M comp just because both are 9-character .com names.
+ * Gating each comp's contribution by how close its sale price is to
+ * the model's own independent estimate keeps an average domain from getting
+ * distorted by headline mega-sales while heavily rewarding verified
+ * real-market comps of similar quality.
  */
 export async function findComps(params: {
     tld: string;
@@ -42,33 +40,84 @@ export async function findComps(params: {
     category: string | null;
     referencePriceUsd: number;
 }): Promise<CompsResult> {
-    const { rows } = await getPool().query<CompRow>('SELECT * FROM comps');
+    let rows: CompRow[] = [];
+
+    try {
+        const dbRes = await getPool().query<CompRow>('SELECT * FROM comps');
+        if (dbRes.rows && dbRes.rows.length > 0) {
+            rows = dbRes.rows;
+        }
+    } catch {
+        // Database unavailable or cold start; use rich embedded dataset
+    }
+
+    if (rows.length === 0) {
+        rows = COMPS.map((c) => {
+            const parts = c.domain.split('.');
+            const tld = parts.slice(1).join('.');
+            const label = parts[0] ?? '';
+            return {
+                domain: c.domain,
+                tld,
+                sale_price_usd: c.salePriceUsd,
+                sale_year: c.saleYear,
+                word_count: c.wordCount,
+                char_count: label.length,
+                category: c.category,
+                source_note: c.sourceNote,
+            };
+        });
+    }
 
     const scored: MatchedComp[] = rows.map((row) => {
-        // How close the comp's actual sale price is to this domain's own
-        // independent baseline estimate, on a log scale (order-of-magnitude
-        // match matters far more than exact-dollar match). 0-100.
         const priceRatio = Math.max(row.sale_price_usd, 1) / Math.max(params.referencePriceUsd, 1);
         const logRatio = Math.abs(Math.log10(priceRatio));
         const priceSimilarity = Math.max(0, 100 - logRatio * 45);
 
         let characteristics = 0;
-        if (row.tld === params.tld) characteristics += 34;
-        else if (isPremiumGroup(row.tld) === isPremiumGroup(params.tld)) characteristics += 10;
+        const reasons: string[] = [];
 
-        if (params.category && row.category === params.category) characteristics += 34;
+        if (row.tld === params.tld) {
+            characteristics += 35;
+            reasons.push(`Exact .${row.tld} match`);
+        } else if (isPremiumGroup(row.tld) && isPremiumGroup(params.tld)) {
+            characteristics += 14;
+            reasons.push(`Top-tier TLD group (.${row.tld})`);
+        }
+
+        if (params.category && row.category === params.category) {
+            characteristics += 32;
+            reasons.push(`Same ${params.category} sector`);
+        }
 
         const lenDiff = Math.abs(row.char_count - params.charCount);
-        characteristics += Math.max(0, 22 - lenDiff * 2.2);
+        if (lenDiff <= 1) {
+            characteristics += 20;
+            reasons.push(`Equivalent length (${row.char_count} chars)`);
+        } else if (lenDiff <= 3) {
+            characteristics += 12;
+            reasons.push(`Similar length`);
+        }
 
-        if (row.word_count === params.wordCount) characteristics += 10;
+        if (row.word_count === params.wordCount) {
+            characteristics += 13;
+            reasons.push(`${row.word_count === 1 ? 'Single word' : row.word_count === 2 ? 'Two-word compound' : 'Brandable pattern'}`);
+        }
 
-        // Price plausibility carries the most weight — matching
-        // TLD/category/length on a domain that isn't remotely the same
-        // quality tier shouldn't count for much.
-        const similarity = Math.round(priceSimilarity * 0.55 + characteristics * 0.45);
+        const similarity = Math.round(priceSimilarity * 0.52 + characteristics * 0.48);
 
-        return { ...row, similarity };
+        let compTier: 'high-relevance' | 'medium-relevance' | 'directional' = 'directional';
+        if (similarity >= 75) compTier = 'high-relevance';
+        else if (similarity >= 50) compTier = 'medium-relevance';
+
+        const matchReason = reasons.slice(0, 2).join(' · ') || 'Similar market profile';
+
+        return {
+            ...row,
+            similarity,
+            matchReason,
+            compTier,
+        };
     });
 
     scored.sort((a, b) => b.similarity - a.similarity);
@@ -84,11 +133,11 @@ export async function findComps(params: {
     // Weight grows with number of decent matches and their average similarity.
     const avgSimilarity = totalWeight / top.length;
     const countFactor = Math.min(1, top.length / 4);
-    const weight = Math.min(0.6, (avgSimilarity / 100) * countFactor);
+    const weight = Math.min(0.65, (avgSimilarity / 100) * countFactor);
 
     return { matches: top, impliedPriceUsd, weight };
 }
 
 function isPremiumGroup(tld: string): boolean {
-    return ['com', 'net', 'org', 'io', 'ai', 'co'].includes(tld);
+    return ['com', 'net', 'org', 'io', 'ai', 'co', 'app', 'dev'].includes(tld);
 }
