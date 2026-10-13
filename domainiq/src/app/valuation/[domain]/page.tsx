@@ -10,6 +10,7 @@ import ShareButton from '@/components/ShareButton';
 import AlternativeNames from '@/components/AlternativeNames';
 import EmbedBadge from '@/components/EmbedBadge';
 import AdSlot from '@/components/AdSlot';
+import PitchGenerator from '@/components/PitchGenerator';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +104,18 @@ const INDEXABILITY_STYLE: Record<string, string> = {
     Optimal: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
     Standard: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800',
     Caution: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800',
+};
+
+const COLLISION_DENSITY_STYLE: Record<string, string> = {
+    'High Commercial Density': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+    'Moderate Extension Footprint': 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800',
+    'Open Brand Landscape': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700',
+};
+
+const BUYER_URGENCY_STYLE: Record<string, string> = {
+    'High Priority': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800',
+    'Strategic / Medium': 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800',
+    'Opportunistic': 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800',
 };
 
 export default async function ValuationPage({ params }: Props) {
@@ -705,29 +718,219 @@ export default async function ValuationPage({ params }: Props) {
                 </div>
             </section>
 
-            {/* Go-To-Market Section */}
+            {/* Cross-Extension Intelligence & Collision Radar (Phase 3) */}
             <section className="card p-8">
-                <h2 className="mb-1 text-xl font-bold">Go-To-Market &amp; Buyer Targeting</h2>
-                <p className="mb-4 text-sm text-slate-500">
-                    Strategic targeting criteria based on industry category and commercial keyword patterns:
-                </p>
-                <div className="space-y-4 text-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
                     <div>
-                        <p className="font-semibold">Target Buyer Profile</p>
-                        <p className="mt-1 text-slate-600 dark:text-slate-400">{result.gtm.buyerProfile}</p>
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <span>Cross-Extension Intelligence &amp; Collision Radar</span>
+                            <span className="text-xs bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-800 px-2.5 py-0.5 rounded-full font-semibold">
+                                Multi-TLD Intelligence
+                            </span>
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Real-time resolution status and comparative market valuations across the core commercial extension ecosystem.
+                        </p>
                     </div>
-                    <div>
-                        <p className="font-semibold">Pitch Angle</p>
-                        <p className="mt-1 text-slate-600 dark:text-slate-400">{result.gtm.pitchAngle}</p>
+
+                    <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${COLLISION_DENSITY_STYLE[result.alternativeTlds.densityRating] || 'bg-slate-100 text-slate-700'}`}>
+                            🎯 {result.alternativeTlds.collisionDensityScore}% Saturated — {result.alternativeTlds.densityRating}
+                        </span>
                     </div>
+                </div>
+
+                {/* Rationale Callout Banner */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-4 mb-6 text-xs text-slate-600 dark:text-slate-300 leading-relaxed flex items-start gap-3">
+                    <span className="text-lg">💡</span>
                     <div>
-                        <p className="font-semibold">Key Prospecting Signals</p>
-                        <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-600 dark:text-slate-400">
-                            {result.gtm.targetSignals.map((s) => (
-                                <li key={s}>{s}</li>
+                        <strong className="text-slate-900 dark:text-slate-100 block mb-0.5">Commercial Collision Analysis:</strong>
+                        {result.alternativeTlds.strategicRationale}
+                    </div>
+                </div>
+
+                {/* Comparative Extensions Table */}
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="text-slate-400 border-b border-slate-200 dark:border-slate-800 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th className="pb-3 pr-4">Extension</th>
+                                <th className="pb-3 pr-4">Full Domain</th>
+                                <th className="pb-3 pr-4">Resolution Status</th>
+                                <th className="pb-3 pr-4">TLD Authority</th>
+                                <th className="pb-3 pr-4">Estimated Value</th>
+                                <th className="pb-3 pr-4">Multiplier vs Current</th>
+                                <th className="pb-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {result.alternativeTlds.alternatives.map((alt) => (
+                                <tr
+                                    key={alt.tld}
+                                    className={`transition-colors ${
+                                        alt.isCurrent
+                                            ? 'bg-brand-50/50 dark:bg-brand-950/30 font-semibold'
+                                            : 'hover:bg-slate-50/50 dark:hover:bg-slate-900/30'
+                                    }`}
+                                >
+                                    <td className="py-3.5 pr-4 font-bold text-slate-900 dark:text-slate-100">
+                                        .{alt.tld}
+                                        {alt.isCurrent && (
+                                            <span className="ml-2 text-[10px] bg-brand-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">
+                                                Active
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="py-3.5 pr-4 text-slate-800 dark:text-slate-200">
+                                        {alt.domain}
+                                    </td>
+                                    <td className="py-3.5 pr-4">
+                                        <span
+                                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                                alt.status === 'active-resolving'
+                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                            }`}
+                                        >
+                                            <span className={`h-1.5 w-1.5 rounded-full ${alt.status === 'active-resolving' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                            {alt.status === 'active-resolving' ? 'Registered & Resolving' : 'Available / Inactive'}
+                                        </span>
+                                    </td>
+                                    <td className="py-3.5 pr-4 text-xs text-slate-500">
+                                        {alt.authority}/100
+                                    </td>
+                                    <td className="py-3.5 pr-4 font-bold text-brand-600 dark:text-brand-400">
+                                        {formatUsd(alt.estMidUsd)}
+                                    </td>
+                                    <td className="py-3.5 pr-4 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                                        &times;{alt.multiplierVsCurrent.toFixed(2)}
+                                    </td>
+                                    <td className="py-3.5 text-right">
+                                        {alt.isCurrent ? (
+                                            <span className="text-xs text-slate-400 font-medium">Selected</span>
+                                        ) : alt.status === 'active-resolving' ? (
+                                            <Link
+                                                href={`/valuation/${encodeURIComponent(alt.domain)}`}
+                                                className="btn-secondary !py-1 !px-2.5 text-xs inline-flex items-center gap-1"
+                                            >
+                                                Evaluate →
+                                            </Link>
+                                        ) : (
+                                            <a
+                                                href={alt.actionUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer sponsored"
+                                                className="btn-primary !py-1 !px-2.5 text-xs inline-flex items-center gap-1"
+                                            >
+                                                Register ↗
+                                            </a>
+                                        )}
+                                    </td>
+                                </tr>
                             ))}
-                        </ul>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            {/* B2B Outbound Lead Prospector & Pitch Generator (Phase 3) */}
+            <section className="card p-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5 mb-6">
+                    <div>
+                        <h2 className="text-xl font-bold flex items-center gap-2">
+                            <span>B2B Outbound Lead Prospector</span>
+                            <span className="text-xs bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-800 px-2.5 py-0.5 rounded-full font-semibold">
+                                Buyer Targeting Engine
+                            </span>
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            High-intent buyer segments, acquisition logic, and customized outbound cold sales pitches.
+                        </p>
                     </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                            📡 Best Channel: {result.leadProspector.recommendedOutreachChannel}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="mb-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-4">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                        Outbound Positioning Angle
+                    </span>
+                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                        {result.leadProspector.outboundAngle}
+                    </p>
+                </div>
+
+                {/* 3 Targeted Buyer Persona Cards */}
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+                    Targeted Buyer Personas ({result.leadProspector.buyerProfiles.length})
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-3 mb-8">
+                    {result.leadProspector.buyerProfiles.map((bp) => (
+                        <div
+                            key={bp.title}
+                            className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900/30 flex flex-col justify-between"
+                        >
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                                        {bp.title}
+                                    </h4>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${BUYER_URGENCY_STYLE[bp.urgency] || 'bg-slate-100 text-slate-700'}`}>
+                                        {bp.urgency}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                    {bp.targetSegment}
+                                </p>
+
+                                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                                        Acquisition Trigger:
+                                    </span>
+                                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                                        {bp.acquisitionRationale}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 block mb-1">
+                                    Suggested Lead Search Queries:
+                                </span>
+                                <div className="space-y-1">
+                                    {bp.suggestedSearchQueries.map((q, idx) => (
+                                        <code
+                                            key={idx}
+                                            className="block text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300 select-all truncate"
+                                            title={q}
+                                        >
+                                            {q}
+                                        </code>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Interactive Cold Pitch Generator */}
+                <div>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            Ready-To-Send Outbound Cold Pitch Generator
+                        </h3>
+                        <span className="text-xs text-slate-500">
+                            1-Click Personalization &amp; Copy
+                        </span>
+                    </div>
+                    <PitchGenerator
+                        templates={result.leadProspector.pitchTemplates}
+                        domain={result.domain}
+                    />
                 </div>
             </section>
 

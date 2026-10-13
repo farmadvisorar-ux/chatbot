@@ -13,6 +13,8 @@ import { checkTrademarkRisk, type TrademarkResult } from './trademark';
 import { generateGtmStrategy, type GtmStrategy } from './gtm';
 import { lookupArchiveHistory, type ArchiveHistoryResult } from './archive';
 import { computeSeoEquity, type SeoEquityResult } from './seo-equity';
+import { checkAlternativeTlds, type AlternativeTldsResult } from './alternative-tlds';
+import { generateLeadProspector, type LeadProspectorResult } from './prospector';
 import { getPool } from '../db';
 import { COMPS } from '@/data/comps-seed';
 
@@ -74,6 +76,8 @@ export interface ValuationResult {
     trademark: TrademarkResult;
     archive: ArchiveHistoryResult | null;
     seoEquity: SeoEquityResult;
+    alternativeTlds: AlternativeTldsResult;
+    leadProspector: LeadProspectorResult;
     gtm: GtmStrategy;
     generatedAt: string;
 }
@@ -286,6 +290,27 @@ export async function evaluateDomain(
         compositionQuality,
     });
 
+    const alternativeTlds = await checkAlternativeTlds({
+        label,
+        currentTld: tld,
+        baseLinguisticUsd: linguisticBase,
+        keywordMultiplier,
+        effectiveAgeYears,
+        currentMidUsd: Math.round(midUsd),
+    });
+
+    const leadProspector = generateLeadProspector({
+        domain,
+        label,
+        tld,
+        vertical,
+        midUsd: Math.round(midUsd),
+        recommendedBin: channelPricing.recommendedBinPrice,
+        monthlyLease24: channelPricing.leaseToOwn.months24.monthlyUsd,
+        isSingleWord,
+        compositionQuality,
+    });
+
     return {
         domain,
         tld,
@@ -316,6 +341,8 @@ export async function evaluateDomain(
         trademark,
         archive,
         seoEquity,
+        alternativeTlds,
+        leadProspector,
         gtm,
         generatedAt: new Date().toISOString(),
     };
