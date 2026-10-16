@@ -25,23 +25,18 @@ export interface AlternativeTldsResult {
 
 const CORE_EXTENSIONS = ['com', 'ai', 'io', 'co', 'org', 'net', 'app', 'xyz'];
 
-async function checkDnsStatus(domain: string, timeoutMs = 1500): Promise<boolean> {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), timeoutMs),
-    );
-
+async function checkDnsStatus(domain: string, timeoutMs = 400): Promise<boolean> {
+    let timer: NodeJS.Timeout | undefined;
     try {
-        // Try A record first
-        await Promise.race([dns.resolve4(domain), timeoutPromise]);
-        return true;
+        const timeoutPromise = new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => resolve(false), timeoutMs);
+        });
+        const lookupPromise = dns.resolve4(domain).then((records) => Boolean(records && records.length > 0)).catch(() => false);
+        return await Promise.race([lookupPromise, timeoutPromise]);
     } catch {
-        try {
-            // Fall back to NS delegation check
-            await Promise.race([dns.resolveNs(domain), timeoutPromise]);
-            return true;
-        } catch {
-            return false;
-        }
+        return false;
+    } finally {
+        if (timer) clearTimeout(timer);
     }
 }
 
@@ -52,11 +47,13 @@ export async function checkAlternativeTlds(params: {
     keywordMultiplier: number;
     effectiveAgeYears: number;
     currentMidUsd: number;
+    skipDns?: boolean;
 }): Promise<AlternativeTldsResult> {
-    const { label, currentTld, baseLinguisticUsd, keywordMultiplier, effectiveAgeYears, currentMidUsd } = params;
+    const { label, currentTld, baseLinguisticUsd, keywordMultiplier, effectiveAgeYears, currentMidUsd, skipDns = false } = params;
 
     // Ensure current TLD is in list if not already
     const extensionsToScan = Array.from(new Set([currentTld.toLowerCase(), ...CORE_EXTENSIONS])).slice(0, 8);
+
 
     const ageMultiplier = effectiveAgeYears > 0 ? 1 + Math.min(0.4, effectiveAgeYears * 0.02) : 1;
 
@@ -76,10 +73,13 @@ export async function checkAlternativeTlds(params: {
         let status: 'active-resolving' | 'unassigned-or-available';
         if (isCurrent) {
             status = 'active-resolving';
+        } else if (skipDns) {
+            status = 'unassigned-or-available';
         } else {
             const hasDns = await checkDnsStatus(domain);
             status = hasDns ? 'active-resolving' : 'unassigned-or-available';
         }
+
 
         let actionUrl = `/valuation/${encodeURIComponent(domain)}`;
         let actionLabel = 'Evaluate →';

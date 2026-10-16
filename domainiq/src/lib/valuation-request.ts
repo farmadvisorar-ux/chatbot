@@ -61,28 +61,35 @@ export async function performValuation(domainInput: string): Promise<ValuationRe
         }
 
         let result: ValuationResult;
+        let budgetTimer: NodeJS.Timeout | undefined;
         try {
-            result = await evaluateDomain(clean, {
-                lookupAge: true,
-                lookupArchive: true,
-                checkTrademark: true,
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                budgetTimer = setTimeout(() => reject(new Error('Live lookup budget expired')), 2500);
             });
+            result = await Promise.race([
+                evaluateDomain(clean, {
+                    lookupAge: true,
+                    lookupArchive: true,
+                    checkTrademark: true,
+                }),
+                timeoutPromise,
+            ]);
         } catch (engineError) {
-            console.warn('Live valuation lookups encountered an issue; falling back to offline core engine:', engineError);
+            console.warn('Live valuation lookups encountered an issue or timed out; falling back to offline core engine:', engineError);
             result = await evaluateDomain(clean, {
                 lookupAge: false,
                 lookupArchive: false,
                 checkTrademark: false,
             });
+        } finally {
+            if (budgetTimer) clearTimeout(budgetTimer);
         }
 
-        try {
-            await recordValuation(result);
-        } catch {
-            // DB persistence failure should never block response
-        }
+        // Fire-and-forget: DB persistence should never delay response
+        recordValuation(result).catch(() => {});
 
         return { result, remainingFree: remaining ?? 100 };
+
     } catch (err) {
         console.error('Unhandled valuation error:', err);
         try {

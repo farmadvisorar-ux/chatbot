@@ -10,9 +10,10 @@ export interface RdapResult {
  * if the network call fails, times out, or the registry doesn't answer,
  * we simply omit the age factor rather than fail the whole valuation.
  */
-export async function lookupDomainAge(domain: string, timeoutMs = 4000): Promise<RdapResult | null> {
+export async function lookupDomainAge(domain: string, timeoutMs = 1200): Promise<RdapResult | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
         const res = await fetch(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
             signal: controller.signal,

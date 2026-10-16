@@ -9,7 +9,8 @@ import { lookupDomainAge, type RdapResult } from './rdap';
 import { baselineValueUsd } from './pricing-curve';
 import { getVerticalInfo, type VerticalInfo } from './verticals';
 import { computeChannelPricing, computeOutboundFitScore, type ChannelPricing } from './channel-pricing';
-import { checkTrademarkRisk, type TrademarkResult } from './trademark';
+import { checkTrademarkRisk, screenTrademarkAndUdrp, type TrademarkResult } from './trademark';
+
 import { generateGtmStrategy, type GtmStrategy } from './gtm';
 import { lookupArchiveHistory, type ArchiveHistoryResult } from './archive';
 import { computeSeoEquity, type SeoEquityResult } from './seo-equity';
@@ -181,9 +182,8 @@ export async function evaluateDomain(
     const linguisticBase = baselineValueUsd(linguisticScore);
     const keywordMultiplier = keywordMatch?.multiplier ?? 1.0;
 
-    // 3. Due Diligence (RDAP Age, Archive Wayback, Trademark Screening)
-    let age: RdapResult | null = null;
-    const agePromise = opts.lookupAge ? lookupDomainAge(domain) : Promise.resolve(null);
+    // 3. Parallel Due Diligence Lookups (RDAP Age, Archive Wayback, Trademark Screening, Alternative TLDs)
+    const agePromise = opts.lookupAge ? lookupDomainAge(domain, 1200).catch(() => null) : Promise.resolve(null);
     const trademarkPromise = opts.checkTrademark === false
         ? Promise.resolve({
             checked: false,
@@ -199,79 +199,127 @@ export async function evaluateDomain(
             },
             disclaimer: 'Trademark screening skipped for this request.',
         })
-        : checkTrademarkRisk(label);
+        : checkTrademarkRisk(label, 1000).catch(() => screenTrademarkAndUdrp(label));
 
-    const [resolvedAge, trademark] = await Promise.all([agePromise, trademarkPromise]);
-    age = resolvedAge;
+    const archivePromise = (opts.lookupArchive !== false && opts.lookupAge !== false)
+        ? lookupArchiveHistory(domain, null, 1200).catch(() => null)
+        : Promise.resolve(null);
 
-    const archive = (opts.lookupArchive !== false && opts.lookupAge !== false)
-        ? await lookupArchiveHistory(domain, age?.registrationDate ?? null)
-        : null;
+    const preliminaryStructural = Math.max(
+        structuralArchetype.marketFloorUsd,
+        Math.round(linguisticBase * tldInfo.multiplier * keywordMultiplier * Math.min(structuralArchetype.structuralMultiplier, 4.0)),
+    );
+
+    const alternativeTldsPromise = checkAlternativeTlds({
+        label,
+        currentTld: tld,
+        baseLinguisticUsd: linguisticBase,
+        keywordMultiplier,
+        effectiveAgeYears: 0,
+        currentMidUsd: preliminaryStructural,
+        skipDns: opts.lookupAge === false,
+    }).catch(() => ({
+        alternatives: [],
+        checkedCount: 0,
+        activeCount: 0,
+        collisionDensityScore: 0,
+        densityRating: 'Open Brand Landscape' as const,
+        strategicRationale: 'Fast estimation mode active.',
+    }));
+
+    // 4. Exact Comp Detection (Seed or Database)
+    let exactComp: MatchedComp | null = null;
+    const seedExact = COMPS.find((c) => c.domain.toLowerCase() === domain.toLowerCase());
+    if (seedExact) {
+        const parts = seedExact.domain.split('.');
+        const l = parts[0] ?? '';
+        exactComp = {
+            domain: seedExact.domain,
+            tld: parts.slice(1).join('.'),
+            sale_price_usd: seedExact.salePriceUsd,
+            present_value_usd: Math.round(seedExact.salePriceUsd * Math.pow(1.032, Math.max(0, 2026 - seedExact.saleYear))),
+            sale_year: seedExact.saleYear,
+            word_count: seedExact.wordCount,
+            char_count: l.length,
+            category: seedExact.category,
+            source_note: seedExact.sourceNote,
+            similarity: 100,
+            matchReason: 'Exact historical domain sale record',
+            compTier: 'high-relevance',
+        };
+    }
+
+    const compsPromise = findComps({
+        tld,
+        charCount,
+        wordCount: wordCountTag,
+        category: keywordMatch?.category ?? null,
+        referencePriceUsd: preliminaryStructural,
+        structuralArchetypeKey: structuralArchetype.key,
+        label,
+    });
+
+    // Await all parallel pipelines concurrently (never sequential)
+    const [age, trademark, rawArchive, alternativeTlds, compsResult] = await Promise.all([
+        agePromise,
+        trademarkPromise,
+        archivePromise,
+        alternativeTldsPromise,
+        compsPromise,
+    ]);
+
+    // Reconcile archive drop-gap against resolved RDAP registration date
+    let archive = rawArchive;
+    if (archive && archive.hasSnapshots && age?.registrationDate && archive.firstSeenYear) {
+        const rdapDate = new Date(age.registrationDate);
+        if (!isNaN(rdapDate.getTime())) {
+            const rdapRegYear = rdapDate.getFullYear();
+            if (rdapRegYear - archive.firstSeenYear >= 3) {
+                archive = {
+                    ...archive,
+                    historicalContinuity: 'drop-risk',
+                    riskStatus: 'dormant-gap',
+                    summary: `Historical Drop Detected (Archived in ${archive.firstSeenYear}, Re-registered in ${rdapRegYear})`,
+                    details: `This domain was initially live and archived in ${archive.firstSeenYear}, but current registration shows ${rdapRegYear}. The domain likely expired or sat dormant before re-acquisition.`,
+                };
+            }
+        }
+    }
 
     const effectiveAgeYears = Math.max(age?.ageYears ?? 0, archive?.archiveAgeYears ?? 0);
     const ageMultiplier = effectiveAgeYears > 0 ? 1 + Math.min(0.45, effectiveAgeYears * 0.022) : 1.0;
 
     // Model 1: Structural & Linguistic Asset Value
     const rawFormulaPrice = linguisticBase * tldInfo.multiplier * keywordMultiplier * ageMultiplier;
-    // Ground structural value by the institutional asset class floor and structural multiplier
     const structuralValueUsd = Math.max(
         structuralArchetype.marketFloorUsd,
         Math.round(rawFormulaPrice * Math.min(structuralArchetype.structuralMultiplier, 4.0))
     );
 
-    // 4. Exact Comp Detection (Database or Seed)
-    let exactComp: MatchedComp | null = null;
-    try {
-        const { rows: exactCompRows } = await getPool().query<MatchedComp>('SELECT * FROM comps WHERE domain = $1', [domain]);
-        const exactCompRow = exactCompRows[0];
-        if (exactCompRow) {
-            exactComp = {
-                ...exactCompRow,
-                present_value_usd: exactCompRow.sale_price_usd,
-                similarity: 100,
-                matchReason: 'Exact historical domain sale record',
-                compTier: 'high-relevance',
-            };
-        }
-    } catch {
-        // Fallback to static seed data
-    }
-
-    if (!exactComp) {
-        const seedExact = COMPS.find((c) => c.domain.toLowerCase() === domain.toLowerCase());
-        if (seedExact) {
-            const parts = seedExact.domain.split('.');
-            const l = parts[0] ?? '';
-            exactComp = {
-                domain: seedExact.domain,
-                tld: parts.slice(1).join('.'),
-                sale_price_usd: seedExact.salePriceUsd,
-                present_value_usd: Math.round(seedExact.salePriceUsd * Math.pow(1.032, Math.max(0, 2026 - seedExact.saleYear))),
-                sale_year: seedExact.saleYear,
-                word_count: seedExact.wordCount,
-                char_count: l.length,
-                category: seedExact.category,
-                source_note: seedExact.sourceNote,
-                similarity: 100,
-                matchReason: 'Exact historical domain sale record',
-                compTier: 'high-relevance',
-            };
+    // If exact comp was not in seed and DB is available, check DB quickly
+    if (!exactComp && process.env.DATABASE_URL) {
+        try {
+            const dbQueryPromise = getPool().query<MatchedComp>('SELECT * FROM comps WHERE domain = $1', [domain]);
+            const timer = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('db-timeout')), 800));
+            const { rows: exactCompRows } = await Promise.race([dbQueryPromise, timer]);
+            const exactCompRow = exactCompRows[0];
+            if (exactCompRow) {
+                exactComp = {
+                    ...exactCompRow,
+                    present_value_usd: exactCompRow.sale_price_usd,
+                    similarity: 100,
+                    matchReason: 'Exact historical domain sale record',
+                    compTier: 'high-relevance',
+                };
+            }
+        } catch {
+            // Safe fallback
         }
     }
 
-    // 5. Model 2: Time-Decayed Multivariate KNN Comps Regression
-    const compsResult = await findComps({
-        tld,
-        charCount,
-        wordCount: wordCountTag,
-        category: keywordMatch?.category ?? null,
-        referencePriceUsd: structuralValueUsd,
-        structuralArchetypeKey: structuralArchetype.key,
-        label,
-    });
     const compsValueUsd = compsResult.impliedPriceUsd;
 
-    // 6. Model 3: Economic CAC Arbitrage & Search Capitalization
+    // Model 3: Economic CAC Arbitrage & Search Capitalization
     const economicArbitrage = computeEconomicArbitrage({
         label,
         tld,
@@ -282,17 +330,8 @@ export async function evaluateDomain(
     });
     const economicValueUsd = economicArbitrage.capitalizedAssetValueUsd;
 
-    // 7. Model 4: Enterprise Defensive Collision Leverage
-    const alternativeTlds = await checkAlternativeTlds({
-        label,
-        currentTld: tld,
-        baseLinguisticUsd: linguisticBase,
-        keywordMultiplier,
-        effectiveAgeYears,
-        currentMidUsd: structuralValueUsd,
-    });
-
     // If target is .com and sister tech extensions (.ai, .io, .co) are taken, calculate corporate upgrade leverage
+
     const isCom = tld.toLowerCase() === 'com';
     let defensiveValueUsd = 0;
     if (isCom && alternativeTlds.activeCount >= 1) {

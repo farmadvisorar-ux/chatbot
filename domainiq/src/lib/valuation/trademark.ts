@@ -289,8 +289,9 @@ interface UsptoApiRecord {
  * Checks trademark risk via live USPTO API if key is present,
  * or runs the comprehensive heuristic and UDRP analyzer.
  */
-export async function checkTrademarkRisk(label: string, timeoutMs = 4000): Promise<TrademarkResult> {
+export async function checkTrademarkRisk(label: string, timeoutMs = 1000): Promise<TrademarkResult> {
     const baseScreen = screenTrademarkAndUdrp(label);
+
 
     const apiKey = process.env.USPTO_API_KEY;
     if (!apiKey) return baseScreen;

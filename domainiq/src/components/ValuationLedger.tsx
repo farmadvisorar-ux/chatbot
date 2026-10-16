@@ -28,11 +28,12 @@ export default function ValuationLedger({ ledger, consensusFmvUsd, domain }: Pro
             `DOMAINIQ AUDITED VALUATION LEDGER FOR ${domain.toUpperCase()}`,
             `Consensus Fair Market Value: $${consensusFmvUsd.toLocaleString()}`,
             '----------------------------------------',
-            ...ledger.map((item) => {
+            ...(ledger || []).map((item) => {
                 const sign = item.impact === 'credit' ? '+' : item.impact === 'debit' ? '-' : '=';
                 return `${sign} $${item.amountUsd.toLocaleString()} | ${item.label} (${item.description})`;
             }),
             '----------------------------------------',
+
             `Net Certified FMV: $${consensusFmvUsd.toLocaleString()}`,
             `Source: DomainIQ Institutional Valuation Terminal (https://domainiq.app/valuation/${domain})`
         ].join('\n');
@@ -76,8 +77,9 @@ export default function ValuationLedger({ ledger, consensusFmvUsd, domain }: Pro
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-sans">
-                        {ledger.map((item, idx) => (
+                        {(ledger || []).map((item, idx) => (
                             <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+
                                 <td className="py-3.5 pr-4">
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm shrink-0">

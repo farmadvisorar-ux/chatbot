@@ -42,8 +42,9 @@ function parseWaybackTimestamp(ts: string): { iso: string; year: number } | null
 export async function lookupArchiveHistory(
     domain: string,
     rdapRegistrationDate?: string | null,
-    timeoutMs = 3500,
+    timeoutMs = 1200,
 ): Promise<ArchiveHistoryResult> {
+
     const waybackUrl = `https://web.archive.org/web/*/${encodeURIComponent(domain)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

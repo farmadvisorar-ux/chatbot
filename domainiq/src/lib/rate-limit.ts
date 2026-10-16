@@ -23,24 +23,31 @@ export async function checkAndConsumeRateLimit(
             return { allowed: true, remaining: limit };
         }
         const pool = getPool();
-        const { rows } = await pool.query<{ count: string }>(
-            `SELECT count(*) FROM rate_limit_events
-             WHERE bucket = $1 AND client_key = $2 AND created_at > now() - ($3 || ' minutes')::interval`,
-            [category, ip, WINDOW_MINUTES],
-        );
-        const current = Number(rows[0]?.count ?? 0);
+        const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('rate-limit-db-timeout')), 800));
 
-        if (current >= limit) {
-            return { allowed: false, remaining: 0 };
-        }
+        const queryPromise = (async () => {
+            const { rows } = await pool.query<{ count: string }>(
+                `SELECT count(*) FROM rate_limit_events
+                 WHERE bucket = $1 AND client_key = $2 AND created_at > now() - ($3 || ' minutes')::interval`,
+                [category, ip, WINDOW_MINUTES],
+            );
+            const current = Number(rows[0]?.count ?? 0);
 
-        await pool.query('INSERT INTO rate_limit_events (bucket, client_key) VALUES ($1, $2)', [category, ip]);
-        return { allowed: true, remaining: limit - current - 1 };
+            if (current >= limit) {
+                return { allowed: false, remaining: 0 };
+            }
+
+            pool.query('INSERT INTO rate_limit_events (bucket, client_key) VALUES ($1, $2)', [category, ip]).catch(() => {});
+            return { allowed: true, remaining: limit - current - 1 };
+        })();
+
+        return await Promise.race([queryPromise, timeoutPromise]);
     } catch {
         // Fall back gracefully if database table is missing or unreachable
         return { allowed: true, remaining: limit };
     }
 }
+
 
 export function getClientIp(headers: Headers): string {
     try {

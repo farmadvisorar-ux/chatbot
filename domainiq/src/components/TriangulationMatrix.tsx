@@ -11,7 +11,16 @@ interface Props {
 }
 
 export default function TriangulationMatrix({ triangulation, structuralArchetype, economicArbitrage, domain }: Props) {
-    const { structuralValueUsd, compsValueUsd, economicValueUsd, defensiveValueUsd, consensusFmvUsd, modelAgreementScore, modelWeights } = triangulation;
+    const {
+        structuralValueUsd = 0,
+        compsValueUsd = null,
+        economicValueUsd = 0,
+        defensiveValueUsd = 0,
+        consensusFmvUsd = 0,
+        modelAgreementScore = 85,
+        modelWeights = { structural: 0.70, comps: 0.15, economic: 0.15 },
+    } = triangulation || {};
+
 
     return (
         <section className="card p-6 sm:p-8 bg-slate-900/60 border border-slate-800 relative overflow-hidden backdrop-blur-md">

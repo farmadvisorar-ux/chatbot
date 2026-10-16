@@ -175,12 +175,15 @@ export default async function ValuationPage({ params }: Props) {
     try {
         session = await getSession();
         if (session && process.env.DATABASE_URL) {
-            const { rows } = await getPool().query('SELECT 1 FROM watchlist WHERE user_id = $1 AND domain = $2', [session.id, result.domain]);
+            const dbQuery = getPool().query('SELECT 1 FROM watchlist WHERE user_id = $1 AND domain = $2', [session.id, result.domain]);
+            const timer = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 500));
+            const { rows } = await Promise.race([dbQuery, timer]);
             alreadySaved = rows.length > 0;
         }
     } catch {
         // Safe fallback if database is unavailable
     }
+
 
     const assetGrade =
         result.midUsd >= 10000000

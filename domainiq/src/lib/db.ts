@@ -14,7 +14,10 @@ export function getPool(): pg.Pool {
             connectionString: process.env.DATABASE_URL,
             ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false },
             max: 3,
+            connectionTimeoutMillis: 1500,
+            idleTimeoutMillis: 10000,
         });
     }
     return globalThis.__domainiqPool;
 }
+
