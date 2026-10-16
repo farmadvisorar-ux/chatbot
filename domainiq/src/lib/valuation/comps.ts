@@ -25,10 +25,32 @@ export interface CompsResult {
     weight: number; // 0-1, how much this signal should count vs. the formula estimate
 }
 
+// In-memory instant pre-compiled seed dataset (100+ verified aftermarket comps)
+const SEED_COMPS: CompRow[] = COMPS.map((c) => {
+    const parts = c.domain.split('.');
+    const tld = parts.slice(1).join('.');
+    const label = parts[0] ?? '';
+    return {
+        domain: c.domain,
+        tld,
+        sale_price_usd: c.salePriceUsd,
+        sale_year: c.saleYear,
+        word_count: c.wordCount,
+        char_count: label.length,
+        category: c.category,
+        source_note: c.sourceNote,
+    };
+});
+
+let cachedDbRows: CompRow[] | null = null;
+let lastDbSyncTime = 0;
+
 /**
  * Finds the most relevant historical sales for a target domain using
  * multivariate KNN similarity regression with 2026 present-value time normalization.
+ * Always operates instantaneously from memory with zero database blocking.
  */
+
 export async function findComps(params: {
     tld: string;
     charCount: number;
@@ -38,34 +60,21 @@ export async function findComps(params: {
     structuralArchetypeKey?: string;
     label?: string;
 }): Promise<CompsResult> {
-    let rows: CompRow[] = [];
+    const rows: CompRow[] = cachedDbRows ?? SEED_COMPS;
 
-    try {
-        const dbRes = await getPool().query<CompRow>('SELECT * FROM comps');
-        if (dbRes.rows && dbRes.rows.length > 0) {
-            rows = dbRes.rows;
-        }
-    } catch {
-        // Database unavailable or cold start; use rich embedded dataset
+    // Background asynchronous cache refresh if database is configured
+    if (!cachedDbRows && process.env.DATABASE_URL && Date.now() - lastDbSyncTime > 120_000) {
+        lastDbSyncTime = Date.now();
+        getPool()
+            .query<CompRow>('SELECT * FROM comps')
+            .then((res) => {
+                if (res.rows && res.rows.length > 0) {
+                    cachedDbRows = res.rows;
+                }
+            })
+            .catch(() => {});
     }
 
-    if (rows.length === 0) {
-        rows = COMPS.map((c) => {
-            const parts = c.domain.split('.');
-            const tld = parts.slice(1).join('.');
-            const label = parts[0] ?? '';
-            return {
-                domain: c.domain,
-                tld,
-                sale_price_usd: c.salePriceUsd,
-                sale_year: c.saleYear,
-                word_count: c.wordCount,
-                char_count: label.length,
-                category: c.category,
-                source_note: c.sourceNote,
-            };
-        });
-    }
 
     const scored: MatchedComp[] = rows.map((row) => {
         // 1. Time-Decayed Present-Value Normalization (3.2% compound index up to 2026)

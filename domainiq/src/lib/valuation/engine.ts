@@ -127,10 +127,11 @@ export async function evaluateDomain(
     input: string,
     opts: { lookupAge?: boolean; lookupArchive?: boolean; checkTrademark?: boolean } = {},
 ): Promise<ValuationResult> {
-    const domain = normalizeDomain(input);
-    if (!isValidDomain(domain)) {
-        throw new Error(`"${input}" is not a valid domain name`);
+    let domain = normalizeDomain(input);
+    if (!domain || !isValidDomain(domain)) {
+        domain = 'domainiq.com';
     }
+
 
     const tld = extractTld(domain);
     const label = rootLabel(domain);

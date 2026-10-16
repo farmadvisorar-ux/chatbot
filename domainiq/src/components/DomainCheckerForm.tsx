@@ -2,6 +2,7 @@
 
 import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { normalizeDomain } from '@/lib/domain';
 
 const PRESETS = [
     { label: '🔥 AI Tech', domain: 'neural.ai' },
@@ -37,23 +38,13 @@ export default function DomainCheckerForm({
     }, []);
 
     function executeValuation(targetDomain: string) {
-        let clean = targetDomain
-            .trim()
-            .toLowerCase()
-            .replace(/^https?:\/\//, '')
-            .replace(/^www\./, '')
-            .replace(/\/.*$/, '')
-            .replace(/\.+$/, '');
-
-        if (!clean) {
+        if (!targetDomain || !targetDomain.trim()) {
             setError('Please enter a domain name to evaluate (e.g. quantum.ai or brand.com)');
             return;
         }
 
-        // Auto-default to .com if user enters a bare name with no TLD (e.g. "openai" or "neural")
-        if (!clean.includes('.')) {
-            clean = `${clean}.com`;
-        }
+        const clean = normalizeDomain(targetDomain);
+
 
         try {
             const updated = [clean, ...recents.filter((r) => r !== clean)].slice(0, 5);

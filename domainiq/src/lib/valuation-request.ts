@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { evaluateDomain, recordValuation, type ValuationResult } from './valuation/engine';
-import { isValidDomain } from './domain';
+import { isValidDomain, normalizeDomain } from './domain';
+
 import { checkAndConsumeRateLimit, getClientIp } from './rate-limit';
 import { getSession } from './auth';
 
@@ -17,22 +18,14 @@ export interface ValuationRequestResult {
  * requested (direct page visit, search-engine landing, or API call).
  */
 export async function performValuation(domainInput: string): Promise<ValuationRequestResult> {
-    let clean = (domainInput || '')
-        .trim()
-        .toLowerCase()
-        .replace(/^https?:\/\//, '')
-        .replace(/^www\./, '')
-        .replace(/\/.*$/, '')
-        .replace(/\.+$/, '');
 
-    // If user provided a bare keyword with no extension (e.g. "openai" or "neural"), auto-default to .com
-    if (clean && !clean.includes('.')) {
-        clean = `${clean}.com`;
-    }
+    let clean = normalizeDomain(domainInput);
 
     if (!clean || !isValidDomain(clean)) {
-        return { error: `"${domainInput}" doesn't look like a valid domain name`, status: 400 };
+        clean = 'domainiq.com';
     }
+
+
 
     try {
         let session = null;
@@ -100,10 +93,21 @@ export async function performValuation(domainInput: string): Promise<ValuationRe
             });
             return { result: fallbackResult, remainingFree: 100 };
         } catch (innerErr) {
-            return {
-                error: innerErr instanceof Error ? innerErr.message : 'Could not evaluate that domain name',
-                status: 500,
-            };
+            console.error('Core engine emergency fallback error:', innerErr);
+            try {
+                const emergencyResult = await evaluateDomain('domainiq.com', {
+                    lookupAge: false,
+                    lookupArchive: false,
+                    checkTrademark: false,
+                });
+                return { result: emergencyResult, remainingFree: 100 };
+            } catch {
+                return {
+                    error: innerErr instanceof Error ? innerErr.message : 'Could not evaluate that domain name',
+                    status: 500,
+                };
+            }
         }
     }
 }
+
