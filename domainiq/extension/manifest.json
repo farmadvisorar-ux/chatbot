@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "DomainIQ — Instant Domain Valuation",
+  "version": "1.0.0",
+  "description": "Instant algorithmic domain valuation, multi-channel pricing, and UDRP legal risk scanning on any website.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Appraise Domain with DomainIQ"
+  },
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://prstuvw.xyz/*",
+    "http://localhost:3000/*"
+  ]
+}

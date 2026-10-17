@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DomainIQ</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="logo-badge">IQ</span>
+      <span class="logo-text">DomainIQ</span>
+    </div>
+    <span class="version-tag">v2.0</span>
+  </div>
+
+  <div class="container">
+    <div class="input-group">
+      <input type="text" id="domainInput" placeholder="Enter domain (e.g. cloudflow.io)" autocomplete="off" />
+      <button id="evaluateBtn" class="btn-primary">Appraise</button>
+    </div>
+
+    <div id="loader" class="loader hidden">
+      <div class="spinner"></div>
+      <p>Running multi-factor algorithmic appraisal…</p>
+    </div>
+
+    <div id="errorBox" class="error-box hidden"></div>
+
+    <div id="resultBox" class="result-box hidden">
+      <div class="result-header">
+        <span class="domain-title" id="resDomain"></span>
+        <span class="confidence-badge" id="resConfidence"></span>
+      </div>
+
+      <div class="price-hero">
+        <div class="price-val" id="resPrice">$0</div>
+        <div class="price-range" id="resRange">Range: $0 – $0</div>
+      </div>
+
+      <div class="channel-grid">
+        <div class="channel-card">
+          <span class="channel-label">48h Liquidation</span>
+          <span class="channel-val" id="resLiquidation">$0</span>
+        </div>
+        <div class="channel-card highlight">
+          <span class="channel-label">Retail BIN</span>
+          <span class="channel-val" id="resBin">$0</span>
+        </div>
+        <div class="channel-card">
+          <span class="channel-label">24mo Lease</span>
+          <span class="channel-val" id="resLease">$0/mo</span>
+        </div>
+      </div>
+
+      <div class="risk-row">
+        <span class="risk-label">⚖️ UDRP Trademark:</span>
+        <span class="risk-val" id="resTrademark">Clean</span>
+      </div>
+
+      <a id="fullReportBtn" href="#" target="_blank" class="btn-full-report">
+        View Full Due Diligence &amp; Radar Report ↗
+      </a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
