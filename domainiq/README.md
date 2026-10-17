@@ -180,3 +180,5 @@ reporting; treat them as approximate, directional reference points, not
 verified transaction records — this is disclosed on every report. All
 valuations are algorithmic estimates for informational purposes, not formal
 appraisals or guarantees of sale price.
+
+<!-- Deployment trigger: 2026-10-17T01:33:16.9123076-05:00 -->
