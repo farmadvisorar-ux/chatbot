@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { normalizeDomain } from '@/lib/domain';
 
 const PRESETS = [
+    { label: '🏛️ Mega Comp', domain: 'insurance.com' },
+    { label: '🎙️ Category Killer', domain: 'voice.com' },
     { label: '🔥 AI Tech', domain: 'neural.ai' },
     { label: '💎 Rare 3L', domain: 'sky.com' },
-    { label: '🏛️ Mega Comp', domain: 'insurance.com' },
     { label: '⚡ Fintech', domain: 'quickpay.io' },
     { label: '🚀 Enterprise', domain: 'cloudscale.net' },
 ];
@@ -128,40 +130,45 @@ export default function DomainCheckerForm({
 
             {/* Quick-Pick Presets & Recent Searches */}
             {showPresets && (
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
-                    <span className="text-slate-500 font-mono text-[11px]">Instant Try:</span>
-                    {PRESETS.map((p) => (
-                        <button
-                            key={p.domain}
-                            type="button"
-                            onClick={() => {
-                                setValue(p.domain);
-                                executeValuation(p.domain);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-mono text-[11px] transition-colors"
-                        >
-                            {p.label} <span className="text-brand-400">({p.domain})</span>
-                        </button>
-                    ))}
+                <div className="space-y-2 pt-1">
+                    <p className="text-center text-xs text-slate-400">
+                        e.g. try{' '}
+                        <Link href="/valuation/insurance.com" className="underline hover:text-brand-400 font-mono">
+                            insurance.com
+                        </Link>
+                        ,{' '}
+                        <Link href="/valuation/voice.com" className="underline hover:text-brand-400 font-mono">
+                            voice.com
+                        </Link>
+                        , or your own domain
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                        <span className="text-slate-500 font-mono text-[11px]">Instant Try:</span>
+                        {PRESETS.map((p) => (
+                            <Link
+                                key={p.domain}
+                                href={`/valuation/${encodeURIComponent(p.domain)}`}
+                                className="px-2.5 py-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-mono text-[11px] transition-colors"
+                            >
+                                {p.label} <span className="text-brand-400">({p.domain})</span>
+                            </Link>
+                        ))}
 
-                    {recents.length > 0 && (
-                        <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-800 text-[11px] text-slate-500">
-                            <span>Recent:</span>
-                            {recents.slice(0, 3).map((r) => (
-                                <button
-                                    key={r}
-                                    type="button"
-                                    onClick={() => {
-                                        setValue(r);
-                                        executeValuation(r);
-                                    }}
-                                    className="text-slate-400 hover:text-brand-300 font-mono underline"
-                                >
-                                    {r}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                        {recents.length > 0 && (
+                            <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-800 text-[11px] text-slate-500">
+                                <span>Recent:</span>
+                                {recents.slice(0, 3).map((r) => (
+                                    <Link
+                                        key={r}
+                                        href={`/valuation/${encodeURIComponent(r)}`}
+                                        className="text-slate-400 hover:text-brand-300 font-mono underline"
+                                    >
+                                        {r}
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

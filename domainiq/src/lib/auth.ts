@@ -79,12 +79,14 @@ export function clearSessionCookie(): void {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
-    const token = cookies().get(SESSION_COOKIE)?.value;
-    if (!token) return null;
     try {
+        const token = cookies().get(SESSION_COOKIE)?.value;
+        if (!token || !process.env.DATABASE_URL) return null;
         const { payload } = await jwtVerify(token, getSecret());
         const userId = Number(payload.sub);
-        const row = await findUserById(userId);
+        if (!Number.isFinite(userId)) return null;
+        const timer = new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 500));
+        const row = await Promise.race([findUserById(userId), timer]);
         if (!row) return null;
         return toSessionUser(row);
     } catch {
