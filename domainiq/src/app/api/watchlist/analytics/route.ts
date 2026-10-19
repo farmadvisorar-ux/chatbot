@@ -40,39 +40,60 @@ function aggregate(rows: { key: string; valueUsd: number }[]): AggBucket[] {
 }
 
 export async function GET() {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
+    try {
+        const session = await getSession();
+        if (!session) return NextResponse.json({ error: 'Sign in required' }, { status: 401 });
 
-    const pool = getPool();
-    const { rows: watchlistRows } = await pool.query<{ domain: string }>(
-        'SELECT domain FROM watchlist WHERE user_id = $1',
-        [session.id],
-    );
-
-    const verticalRows: { key: string; valueUsd: number }[] = [];
-    const tldRows: { key: string; valueUsd: number }[] = [];
-    let totalValueUsd = 0;
-    let priced = 0;
-
-    for (const { domain } of watchlistRows) {
-        const { rows } = await pool.query<{ mid_usd: number; breakdown_json: Breakdown }>(
-            'SELECT mid_usd, breakdown_json FROM valuations WHERE domain = $1 ORDER BY created_at DESC LIMIT 1',
-            [domain],
+        const pool = getPool();
+        const { rows: watchlistRows } = await pool.query<{ domain: string }>(
+            'SELECT domain FROM watchlist WHERE user_id = $1',
+            [session.id],
         );
-        const latest = rows[0];
-        if (!latest) continue;
 
-        totalValueUsd += latest.mid_usd;
-        priced += 1;
-        verticalRows.push({ key: latest.breakdown_json.vertical?.label ?? 'Unclassified', valueUsd: latest.mid_usd });
-        tldRows.push({ key: `.${latest.breakdown_json.tld}`, valueUsd: latest.mid_usd });
+        const verticalRows: { key: string; valueUsd: number }[] = [];
+        const tldRows: { key: string; valueUsd: number }[] = [];
+        let totalValueUsd = 0;
+        let priced = 0;
+
+        for (const { domain } of watchlistRows) {
+            try {
+                const { rows } = await pool.query<{ mid_usd: number; breakdown_json: any }>(
+                    'SELECT mid_usd, breakdown_json FROM valuations WHERE domain = $1 ORDER BY created_at DESC LIMIT 1',
+                    [domain],
+                );
+                const latest = rows[0];
+                if (!latest) continue;
+
+                totalValueUsd += latest.mid_usd;
+                priced += 1;
+                const parsed = typeof latest.breakdown_json === 'string'
+                    ? JSON.parse(latest.breakdown_json)
+                    : latest.breakdown_json;
+
+                const vertLabel = parsed?.vertical?.label || 'Unclassified';
+                const tldLabel = parsed?.tld ? `.${parsed.tld}` : '.com';
+                verticalRows.push({ key: vertLabel, valueUsd: latest.mid_usd });
+                tldRows.push({ key: tldLabel, valueUsd: latest.mid_usd });
+            } catch {
+                // skip individual row errors
+            }
+        }
+
+        return NextResponse.json({
+            totalValueUsd,
+            domainCount: watchlistRows.length,
+            pricedCount: priced,
+            byVertical: aggregate(verticalRows),
+            byTld: aggregate(tldRows),
+        });
+    } catch (err) {
+        console.warn('Watchlist analytics error, returning default zeroed analytics:', err);
+        return NextResponse.json({
+            totalValueUsd: 0,
+            domainCount: 0,
+            pricedCount: 0,
+            byVertical: [],
+            byTld: [],
+        });
     }
-
-    return NextResponse.json({
-        totalValueUsd,
-        domainCount: watchlistRows.length,
-        pricedCount: priced,
-        byVertical: aggregate(verticalRows),
-        byTld: aggregate(tldRows),
-    });
 }

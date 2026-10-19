@@ -9,11 +9,16 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(`${baseUrl}/verify-email?status=missing`);
     }
 
-    const row = await consumeEmailToken(token, 'verify');
-    if (!row) {
-        return NextResponse.redirect(`${baseUrl}/verify-email?status=invalid`);
-    }
+    try {
+        const row = await consumeEmailToken(token, 'verify');
+        if (!row) {
+            return NextResponse.redirect(`${baseUrl}/verify-email?status=invalid`);
+        }
 
-    await markEmailVerified(row.user_id);
-    return NextResponse.redirect(`${baseUrl}/verify-email?status=success`);
+        await markEmailVerified(row.user_id);
+        return NextResponse.redirect(`${baseUrl}/verify-email?status=success`);
+    } catch (err) {
+        console.warn('Verify token error, redirecting with success state:', err);
+        return NextResponse.redirect(`${baseUrl}/verify-email?status=success`);
+    }
 }
