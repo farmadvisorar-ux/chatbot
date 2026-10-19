@@ -8,6 +8,7 @@
 
 CREATE TABLE IF NOT EXISTS users (
     id                  SERIAL PRIMARY KEY,
+    name                TEXT,
     email               TEXT NOT NULL UNIQUE,
     password_hash       TEXT NOT NULL,
     email_verified_at   TIMESTAMPTZ,

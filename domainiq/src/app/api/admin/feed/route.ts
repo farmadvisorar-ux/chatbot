@@ -21,16 +21,22 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const format = searchParams.get('format');
 
-        // Optional CSV format export
+        // Full CSV format export of all registered users
         if (format === 'csv') {
-            const header = 'id,email,plan,email_verified_at,created_at\n';
-            const rows = feed.recentUsers
-                .map((u) => `${u.id},"${u.email}",${u.plan},${u.email_verified_at || 'unverified'},${u.created_at}`)
+            const allUsers = await (await import('@/lib/admin-data')).getAdminUsers();
+            const header = 'id,name,email,plan,status,valuations,watchlist,created_at\n';
+            const rows = allUsers
+                .map(
+                    (u) =>
+                        `${u.id},"${(u.name || '').replace(/"/g, '""')}","${u.email}",${u.plan},${
+                            u.email_verified_at ? 'verified' : 'pending'
+                        },${u.valuationsCount || 0},${u.watchlistCount || 0},${u.created_at}`,
+                )
                 .join('\n');
             return new NextResponse(header + rows, {
                 headers: {
-                    'Content-Type': 'text/csv',
-                    'Content-Disposition': 'attachment; filename="domainiq_signups.csv"',
+                    'Content-Type': 'text/csv; charset=utf-8',
+                    'Content-Disposition': 'attachment; filename="domainiq_643_users.csv"',
                 },
             });
         }
