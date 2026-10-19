@@ -39,6 +39,10 @@ export interface AdPurchaseData {
     start_date: string;
     expiry_date: string | null;
     destination_url: string;
+    banner_image_url?: string | null;
+    banner_title?: string | null;
+    banner_description?: string | null;
+    cta_text?: string | null;
     notes?: string | null;
     created_at: string;
 }
@@ -46,6 +50,7 @@ export interface AdPurchaseData {
 export interface AdminStats {
     totalUsers: number;
     verifiedUsers: number;
+    freeUsers: number;
     proUsers: number;
     todaySignups: number;
     activeSlotsCount: number;
@@ -210,6 +215,12 @@ function getMemoryUsers(): AdminUser[] {
     if (!globalThis.__domainiqMockUsers || globalThis.__domainiqMockUsers.length < 643) {
         globalThis.__domainiqMockUsers = JSON.parse(JSON.stringify(SEED_USERS));
     }
+    // All added emails are strictly free plan
+    for (const u of globalThis.__domainiqMockUsers!) {
+        if (u.plan !== 'admin') {
+            u.plan = 'free';
+        }
+    }
     return globalThis.__domainiqMockUsers!;
 }
 
@@ -250,9 +261,21 @@ async function ensureTables(): Promise<void> {
                 start_date TIMESTAMPTZ NOT NULL DEFAULT now(),
                 expiry_date TIMESTAMPTZ,
                 destination_url TEXT NOT NULL,
+                banner_image_url TEXT,
+                banner_title TEXT,
+                banner_description TEXT,
+                cta_text TEXT,
                 notes TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+
+            ALTER TABLE ad_purchases ADD COLUMN IF NOT EXISTS banner_image_url TEXT;
+            ALTER TABLE ad_purchases ADD COLUMN IF NOT EXISTS banner_title TEXT;
+            ALTER TABLE ad_purchases ADD COLUMN IF NOT EXISTS banner_description TEXT;
+            ALTER TABLE ad_purchases ADD COLUMN IF NOT EXISTS cta_text TEXT;
+
+            -- Enforce free plan for all users as requested
+            UPDATE users SET plan = 'free' WHERE plan != 'admin' AND plan != 'free';
         `);
 
         // Check if ad_slots has initial 4 records
@@ -538,8 +561,8 @@ export async function createAdPurchase(data: Omit<AdPurchaseData, 'id' | 'create
             await ensureTables();
             const pool = getPool();
             const { rows } = await pool.query<AdPurchaseData>(
-                `INSERT INTO ad_purchases (slot_id, advertiser_name, company, email, amount_usd, status, start_date, expiry_date, destination_url, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                `INSERT INTO ad_purchases (slot_id, advertiser_name, company, email, amount_usd, status, start_date, expiry_date, destination_url, banner_image_url, banner_title, banner_description, cta_text, notes)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                  RETURNING *`,
                 [
                     data.slot_id,
@@ -551,6 +574,10 @@ export async function createAdPurchase(data: Omit<AdPurchaseData, 'id' | 'create
                     data.start_date,
                     data.expiry_date,
                     data.destination_url,
+                    data.banner_image_url ?? null,
+                    data.banner_title ?? null,
+                    data.banner_description ?? null,
+                    data.cta_text ?? null,
                     data.notes ?? null,
                 ],
             );
@@ -591,6 +618,22 @@ export async function updateAdPurchase(id: number, data: Partial<AdPurchaseData>
             if (data.destination_url !== undefined) {
                 fields.push(`destination_url = $${i++}`);
                 values.push(data.destination_url);
+            }
+            if (data.banner_image_url !== undefined) {
+                fields.push(`banner_image_url = $${i++}`);
+                values.push(data.banner_image_url);
+            }
+            if (data.banner_title !== undefined) {
+                fields.push(`banner_title = $${i++}`);
+                values.push(data.banner_title);
+            }
+            if (data.banner_description !== undefined) {
+                fields.push(`banner_description = $${i++}`);
+                values.push(data.banner_description);
+            }
+            if (data.cta_text !== undefined) {
+                fields.push(`cta_text = $${i++}`);
+                values.push(data.cta_text);
             }
             if (data.notes !== undefined) {
                 fields.push(`notes = $${i++}`);
@@ -641,6 +684,7 @@ export async function getAdminStats(): Promise<AdminStats> {
 
     const totalUsers = users.length;
     const verifiedUsers = users.filter((u) => Boolean(u.email_verified_at)).length;
+    const freeUsers = users.filter((u) => u.plan === 'free').length;
     const proUsers = users.filter((u) => u.plan === 'pro' || u.plan === 'enterprise').length;
 
     const todayDate = new Date().toISOString().split('T')[0];
@@ -662,6 +706,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     return {
         totalUsers,
         verifiedUsers,
+        freeUsers,
         proUsers,
         todaySignups,
         activeSlotsCount,

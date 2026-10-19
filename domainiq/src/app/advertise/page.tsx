@@ -64,6 +64,10 @@ function AdvertiseForm() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [destinationUrl, setDestinationUrl] = useState('');
+    const [bannerImageUrl, setBannerImageUrl] = useState('');
+    const [bannerTitle, setBannerTitle] = useState('');
+    const [bannerDescription, setBannerDescription] = useState('');
+    const [ctaText, setCtaText] = useState('Explore Offer →');
     const [notes, setNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -77,12 +81,12 @@ function AdvertiseForm() {
         }
     }, [searchParams]);
 
+    const currentPos = AD_POSITIONS.find((p) => p.slotId === selectedSlot) ?? AD_POSITIONS[0]!;
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
         setSubmitting(true);
-
-        const currentPos = AD_POSITIONS.find((p) => p.slotId === selectedSlot);
 
         try {
             const res = await fetch('/api/admin/purchases', {
@@ -95,6 +99,10 @@ function AdvertiseForm() {
                     email,
                     destination_url: destinationUrl,
                     amount_usd: currentPos?.priceUsd || 499,
+                    banner_image_url: bannerImageUrl.trim() || null,
+                    banner_title: bannerTitle.trim() || `${company} — Official Sponsor`,
+                    banner_description: bannerDescription.trim() || `Visit ${company} for premium digital asset solutions and verified domain services.`,
+                    cta_text: ctaText.trim() || 'Learn More →',
                     notes,
                 }),
             });
@@ -119,16 +127,32 @@ function AdvertiseForm() {
                     ✓
                 </div>
                 <h3 className="text-xl font-black text-white">
-                    Sponsorship Reservation Received!
+                    Banner Sponsorship Reservation Received!
                 </h3>
                 <p className="text-sm text-slate-300 leading-relaxed">
-                    Thank you, <span className="font-bold text-white">{company}</span>. Your reservation for <span className="font-mono text-emerald-400">Ad Box #{selectedSlot}</span> has been routed directly to our admin terminal for review.
+                    Thank you, <span className="font-bold text-white">{company}</span>. Your reservation for <span className="font-mono text-emerald-400">Ad Box #{selectedSlot}</span> ({currentPos?.name || 'Dedicated Placement'}) has been routed directly to our admin terminal for deployment review.
                 </p>
                 <p className="text-xs text-slate-400 font-mono">
-                    We will review your destination URL (<span className="text-slate-300">{destinationUrl}</span>) and contact you at <span className="text-slate-300">{email}</span> within 24 hours to confirm payment and push your live link.
+                    Target destination URL: <span className="text-slate-200">{destinationUrl}</span> • Contact: <span className="text-slate-200">{email}</span>. You will receive an invoice and onboarding confirmation within 24 hours.
                 </p>
-                <div className="pt-4">
-                    <Link href="/" className="btn-primary text-xs font-mono font-bold uppercase tracking-wider px-6 py-2.5">
+                <div className="pt-4 flex items-center justify-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSubmitted(false);
+                            setCompany('');
+                            setName('');
+                            setEmail('');
+                            setDestinationUrl('');
+                            setBannerImageUrl('');
+                            setBannerTitle('');
+                            setBannerDescription('');
+                        }}
+                        className="btn-secondary text-xs font-mono px-4 py-2"
+                    >
+                        + Book Another Placement
+                    </button>
+                    <Link href="/" className="btn-primary text-xs font-mono font-bold uppercase tracking-wider px-6 py-2">
                         ← Return to DomainIQ Home
                     </Link>
                 </div>
@@ -137,10 +161,23 @@ function AdvertiseForm() {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="card p-6 sm:p-8 rounded-2xl border-brand-500/30 bg-slate-900/90 shadow-2xl space-y-5">
-            <h3 className="text-base font-black text-white tracking-tight border-b border-slate-800 pb-3">
-                Reserve Your Ad Box Placement
-            </h3>
+        <form onSubmit={handleSubmit} className="card p-6 sm:p-8 rounded-2xl border-brand-500/30 bg-slate-900/90 shadow-2xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+                <div>
+                    <h3 className="text-lg font-black text-white tracking-tight">
+                        Reserve Your Advertisement Banner
+                    </h3>
+                    <p className="text-xs text-slate-400 font-mono">
+                        Select one of the 4 dedicated ad boxes, customize your banner creative, and see real-time preview.
+                    </p>
+                </div>
+                <div className="text-right shrink-0">
+                    <span className="text-xl font-black text-emerald-400 font-mono">
+                        ${currentPos?.priceUsd ?? 499}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-mono">/month</span>
+                </div>
+            </div>
 
             {error && (
                 <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-mono">
@@ -148,96 +185,241 @@ function AdvertiseForm() {
                 </div>
             )}
 
+            {/* Step 1: Choose Placement */}
             <div className="space-y-1.5">
                 <label className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 block">
-                    Select Ad Placement
+                    1. Select Dedicated Ad Box Placement
                 </label>
-                <select
-                    value={selectedSlot}
-                    onChange={(e) => setSelectedSlot(Number(e.target.value))}
-                    className="input w-full text-xs font-mono bg-slate-950 border-slate-800"
-                >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {AD_POSITIONS.map((pos) => (
-                        <option key={pos.slotId} value={pos.slotId}>
-                            Box #{pos.slotId}: {pos.name} (${pos.priceUsd}/mo)
-                        </option>
+                        <button
+                            key={pos.slotId}
+                            type="button"
+                            onClick={() => setSelectedSlot(pos.slotId)}
+                            className={`p-3.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                                selectedSlot === pos.slotId
+                                    ? 'bg-brand-950/70 border-brand-500 text-white shadow-lg shadow-brand-500/10'
+                                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-mono font-bold text-white">
+                                    Ad Box #{pos.slotId}
+                                </span>
+                                <span className="text-xs font-mono font-bold text-emerald-400">
+                                    ${pos.priceUsd}/mo
+                                </span>
+                            </div>
+                            <div className="text-xs font-semibold text-slate-200 mt-1">{pos.name}</div>
+                            <div className="text-[10px] text-slate-500 font-mono mt-1">{pos.location}</div>
+                        </button>
                     ))}
-                </select>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                    <label className="text-xs font-mono text-slate-300 block">Company / Brand Name *</label>
-                    <input
-                        type="text"
-                        required
-                        placeholder="e.g. Sedo, Escrow.com, Namecheap"
-                        value={company}
-                        onChange={(e) => setCompany(e.target.value)}
-                        className="input w-full text-xs font-mono bg-slate-950"
-                    />
-                </div>
-                <div className="space-y-1.5">
-                    <label className="text-xs font-mono text-slate-300 block">Contact Name *</label>
-                    <input
-                        type="text"
-                        required
-                        placeholder="e.g. Alex Morgan"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="input w-full text-xs font-mono bg-slate-950"
-                    />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                    <label className="text-xs font-mono text-slate-300 block">Business Email *</label>
-                    <input
-                        type="email"
-                        required
-                        placeholder="partner@yourcompany.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="input w-full text-xs font-mono bg-slate-950"
-                    />
+            {/* Step 2: Company & Contact Information */}
+            <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                <label className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 block">
+                    2. Company &amp; Contact Details
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-mono text-slate-300 block">Company / Brand Name *</label>
+                        <input
+                            type="text"
+                            required
+                            placeholder="e.g. Escrow.com, Sedo, Dynadot"
+                            value={company}
+                            onChange={(e) => setCompany(e.target.value)}
+                            className="input w-full text-xs font-mono bg-slate-950"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-mono text-slate-300 block">Contact Name *</label>
+                        <input
+                            type="text"
+                            required
+                            placeholder="e.g. Sarah Jenkins"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="input w-full text-xs font-mono bg-slate-950"
+                        />
+                    </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-mono text-slate-300 block">Business Email *</label>
+                        <input
+                            type="email"
+                            required
+                            placeholder="partnerships@yourcompany.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="input w-full text-xs font-mono bg-slate-950"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-mono text-brand-300 font-bold block">
+                            Live Destination URL *
+                        </label>
+                        <input
+                            type="url"
+                            required
+                            placeholder="https://yourcompany.com/promo"
+                            value={destinationUrl}
+                            onChange={(e) => setDestinationUrl(e.target.value)}
+                            className="input w-full text-xs font-mono bg-slate-950 border-brand-500/50"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Step 3: Banner Creative Configuration */}
+            <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                <label className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 block">
+                    3. Banner Creative &amp; Marketing Copy
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-mono text-slate-300 block">
+                            Banner Headline / Title *
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            placeholder="e.g. Secure Domain Escrow With Zero Friction"
+                            value={bannerTitle}
+                            onChange={(e) => setBannerTitle(e.target.value)}
+                            className="input w-full text-xs bg-slate-950"
+                        />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-mono text-slate-300 block">
+                            CTA Button Text *
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            placeholder="e.g. Visit Escrow.com →"
+                            value={ctaText}
+                            onChange={(e) => setCtaText(e.target.value)}
+                            className="input w-full text-xs font-mono bg-slate-950"
+                        />
+                    </div>
+                </div>
+
                 <div className="space-y-1.5">
-                    <label className="text-xs font-mono text-brand-300 font-bold block">
-                        Live Destination Link *
+                    <label className="text-xs font-mono text-slate-300 block">
+                        Banner Image URL (Logo or Banner Creative)
                     </label>
                     <input
                         type="url"
+                        placeholder="https://yourcompany.com/assets/banner-logo.png"
+                        value={bannerImageUrl}
+                        onChange={(e) => setBannerImageUrl(e.target.value)}
+                        className="input w-full text-xs font-mono bg-slate-950"
+                    />
+                    <p className="text-[10px] text-slate-500 font-mono">
+                        Direct public image link (PNG, JPG, SVG). Leave blank to use a polished branded typography badge.
+                    </p>
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-300 block">
+                        Banner Description / Value Proposition *
+                    </label>
+                    <textarea
+                        rows={2}
                         required
-                        placeholder="https://yourcompany.com/landing"
-                        value={destinationUrl}
-                        onChange={(e) => setDestinationUrl(e.target.value)}
-                        className="input w-full text-xs font-mono bg-slate-950 border-brand-500/50"
+                        placeholder="e.g. Over $5 Billion in digital assets protected. Instant wire and crypto checkout for domain buyers."
+                        value={bannerDescription}
+                        onChange={(e) => setBannerDescription(e.target.value)}
+                        className="input w-full text-xs bg-slate-950"
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-400 block">
+                        Additional Campaign Notes (Optional)
+                    </label>
+                    <input
+                        type="text"
+                        placeholder="Target start date, UTM tracking tags, special instructions..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="input w-full text-xs bg-slate-950"
                     />
                 </div>
             </div>
 
-            <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-300 block">Campaign Objective &amp; Notes</label>
-                <textarea
-                    rows={3}
-                    placeholder="Describe your target offer, preferred start date, or promotional copy..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="input w-full text-xs bg-slate-950"
-                />
+            {/* Real-time Live Banner Preview */}
+            <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-brand-300">
+                        ⚡ Live Banner Preview (Box #{selectedSlot})
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">
+                        Updates as you type
+                    </span>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl border border-brand-500/40 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 shadow-xl relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3.5">
+                            {bannerImageUrl.trim() ? (
+                                <img
+                                    src={bannerImageUrl.trim()}
+                                    alt="Banner Preview"
+                                    onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                    className="w-14 h-14 rounded-xl object-cover border border-slate-700 shrink-0 bg-slate-950 shadow"
+                                />
+                            ) : (
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-600 to-indigo-600 flex items-center justify-center text-white text-base font-bold shrink-0 shadow">
+                                    📢
+                                </div>
+                            )}
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-brand-950 text-brand-300 border border-brand-800">
+                                        Sponsored Partner
+                                    </span>
+                                    <span className="text-[11px] text-slate-400 font-mono">
+                                        {company || 'Your Company'}
+                                    </span>
+                                </div>
+                                <h4 className="text-sm sm:text-base font-bold text-white">
+                                    {bannerTitle || 'Your Compelling Headline Here'}
+                                </h4>
+                                <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                                    {bannerDescription || 'Your targeted promotional message will appear here, viewed by 50,000+ domain portfolio investors.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="shrink-0 pt-2 sm:pt-0">
+                            <span className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider bg-brand-600 text-white shadow-md shadow-brand-500/25 whitespace-nowrap">
+                                {ctaText || 'Learn More →'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <button
                 type="submit"
                 disabled={submitting}
-                className="btn-primary w-full py-3 text-xs font-mono font-bold uppercase tracking-wider"
+                className="btn-primary w-full py-3.5 text-xs font-mono font-bold uppercase tracking-wider shadow-lg shadow-brand-500/25 hover:scale-[1.01] transition-transform"
             >
-                {submitting ? 'Submitting Reservation...' : 'Submit Sponsorship Request →'}
+                {submitting ? 'Submitting Banner Placement...' : `Submit Reservation for Box #${selectedSlot} (${currentPos?.priceUsd ?? 499}/mo) →`}
             </button>
 
             <p className="text-[11px] text-center text-slate-500 font-mono">
-                No automatic charges. We verify brand suitability and send an invoice with direct escrow / credit card checkout.
+                No immediate credit card charge. Our team verifies your creative and provides payment checkout via Escrow, Stripe, or Wire.
             </p>
         </form>
     );

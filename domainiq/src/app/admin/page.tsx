@@ -53,6 +53,10 @@ export default function AdminDashboardPage() {
         amount_usd: number;
         status: PurchaseStatus;
         destination_url: string;
+        banner_image_url?: string;
+        banner_title?: string;
+        banner_description?: string;
+        cta_text?: string;
         notes: string;
     }>({
         slot_id: 1,
@@ -62,6 +66,10 @@ export default function AdminDashboardPage() {
         amount_usd: 499,
         status: 'active',
         destination_url: '',
+        banner_image_url: '',
+        banner_title: '',
+        banner_description: '',
+        cta_text: 'Learn More →',
         notes: '',
     });
     const [savingPurchase, setSavingPurchase] = useState(false);
@@ -232,6 +240,10 @@ export default function AdminDashboardPage() {
                     amount_usd: 499,
                     status: 'active',
                     destination_url: '',
+                    banner_image_url: '',
+                    banner_title: '',
+                    banner_description: '',
+                    cta_text: 'Learn More →',
                     notes: '',
                 });
                 showToast('New ad purchase created and tracked successfully!');
@@ -260,6 +272,41 @@ export default function AdminDashboardPage() {
             }
         } catch {
             showToast('Failed to update status', 'error');
+        }
+    };
+
+    // 1-Click Deploy Advertiser Banner to Live Slot
+    const handleDeployPurchaseBanner = async (p: AdPurchaseData) => {
+        try {
+            const res = await fetch('/api/admin/ads', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    slotId: p.slot_id,
+                    sponsor_name: p.company || p.advertiser_name,
+                    title: p.banner_title || `${p.company} — Verified Partner`,
+                    description:
+                        p.banner_description ||
+                        `Official Partner of DomainIQ. Visit ${p.company} to explore premium digital asset solutions.`,
+                    destination_url: p.destination_url,
+                    image_url: p.banner_image_url || null,
+                    badge: 'Sponsored Partner',
+                    cta_text: p.cta_text || 'Learn More →',
+                    is_active: true,
+                }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setSlots((prev) => prev.map((s) => (s.id === p.slot_id ? data.slot : s)));
+                if (p.status !== 'active') {
+                    await handleUpdatePurchaseStatus(p.id, 'active');
+                }
+                showToast(`⚡ Deployed ${p.company}'s banner to live Ad Box #${p.slot_id}!`);
+            } else {
+                showToast(data.error || 'Failed to deploy banner to live slot', 'error');
+            }
+        } catch {
+            showToast('Error deploying banner to ad box', 'error');
         }
     };
 
@@ -583,7 +630,7 @@ export default function AdminDashboardPage() {
                                 {stats?.totalUsers ?? users.length}
                             </div>
                             <div className="text-[11px] font-mono text-emerald-400">
-                                {stats?.proUsers ?? 0} Pro • {stats?.verifiedUsers ?? 0} Verified
+                                {stats?.freeUsers ?? users.filter((u) => u.plan === 'free').length} Free • {stats?.verifiedUsers ?? 0} Verified
                             </div>
                         </div>
 
@@ -952,6 +999,19 @@ export default function AdminDashboardPage() {
                                                 />
                                             </div>
 
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-mono text-slate-400">
+                                                    Banner Image URL (Logo or Ad Creative)
+                                                </label>
+                                                <input
+                                                    type="url"
+                                                    value={slotDraft.image_url ?? slot.image_url ?? ''}
+                                                    onChange={(e) => setSlotDraft({ ...slotDraft, image_url: e.target.value })}
+                                                    placeholder="https://... (Direct image link)"
+                                                    className="input w-full text-xs font-mono bg-slate-950"
+                                                />
+                                            </div>
+
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="space-y-1">
                                                     <label className="text-[11px] font-mono text-slate-400">Badge Text</label>
@@ -1114,8 +1174,30 @@ export default function AdminDashboardPage() {
                                             <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
                                                 <td className="p-3.5 font-bold text-slate-400">#{p.id}</td>
                                                 <td className="p-3.5">
-                                                    <div className="font-bold text-white">{p.advertiser_name}</div>
-                                                    <div className="text-[11px] text-slate-400">{p.company}</div>
+                                                    <div className="flex items-center gap-2.5">
+                                                        {p.banner_image_url ? (
+                                                            <img
+                                                                src={p.banner_image_url}
+                                                                alt={p.company}
+                                                                className="w-8 h-8 rounded-lg object-cover border border-slate-700 bg-slate-950 shrink-0 shadow-sm"
+                                                                onError={(e) => {
+                                                                    (e.target as HTMLElement).style.display = 'none';
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-xs shrink-0">
+                                                                📢
+                                                            </div>
+                                                        )}
+                                                        <div className="space-y-0.5">
+                                                            <div className="font-bold text-white flex items-center gap-1.5">
+                                                                <span>{p.company || p.advertiser_name}</span>
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-400 font-normal truncate max-w-[200px]">
+                                                                {p.banner_title || p.advertiser_name}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td className="p-3.5 text-slate-300">{p.email}</td>
                                                 <td className="p-3.5">
@@ -1159,8 +1241,17 @@ export default function AdminDashboardPage() {
                                                         <option value="canceled">Canceled</option>
                                                     </select>
                                                 </td>
-                                                <td className="p-3.5 text-right">
+                                                <td className="p-3.5 text-right whitespace-nowrap space-x-2">
                                                     <button
+                                                        type="button"
+                                                        onClick={() => handleDeployPurchaseBanner(p)}
+                                                        className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-brand-600 hover:bg-brand-500 text-white transition-all shadow-sm"
+                                                        title="Instantly deploy this banner live to Ad Box slot"
+                                                    >
+                                                        ⚡ Deploy Live
+                                                    </button>
+                                                    <button
+                                                        type="button"
                                                         onClick={() => handleDeletePurchase(p.id)}
                                                         className="text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded hover:bg-rose-950/40 transition-colors"
                                                     >
@@ -1264,7 +1355,7 @@ export default function AdminDashboardPage() {
                                     </div>
 
                                     <div className="space-y-1">
-                                        <label className="text-brand-300 font-bold">Live Target Link (Destination URL)</label>
+                                        <label className="text-brand-300 font-bold">Live Target Link (Destination URL) *</label>
                                         <input
                                             type="url"
                                             required
@@ -1274,6 +1365,59 @@ export default function AdminDashboardPage() {
                                                 setNewPurchaseDraft({ ...newPurchaseDraft, destination_url: e.target.value })
                                             }
                                             className="input w-full bg-slate-950 border-brand-500/50"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-slate-400">Banner Headline</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Escrow Your Domains Safely"
+                                                value={newPurchaseDraft.banner_title || ''}
+                                                onChange={(e) =>
+                                                    setNewPurchaseDraft({ ...newPurchaseDraft, banner_title: e.target.value })
+                                                }
+                                                className="input w-full bg-slate-950"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-slate-400">CTA Button Text</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Visit Partner →"
+                                                value={newPurchaseDraft.cta_text || ''}
+                                                onChange={(e) =>
+                                                    setNewPurchaseDraft({ ...newPurchaseDraft, cta_text: e.target.value })
+                                                }
+                                                className="input w-full bg-slate-950"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-slate-400">Banner Image URL</label>
+                                        <input
+                                            type="url"
+                                            placeholder="https://... (Direct image link)"
+                                            value={newPurchaseDraft.banner_image_url || ''}
+                                            onChange={(e) =>
+                                                setNewPurchaseDraft({ ...newPurchaseDraft, banner_image_url: e.target.value })
+                                            }
+                                            className="input w-full bg-slate-950"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-slate-400">Banner Description Copy</label>
+                                        <textarea
+                                            rows={2}
+                                            placeholder="Promotional pitch and value proposition..."
+                                            value={newPurchaseDraft.banner_description || ''}
+                                            onChange={(e) =>
+                                                setNewPurchaseDraft({ ...newPurchaseDraft, banner_description: e.target.value })
+                                            }
+                                            className="input w-full bg-slate-950"
                                         />
                                     </div>
 
@@ -1381,7 +1525,7 @@ export default function AdminDashboardPage() {
                                     <span className="text-xs text-brand-400 font-normal">Registered</span>
                                 </div>
                                 <div className="text-[11px] font-mono text-slate-400">
-                                    {proCount + enterpriseCount} Paid ({proCount} Pro, {enterpriseCount} Enterprise)
+                                    {freeCount} Free Signups (100% Free Plan)
                                 </div>
                             </div>
 

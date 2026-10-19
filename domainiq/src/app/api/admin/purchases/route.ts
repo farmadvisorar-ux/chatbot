@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
             start_date: body.start_date || new Date().toISOString(),
             expiry_date: body.expiry_date || null,
             destination_url: String(body.destination_url).trim(),
+            banner_image_url: body.banner_image_url ? String(body.banner_image_url).trim() : null,
+            banner_title: body.banner_title ? String(body.banner_title).trim() : null,
+            banner_description: body.banner_description ? String(body.banner_description).trim() : null,
+            cta_text: body.cta_text ? String(body.cta_text).trim() : null,
             notes: body.notes ? String(body.notes).trim() : null,
         });
 
@@ -75,6 +79,10 @@ export async function PATCH(req: NextRequest) {
             status: body.status,
             amount_usd: body.amount_usd !== undefined ? Number(body.amount_usd) : undefined,
             destination_url: body.destination_url,
+            banner_image_url: body.banner_image_url,
+            banner_title: body.banner_title,
+            banner_description: body.banner_description,
+            cta_text: body.cta_text,
             notes: body.notes,
         });
 
