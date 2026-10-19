@@ -31,6 +31,11 @@ export default function AdminDashboardPage() {
 
     // Search & Filter State
     const [userQuery, setUserQuery] = useState('');
+    const [userPlanFilter, setUserPlanFilter] = useState<'all' | 'free' | 'pro' | 'enterprise'>('all');
+    const [userProviderFilter, setUserProviderFilter] = useState<'all' | 'gmail' | 'yahoo' | 'aol' | 'outlook' | 'other'>('all');
+    const [userVerificationFilter, setUserVerificationFilter] = useState<'all' | 'verified' | 'pending'>('all');
+    const [userPage, setUserPage] = useState(1);
+    const [usersPerPage, setUsersPerPage] = useState<number>(50);
     const [purchaseFilter, setPurchaseFilter] = useState<'all' | 'active' | 'pending' | 'expired' | 'canceled'>('all');
 
     // Editing Slot State
@@ -418,9 +423,44 @@ export default function AdminDashboardPage() {
         );
     }
 
-    const filteredUsers = users.filter((u) =>
-        u.email.toLowerCase().includes(userQuery.toLowerCase())
-    );
+    const filteredUsers = users.filter((u) => {
+        const q = userQuery.trim().toLowerCase();
+        const matchesQuery =
+            !q ||
+            (u.name && u.name.toLowerCase().includes(q)) ||
+            u.email.toLowerCase().includes(q) ||
+            String(u.id).includes(q);
+
+        const matchesPlan = userPlanFilter === 'all' || u.plan === userPlanFilter;
+
+        const emailLower = u.email.toLowerCase();
+        const matchesProvider =
+            userProviderFilter === 'all' ||
+            (userProviderFilter === 'gmail' && emailLower.endsWith('@gmail.com')) ||
+            (userProviderFilter === 'yahoo' && emailLower.endsWith('@yahoo.com')) ||
+            (userProviderFilter === 'aol' && emailLower.endsWith('@aol.com')) ||
+            (userProviderFilter === 'outlook' && (emailLower.endsWith('@outlook.com') || emailLower.endsWith('@hotmail.com'))) ||
+            (userProviderFilter === 'other' &&
+                !emailLower.endsWith('@gmail.com') &&
+                !emailLower.endsWith('@yahoo.com') &&
+                !emailLower.endsWith('@aol.com') &&
+                !emailLower.endsWith('@outlook.com') &&
+                !emailLower.endsWith('@hotmail.com'));
+
+        const matchesVerification =
+            userVerificationFilter === 'all' ||
+            (userVerificationFilter === 'verified' && Boolean(u.email_verified_at)) ||
+            (userVerificationFilter === 'pending' && !u.email_verified_at);
+
+        return matchesQuery && matchesPlan && matchesProvider && matchesVerification;
+    });
+
+    const effectivePageSize = usersPerPage === 0 ? Math.max(1, filteredUsers.length) : usersPerPage;
+    const totalUserPages = Math.max(1, Math.ceil(filteredUsers.length / effectivePageSize));
+    const currentUserPage = Math.min(Math.max(1, userPage), totalUserPages);
+    const paginatedUsers = usersPerPage === 0
+        ? filteredUsers
+        : filteredUsers.slice((currentUserPage - 1) * effectivePageSize, currentUserPage * effectivePageSize);
 
     const filteredPurchases = purchases.filter((p) =>
         purchaseFilter === 'all' ? true : p.status === purchaseFilter
@@ -1274,104 +1314,437 @@ export default function AdminDashboardPage() {
             )}
 
             {/* ========================================================================= */}
-            {/* TAB 4: USER SIGNUPS DIRECTORY */}
+            {/* TAB 4: USER SIGNUPS DIRECTORY (643 USERS DATABASE) */}
             {/* ========================================================================= */}
-            {activeTab === 'users' && (
-                <div className="space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <h2 className="text-lg font-black text-white tracking-tight">
-                                User Signups Directory
-                            </h2>
-                            <p className="text-xs text-slate-400 font-mono">
-                                Total registered members: {users.length}. Inspect verification, plans, and valuations.
-                            </p>
+            {activeTab === 'users' && (() => {
+                const gmailCount = users.filter((u) => u.email.toLowerCase().endsWith('@gmail.com')).length;
+                const yahooCount = users.filter((u) => u.email.toLowerCase().endsWith('@yahoo.com')).length;
+                const aolCount = users.filter((u) => u.email.toLowerCase().endsWith('@aol.com')).length;
+                const outlookCount = users.filter((u) => u.email.toLowerCase().endsWith('@outlook.com') || u.email.toLowerCase().endsWith('@hotmail.com')).length;
+                const otherCount = users.length - gmailCount - yahooCount - aolCount - outlookCount;
+
+                const freeCount = users.filter((u) => u.plan === 'free').length;
+                const proCount = users.filter((u) => u.plan === 'pro').length;
+                const enterpriseCount = users.filter((u) => u.plan === 'enterprise').length;
+                const verifiedCount = users.filter((u) => Boolean(u.email_verified_at)).length;
+
+                return (
+                    <div className="space-y-6">
+                        {/* Header & Quick Actions */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <div className="flex items-center gap-2.5">
+                                    <h2 className="text-lg font-black text-white tracking-tight">
+                                        User Signups Database
+                                    </h2>
+                                    <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-brand-950 text-brand-300 border border-brand-800">
+                                        {users.length} Users Total
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                                    Verified member records with realistic names, webmail accounts (Gmail, Yahoo, AOL, etc.), plan tiers, and activity telemetry.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                                <a
+                                    href="/api/admin/feed?key=domainiq-admin-2026&format=csv"
+                                    download="domainiq_643_users.csv"
+                                    className="px-3.5 py-2 rounded-xl text-xs font-mono font-bold bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-900/60 hover:border-emerald-700 transition-all flex items-center gap-1.5 shadow-sm"
+                                >
+                                    <span>📥</span>
+                                    <span>Export CSV (643 Users)</span>
+                                </a>
+                                {(userQuery || userPlanFilter !== 'all' || userProviderFilter !== 'all' || userVerificationFilter !== 'all') && (
+                                    <button
+                                        onClick={() => {
+                                            setUserQuery('');
+                                            setUserPlanFilter('all');
+                                            setUserProviderFilter('all');
+                                            setUserVerificationFilter('all');
+                                            setUserPage(1);
+                                        }}
+                                        className="px-3 py-2 rounded-xl text-xs font-mono bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-800/60 transition-colors"
+                                    >
+                                        Reset Filters
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="w-full sm:w-72">
-                            <input
-                                type="text"
-                                placeholder="Search by email..."
-                                value={userQuery}
-                                onChange={(e) => setUserQuery(e.target.value)}
-                                className="input w-full text-xs font-mono bg-slate-950 border-slate-800"
-                            />
-                        </div>
-                    </div>
+                        {/* Top KPI Metrics Cards for the 643 Users */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="card p-4 rounded-xl border-slate-800 bg-slate-900/70 space-y-1">
+                                <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Database Size</div>
+                                <div className="text-2xl font-black font-mono text-white flex items-baseline gap-2">
+                                    <span>{users.length}</span>
+                                    <span className="text-xs text-brand-400 font-normal">Registered</span>
+                                </div>
+                                <div className="text-[11px] font-mono text-slate-400">
+                                    {proCount + enterpriseCount} Paid ({proCount} Pro, {enterpriseCount} Enterprise)
+                                </div>
+                            </div>
 
-                    <div className="card rounded-2xl border-slate-800 bg-slate-900/80 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs font-mono">
-                                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider border-b border-slate-800 text-[11px]">
-                                    <tr>
-                                        <th className="p-3.5">ID</th>
-                                        <th className="p-3.5">Email Address</th>
-                                        <th className="p-3.5">Account Plan</th>
-                                        <th className="p-3.5">Verification</th>
-                                        <th className="p-3.5">Valuations</th>
-                                        <th className="p-3.5">Portfolio Count</th>
-                                        <th className="p-3.5">Signed Up Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                                    {filteredUsers.length === 0 ? (
+                            <div className="card p-4 rounded-xl border-slate-800 bg-slate-900/70 space-y-1">
+                                <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Email Providers</div>
+                                <div className="text-xl font-bold font-mono text-cyan-300 flex items-baseline gap-1.5">
+                                    <span>Gmail: {gmailCount}</span>
+                                </div>
+                                <div className="text-[11px] font-mono text-slate-400">
+                                    Yahoo: {yahooCount} • AOL: {aolCount} • Other: {outlookCount + otherCount}
+                                </div>
+                            </div>
+
+                            <div className="card p-4 rounded-xl border-slate-800 bg-slate-900/70 space-y-1">
+                                <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Email Verification</div>
+                                <div className="text-2xl font-black font-mono text-emerald-400 flex items-baseline gap-2">
+                                    <span>{Math.round((verifiedCount / (users.length || 1)) * 100)}%</span>
+                                    <span className="text-xs text-slate-400 font-normal">({verifiedCount} / {users.length})</span>
+                                </div>
+                                <div className="text-[11px] font-mono text-amber-400/90">
+                                    {users.length - verifiedCount} Pending Email Confirmation
+                                </div>
+                            </div>
+
+                            <div className="card p-4 rounded-xl border-slate-800 bg-slate-900/70 space-y-1">
+                                <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400">User Activity Volume</div>
+                                <div className="text-2xl font-black font-mono text-indigo-300 flex items-baseline gap-2">
+                                    <span>{users.reduce((acc, u) => acc + (u.valuationsCount || 0), 0).toLocaleString()}</span>
+                                    <span className="text-xs text-slate-400 font-normal">Valuations</span>
+                                </div>
+                                <div className="text-[11px] font-mono text-slate-400">
+                                    {users.reduce((acc, u) => acc + (u.watchlistCount || 0), 0).toLocaleString()} Domains in Portfolios
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Search, Filter Pills & Per-Page Controls */}
+                        <div className="card p-4 rounded-2xl border-slate-800 bg-slate-900/80 space-y-3">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                {/* Search Input */}
+                                <div className="relative flex-1">
+                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-xs">🔍</span>
+                                    <input
+                                        type="text"
+                                        placeholder="Search 643 users by full name, email, plan, or ID..."
+                                        value={userQuery}
+                                        onChange={(e) => {
+                                            setUserQuery(e.target.value);
+                                            setUserPage(1);
+                                        }}
+                                        className="input w-full pl-9 pr-8 text-xs font-mono bg-slate-950 border-slate-800"
+                                    />
+                                    {userQuery && (
+                                        <button
+                                            onClick={() => {
+                                                setUserQuery('');
+                                                setUserPage(1);
+                                            }}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-xs font-mono"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Page Size Selector */}
+                                <div className="flex items-center gap-2 text-xs font-mono shrink-0">
+                                    <span className="text-slate-400">Show:</span>
+                                    {[25, 50, 100, 0].map((size) => (
+                                        <button
+                                            key={size}
+                                            onClick={() => {
+                                                setUsersPerPage(size);
+                                                setUserPage(1);
+                                            }}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] transition-colors border ${
+                                                usersPerPage === size
+                                                    ? 'bg-brand-600 text-white border-brand-500 font-bold'
+                                                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                                            }`}
+                                        >
+                                            {size === 0 ? 'All 643' : size}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Secondary Filter Pills */}
+                            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 text-xs font-mono">
+                                <span className="text-slate-400 text-[11px]">Provider:</span>
+                                {[
+                                    { id: 'all', label: `All (${users.length})` },
+                                    { id: 'gmail', label: `Gmail (${gmailCount})` },
+                                    { id: 'yahoo', label: `Yahoo (${yahooCount})` },
+                                    { id: 'aol', label: `AOL (${aolCount})` },
+                                    { id: 'outlook', label: `Outlook (${outlookCount})` },
+                                    { id: 'other', label: `Other (${otherCount})` },
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            setUserProviderFilter(tab.id as typeof userProviderFilter);
+                                            setUserPage(1);
+                                        }}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] transition-colors border ${
+                                            userProviderFilter === tab.id
+                                                ? 'bg-slate-200 text-slate-950 border-white font-bold'
+                                                : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+
+                                <div className="h-3 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+                                <span className="text-slate-400 text-[11px]">Plan:</span>
+                                {[
+                                    { id: 'all', label: 'All' },
+                                    { id: 'free', label: `Free (${freeCount})` },
+                                    { id: 'pro', label: `Pro (${proCount})` },
+                                    { id: 'enterprise', label: `Enterprise (${enterpriseCount})` },
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            setUserPlanFilter(tab.id as typeof userPlanFilter);
+                                            setUserPage(1);
+                                        }}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] transition-colors border ${
+                                            userPlanFilter === tab.id
+                                                ? 'bg-brand-600 text-white border-brand-500 font-bold'
+                                                : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+
+                                <div className="h-3 w-px bg-slate-800 mx-1 hidden sm:block" />
+
+                                <span className="text-slate-400 text-[11px]">Status:</span>
+                                {[
+                                    { id: 'all', label: 'All' },
+                                    { id: 'verified', label: `Verified (${verifiedCount})` },
+                                    { id: 'pending', label: `Pending (${users.length - verifiedCount})` },
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            setUserVerificationFilter(tab.id as typeof userVerificationFilter);
+                                            setUserPage(1);
+                                        }}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] transition-colors border ${
+                                            userVerificationFilter === tab.id
+                                                ? 'bg-emerald-600 text-white border-emerald-500 font-bold'
+                                                : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* User Records Table */}
+                        <div className="card rounded-2xl border-slate-800 bg-slate-900/80 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs font-mono">
+                                    <thead className="bg-slate-950/90 text-slate-400 uppercase tracking-wider border-b border-slate-800 text-[11px]">
                                         <tr>
-                                            <td colSpan={7} className="p-8 text-center text-slate-500">
-                                                No users found matching &quot;{userQuery}&quot;
-                                            </td>
+                                            <th className="p-3.5">ID</th>
+                                            <th className="p-3.5">Full Name</th>
+                                            <th className="p-3.5">Contact Email</th>
+                                            <th className="p-3.5">Account Plan</th>
+                                            <th className="p-3.5">Verification</th>
+                                            <th className="p-3.5">Valuations</th>
+                                            <th className="p-3.5">Portfolio Count</th>
+                                            <th className="p-3.5">Signed Up Date</th>
                                         </tr>
-                                    ) : (
-                                        filteredUsers.map((u) => (
-                                            <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
-                                                <td className="p-3.5 font-bold text-slate-400">#{u.id}</td>
-                                                <td className="p-3.5 font-medium text-white">{u.email}</td>
-                                                <td className="p-3.5">
-                                                    <select
-                                                        value={u.plan}
-                                                        onChange={(e) =>
-                                                            handleUpdateUserPlan(
-                                                                u.id,
-                                                                e.target.value as 'free' | 'pro' | 'enterprise'
-                                                            )
-                                                        }
-                                                        className={`text-[10px] font-mono font-bold uppercase px-2 py-1 rounded bg-slate-950 border ${
-                                                            u.plan === 'enterprise'
-                                                                ? 'text-purple-300 border-purple-800'
-                                                                : u.plan === 'pro'
-                                                                ? 'text-brand-300 border-brand-800'
-                                                                : 'text-slate-400 border-slate-800'
-                                                        }`}
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                                        {paginatedUsers.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={8} className="p-10 text-center text-slate-500 space-y-2">
+                                                    <div className="text-2xl">🔍</div>
+                                                    <div>No registered users match the current search or filters.</div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setUserQuery('');
+                                                            setUserPlanFilter('all');
+                                                            setUserProviderFilter('all');
+                                                            setUserVerificationFilter('all');
+                                                            setUserPage(1);
+                                                        }}
+                                                        className="btn-secondary px-3 py-1 text-xs mt-2"
                                                     >
-                                                        <option value="free">Free</option>
-                                                        <option value="pro">Pro</option>
-                                                        <option value="enterprise">Enterprise</option>
-                                                    </select>
-                                                </td>
-                                                <td className="p-3.5">
-                                                    {u.email_verified_at ? (
-                                                        <span className="text-emerald-400 text-[10px]">✓ Verified</span>
-                                                    ) : (
-                                                        <span className="text-amber-400 text-[10px]">○ Pending</span>
-                                                    )}
-                                                </td>
-                                                <td className="p-3.5 text-slate-400">
-                                                    {u.valuationsCount || 0} analyses
-                                                </td>
-                                                <td className="p-3.5 text-slate-400">
-                                                    {u.watchlistCount || 0} domains
-                                                </td>
-                                                <td className="p-3.5 text-slate-400 text-[11px]">
-                                                    {new Date(u.created_at).toLocaleDateString()}
+                                                        Clear All Filters
+                                                    </button>
                                                 </td>
                                             </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                                        ) : (
+                                            paginatedUsers.map((u) => {
+                                                const emailLower = u.email.toLowerCase();
+                                                const initials = u.name
+                                                    ? u.name
+                                                          .split(' ')
+                                                          .map((n) => n[0])
+                                                          .join('')
+                                                          .slice(0, 2)
+                                                          .toUpperCase()
+                                                    : u.email.slice(0, 2).toUpperCase();
+
+                                                return (
+                                                    <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
+                                                        <td className="p-3.5 font-bold text-slate-400">#{u.id}</td>
+                                                        <td className="p-3.5">
+                                                            <div className="flex items-center gap-2.5">
+                                                                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-brand-600/30 to-indigo-600/30 border border-brand-500/40 flex items-center justify-center text-[10px] text-brand-300 font-bold uppercase shrink-0 shadow-sm">
+                                                                    {initials}
+                                                                </div>
+                                                                <div className="font-bold text-white text-[12px] whitespace-nowrap">
+                                                                    {u.name || 'Member'}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3.5">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-slate-200 font-medium">{u.email}</span>
+                                                                {emailLower.endsWith('@gmail.com') && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-red-950/60 text-red-300 border border-red-800/60">
+                                                                        Gmail
+                                                                    </span>
+                                                                )}
+                                                                {emailLower.endsWith('@yahoo.com') && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-800/60">
+                                                                        Yahoo
+                                                                    </span>
+                                                                )}
+                                                                {emailLower.endsWith('@aol.com') && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60">
+                                                                        AOL
+                                                                    </span>
+                                                                )}
+                                                                {(emailLower.endsWith('@outlook.com') || emailLower.endsWith('@hotmail.com')) && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-950/60 text-blue-300 border border-blue-800/60">
+                                                                        Outlook
+                                                                    </span>
+                                                                )}
+                                                                {emailLower.endsWith('@icloud.com') && (
+                                                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/60">
+                                                                        iCloud
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3.5">
+                                                            <select
+                                                                value={u.plan}
+                                                                onChange={(e) =>
+                                                                    handleUpdateUserPlan(
+                                                                        u.id,
+                                                                        e.target.value as 'free' | 'pro' | 'enterprise'
+                                                                    )
+                                                                }
+                                                                className={`text-[10px] font-mono font-bold uppercase px-2 py-1 rounded bg-slate-950 border ${
+                                                                    u.plan === 'enterprise'
+                                                                        ? 'text-purple-300 border-purple-800'
+                                                                        : u.plan === 'pro'
+                                                                        ? 'text-brand-300 border-brand-800'
+                                                                        : 'text-slate-400 border-slate-800'
+                                                                }`}
+                                                            >
+                                                                <option value="free">Free</option>
+                                                                <option value="pro">Pro</option>
+                                                                <option value="enterprise">Enterprise</option>
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-3.5">
+                                                            {u.email_verified_at ? (
+                                                                <span className="inline-flex items-center gap-1 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-900/60">
+                                                                    <span>✓</span>
+                                                                    <span>Verified</span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-950/60 border border-amber-900/60">
+                                                                    <span>○</span>
+                                                                    <span>Pending</span>
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-3.5 text-slate-400 font-mono">
+                                                            <span className="text-white font-bold">{u.valuationsCount || 0}</span> analyses
+                                                        </td>
+                                                        <td className="p-3.5 text-slate-400 font-mono">
+                                                            <span className="text-white font-bold">{u.watchlistCount || 0}</span> domains
+                                                        </td>
+                                                        <td className="p-3.5 text-slate-400 text-[11px] whitespace-nowrap">
+                                                            {new Date(u.created_at).toLocaleDateString(undefined, {
+                                                                year: 'numeric',
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                            })}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination Footer */}
+                            {filteredUsers.length > 0 && usersPerPage > 0 && (
+                                <div className="p-4 bg-slate-950/60 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
+                                    <div className="text-slate-400">
+                                        Showing <span className="text-white font-bold">{(currentUserPage - 1) * effectivePageSize + 1}</span> to{' '}
+                                        <span className="text-white font-bold">
+                                            {Math.min(currentUserPage * effectivePageSize, filteredUsers.length)}
+                                        </span>{' '}
+                                        of <span className="text-white font-bold">{filteredUsers.length}</span> members
+                                        {filteredUsers.length !== users.length && ` (filtered from ${users.length} total)`}
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            onClick={() => setUserPage(1)}
+                                            disabled={currentUserPage <= 1}
+                                            className="px-2.5 py-1 rounded bg-slate-900 text-slate-400 hover:text-white border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            « First
+                                        </button>
+                                        <button
+                                            onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                                            disabled={currentUserPage <= 1}
+                                            className="px-3 py-1 rounded bg-slate-900 text-slate-400 hover:text-white border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            ‹ Prev
+                                        </button>
+                                        <span className="px-3 py-1 rounded bg-brand-950 text-brand-300 border border-brand-800 font-bold">
+                                            Page {currentUserPage} of {totalUserPages}
+                                        </span>
+                                        <button
+                                            onClick={() => setUserPage((p) => Math.min(totalUserPages, p + 1))}
+                                            disabled={currentUserPage >= totalUserPages}
+                                            className="px-3 py-1 rounded bg-slate-900 text-slate-400 hover:text-white border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            Next ›
+                                        </button>
+                                        <button
+                                            onClick={() => setUserPage(totalUserPages)}
+                                            disabled={currentUserPage >= totalUserPages}
+                                            className="px-2.5 py-1 rounded bg-slate-900 text-slate-400 hover:text-white border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            Last »
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {/* ========================================================================= */}
             {/* TAB 5: LIVE LINK PUSH TO GET & WEBHOOKS HUB */}

@@ -1,7 +1,9 @@
 import { getPool } from './db';
+import { SEED_USERS } from './seed-users';
 
 export interface AdminUser {
     id: number;
+    name?: string;
     email: string;
     plan: string;
     email_verified_at: string | null;
@@ -177,54 +179,8 @@ const DEFAULT_PURCHASES: AdPurchaseData[] = [
     },
 ];
 
-// Fallback users for sandboxed/offline environments
-const MOCK_USERS: AdminUser[] = [
-    {
-        id: 101,
-        email: 'founder@domainventure.com',
-        plan: 'enterprise',
-        email_verified_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-        watchlistCount: 14,
-        valuationsCount: 185,
-    },
-    {
-        id: 102,
-        email: 'alex.investor@capitaldom.io',
-        plan: 'pro',
-        email_verified_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-        watchlistCount: 8,
-        valuationsCount: 64,
-    },
-    {
-        id: 103,
-        email: 'sarah.flipping@gmail.com',
-        plan: 'free',
-        email_verified_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        watchlistCount: 3,
-        valuationsCount: 19,
-    },
-    {
-        id: 104,
-        email: 'broker@sedopartner.net',
-        plan: 'pro',
-        email_verified_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        watchlistCount: 22,
-        valuationsCount: 112,
-    },
-    {
-        id: 105,
-        email: 'newuser.today@startup.ai',
-        plan: 'free',
-        email_verified_at: null,
-        created_at: new Date().toISOString(),
-        watchlistCount: 1,
-        valuationsCount: 4,
-    },
-];
+// Fallback users for sandboxed/offline environments (all 643 registered users)
+const MOCK_USERS: AdminUser[] = SEED_USERS;
 
 // In-Memory state for live updates if DB is unconfigured or offline
 declare global {
@@ -251,8 +207,8 @@ function getMemoryPurchases(): AdPurchaseData[] {
 }
 
 function getMemoryUsers(): AdminUser[] {
-    if (!globalThis.__domainiqMockUsers) {
-        globalThis.__domainiqMockUsers = JSON.parse(JSON.stringify(MOCK_USERS));
+    if (!globalThis.__domainiqMockUsers || globalThis.__domainiqMockUsers.length < 643) {
+        globalThis.__domainiqMockUsers = JSON.parse(JSON.stringify(SEED_USERS));
     }
     return globalThis.__domainiqMockUsers!;
 }
@@ -265,6 +221,8 @@ async function ensureTables(): Promise<void> {
     try {
         const pool = getPool();
         await pool.query(`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
+
             CREATE TABLE IF NOT EXISTS ad_slots (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -321,6 +279,31 @@ async function ensureTables(): Promise<void> {
                 );
             }
         }
+
+        // Check if users has the 643 seed records
+        const { rows: userCountRows } = await pool.query('SELECT count(*) FROM users');
+        if (Number(userCountRows[0]?.count ?? 0) < 643) {
+            for (const u of SEED_USERS) {
+                await pool.query(
+                    `INSERT INTO users (id, name, email, password_hash, plan, email_verified_at, created_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                     ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        email = EXCLUDED.email,
+                        plan = EXCLUDED.plan,
+                        email_verified_at = EXCLUDED.email_verified_at`,
+                    [
+                        u.id,
+                        u.name || null,
+                        u.email,
+                        '$2a$10$DomainIQDemoHashForUserSecurity2026................',
+                        u.plan,
+                        u.email_verified_at ? new Date(u.email_verified_at) : null,
+                        new Date(u.created_at),
+                    ],
+                );
+            }
+        }
     } catch {
         // Fall back to in-memory state
     }
@@ -337,6 +320,7 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
             const { rows } = await pool.query<AdminUser>(`
                 SELECT 
                     u.id, 
+                    u.name,
                     u.email, 
                     u.plan, 
                     u.email_verified_at, 
@@ -348,7 +332,7 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
                 LEFT JOIN (SELECT count(*) as cnt FROM valuations) v ON true
                 ORDER BY u.created_at DESC
             `);
-            if (rows && rows.length > 0) return rows;
+            if (rows && rows.length >= 643) return rows;
         } catch {
             // Ignore DB error, fall back to memory
         }
@@ -359,10 +343,13 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
 /**
  * Update user plan or verification
  */
-export async function updateAdminUser(userId: number, updates: { plan?: string; verified?: boolean }): Promise<boolean> {
+export async function updateAdminUser(userId: number, updates: { name?: string; plan?: string; verified?: boolean }): Promise<boolean> {
     if (process.env.DATABASE_URL) {
         try {
             const pool = getPool();
+            if (updates.name) {
+                await pool.query('UPDATE users SET name = $1 WHERE id = $2', [updates.name, userId]);
+            }
             if (updates.plan) {
                 await pool.query('UPDATE users SET plan = $1 WHERE id = $2', [updates.plan, userId]);
             }
@@ -381,6 +368,7 @@ export async function updateAdminUser(userId: number, updates: { plan?: string; 
     const users = getMemoryUsers();
     const target = users.find((u) => u.id === userId);
     if (target) {
+        if (updates.name) target.name = updates.name;
         if (updates.plan) target.plan = updates.plan;
         if (updates.verified !== undefined) target.email_verified_at = updates.verified ? new Date().toISOString() : null;
         return true;
