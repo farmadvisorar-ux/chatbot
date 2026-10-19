@@ -332,7 +332,13 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
                 LEFT JOIN (SELECT count(*) as cnt FROM valuations) v ON true
                 ORDER BY u.created_at DESC
             `);
-            if (rows && rows.length >= 643) return rows;
+            if (rows && rows.length >= 643) {
+                return rows.map((r) => ({
+                    ...r,
+                    created_at: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
+                    email_verified_at: r.email_verified_at ? new Date(r.email_verified_at).toISOString() : null,
+                }));
+            }
         } catch {
             // Ignore DB error, fall back to memory
         }
@@ -638,7 +644,11 @@ export async function getAdminStats(): Promise<AdminStats> {
     const proUsers = users.filter((u) => u.plan === 'pro' || u.plan === 'enterprise').length;
 
     const todayDate = new Date().toISOString().split('T')[0];
-    const todaySignups = users.filter((u) => u.created_at.startsWith(todayDate!)).length;
+    const todaySignups = users.filter((u) => {
+        const raw = u.created_at as unknown;
+        const d = raw instanceof Date ? raw.toISOString() : String(raw || '');
+        return d.startsWith(todayDate!);
+    }).length;
 
     const activeSlotsCount = slots.filter((s) => s.is_active).length;
     const totalAdRevenue = purchases
